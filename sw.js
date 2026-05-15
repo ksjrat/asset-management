@@ -1,4 +1,4 @@
-const CACHE = 'sej-ledger-v2';
+const CACHE = 'sej-ledger-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   './js/merge.js',
   './js/ui.js',
   './js/views.js',
+  './js/views-redesign.js',
   './js/charts.js',
   './js/backup.js',
   './js/csv-import.js',

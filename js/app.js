@@ -1,11 +1,12 @@
 import { initUi, $ } from './ui.js';
 import { app, loadUiPrefs, persist } from './state.js';
-import { SHEET_MENU } from './store.js';
+import { monthLabel } from './format.js';
 import {
-  renderHome, renderMonth, renderBudget, renderMonthlyReport,
-  renderSettlement, renderAnnual, renderAssets, renderItems,
-  renderPayment, renderGoals, renderSettings, showTxForm,
+  renderMonth, renderBudget, renderMonthlyReport, renderSettlement, renderItems,
 } from './views.js';
+import {
+  renderHomeV2, renderAssetsV2, renderMore, renderSettingsPage, showQuickTxForm,
+} from './views-redesign.js';
 
 const main = () => $('#main');
 const pageTitle = () => $('#page-title');
@@ -34,108 +35,68 @@ function ctx() {
 
 function tabForRoute(r) {
   if (r === 'home') return 'home';
-  if (['settlement', 'budget', 'monthly-report'].includes(r) || r.startsWith('annual')) return 'report';
-  if (r === 'month' || r.startsWith('month-') || ['items', 'payment', 'goals'].includes(r)) return 'month';
-  if (
-    r === 'assets' || r.startsWith('asset') ||
-    ['accounts', 'emergency', 'deposits', 'savings', 'investments', 'trades', 'debts', 'loans', 'asset-summary'].includes(r)
-  ) return 'assets';
+  if (r === 'month') return 'month';
+  if (r === 'assets' || r.startsWith('asset-')) return 'assets';
+  if (['more', 'budget', 'report', 'settlement', 'settings', 'items', 'goals'].includes(r)) return 'more';
   return 'home';
+}
+
+function shiftMonth(delta) {
+  let m = app.viewMonth + delta;
+  if (m < 1) m = 12;
+  if (m > 12) m = 1;
+  app.viewMonth = m;
+  render();
 }
 
 function setRoute(r, opts = {}) {
   app.route = r;
   if (opts.month != null) app.viewMonth = opts.month;
   if (opts.assetSheet) app.assetSheet = opts.assetSheet;
-  closeDrawer();
-  document.querySelectorAll('.tab').forEach((t) => {
+
+  document.querySelectorAll('.tab[data-route]').forEach((t) => {
     t.classList.toggle('active', t.dataset.route === tabForRoute(r));
   });
+
   render();
 }
 
-function openDrawer() {
-  $('#drawer').classList.remove('hidden');
-  $('#drawer-overlay').classList.remove('hidden');
-}
-
-function closeDrawer() {
-  $('#drawer').classList.add('hidden');
-  $('#drawer-overlay').classList.add('hidden');
-}
-
-function renderDrawer() {
-  const list = $('#drawer-list');
-  list.innerHTML = SHEET_MENU.map((sec) => `
-    <li class="drawer-section">${sec.section}</li>
-    ${sec.items.map((it) => `
-      <li><button type="button" data-nav="${it.id}" class="${app.route === it.id ? 'active' : ''}">${it.label}</button></li>
-    `).join('')}
-  `).join('');
-  list.querySelectorAll('[data-nav]').forEach((btn) => {
-    btn.onclick = () => {
-      const id = btn.dataset.nav;
-      if (id.startsWith('month-')) setRoute('month', { month: parseInt(id.split('-')[1], 10) });
-      else if (['accounts', 'emergency', 'deposits', 'savings', 'investments', 'trades', 'debts', 'loans', 'asset-summary'].includes(id)) {
-        app.assetSheet = id;
-        setRoute('assets');
-      } else setRoute(id);
-    };
-  });
-}
-
-function updateFab() {
-  const fab = $('#fab-add');
-  if (!fab) return;
-  const show = app.route === 'home' || app.route === 'month' || app.route.startsWith('month-');
-  fab.classList.toggle('hidden', !show);
+function updateHeaderMonth() {
+  const sub = headerSub();
+  if (sub) sub.textContent = `${app.data.year}년 ${monthLabel(app.viewMonth)}`;
 }
 
 function render() {
-  renderDrawer();
-  updateFab();
   const c = ctx();
   const r = app.route;
+  updateHeaderMonth();
 
-  if (r === 'home') renderHome(c);
-  else if (r === 'month' || r.startsWith('month-')) renderMonth(c);
-  else if (r === 'assets' || ['accounts', 'emergency', 'deposits', 'savings', 'investments', 'trades', 'debts', 'loans', 'asset-summary'].includes(r)) {
-    if (r !== 'assets') app.assetSheet = r;
-    renderAssets(c);
-  }
-  else if (r === 'settlement') renderSettlement(c);
+  if (r === 'home') renderHomeV2(c);
+  else if (r === 'month') renderMonth(c);
+  else if (r === 'assets') renderAssetsV2(c);
+  else if (r === 'more') renderMore(c);
   else if (r === 'budget') renderBudget(c);
-  else if (r === 'monthly-report') renderMonthlyReport(c);
-  else if (r.startsWith('annual')) renderAnnual(c, r);
+  else if (r === 'report') renderMonthlyReport(c);
+  else if (r === 'settlement') renderSettlement(c);
+  else if (r === 'settings') renderSettingsPage(c);
   else if (r === 'items') renderItems(c);
-  else if (r === 'payment') renderPayment(c);
-  else if (r === 'goals') renderGoals(c);
-  else if (r === 'report') renderSettlement(c);
-  else renderHome(c);
+  else renderHomeV2(c);
 }
 
 function init() {
   initUi();
   loadUiPrefs();
   app.viewMonth = new Date().getMonth() + 1;
+  app.route = app.route || 'home';
 
-  $('#btn-menu').addEventListener('click', openDrawer);
-  $('#drawer-overlay').addEventListener('click', closeDrawer);
-  $('#btn-settings').addEventListener('click', () => renderSettings(ctx()));
+  $('#btn-prev-month')?.addEventListener('click', () => shiftMonth(-1));
+  $('#btn-next-month')?.addEventListener('click', () => shiftMonth(1));
 
-  document.querySelectorAll('.tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      const r = tab.dataset.route;
-      if (r === 'report') setRoute('settlement');
-      else if (r === 'assets') { app.assetSheet = 'asset-summary'; setRoute('assets'); }
-      else setRoute(r);
-    });
+  document.querySelectorAll('.tab[data-route]').forEach((tab) => {
+    tab.addEventListener('click', () => setRoute(tab.dataset.route));
   });
 
-  $('#fab-add')?.addEventListener('click', () => {
-    if (app.route === 'home') setRoute('month');
-    showTxForm(ctx(), 'expense');
-  });
+  $('#tab-add')?.addEventListener('click', () => showQuickTxForm(ctx(), 'expense'));
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

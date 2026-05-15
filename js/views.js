@@ -1,9 +1,9 @@
 import { formatWon, formatPct, parseAmount, MONTHS, monthLabel, formatDateShort } from './format.js';
 import {
-  getMonth, uid, calcSettlement, totalAssets, totalLiabilities, assetBreakdown,
+  getMonth, uid, calcSettlement, totalAssets, totalLiabilities, getNetWorth,
   annualByCategory, annualByCard, annualBySubCategory, monthlyTrend,
-  expensesByCategoryForMonth, getBudgetVsActual, getExpenseCategoryList,
-  applyAutoCarryOver, setCarryOver, isSavingExpense, defaultTxDate,
+  expensesByCategoryForMonth, expensesByOwner, getBudgetVsActual, getExpenseCategoryList,
+  applyAutoCarryOver, setCarryOver, isSavingExpense, defaultTxDate, pushRecentTx,
 } from './store.js';
 import { escapeHtml, openModal, closeModal } from './ui.js';
 import { barChartHtml, lineTrendSvg } from './charts.js';
@@ -47,8 +47,7 @@ export function renderHome(ctx) {
   const budgetRows = getBudgetVsActual(data, year, viewMonth)
     .filter((r) => r.budget > 0 || r.actual > 0).slice(0, 5);
 
-  pageTitle.textContent = year + '\ub144 \uac00\uacc4\ubd80';
-  headerSub.textContent = monthLabel(viewMonth) + ' \uacb0\uc0b0 \u00b7 \uc21c\uc790\uc0b0 ' + formatWon(assets - liabilities);
+  pageTitle.textContent = data.settings.title || '\uc2b9\uc7ac\u00b7\uc740\uc9c0 \uac00\uacc4\ubd80';
 
   let budgetHtml = '';
   if (budgetRows.length) {
@@ -96,8 +95,7 @@ export function renderMonth(ctx) {
     return [t.name, t.category, t.owner, t.card].some((x) => (x || '').toLowerCase().includes(q));
   }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-  pageTitle.textContent = monthLabel(viewMonth) + ' \uac00\uacc4';
-  headerSub.textContent = '\uc218\uc785 ' + formatWon(s.income) + ' \u00b7 \uc9c0\ucd9c ' + formatWon(s.totalExpense);
+  pageTitle.textContent = '\uac70\ub798 \ub0b4\uc5ed';
 
   const txRow = (t, kind) =>
     '<li class="tx-item" data-id="' + t.id + '" data-kind="' + kind + '">' +
@@ -111,15 +109,13 @@ export function renderMonth(ctx) {
   const expenses = filterList(m.expenses);
 
   main.innerHTML = (
-    '<div class="month-picker"><button type="button" id="prev-month">\u2039</button><span>' + year + '\ub144 ' + monthLabel(viewMonth) + '</span><button type="button" id="next-month">\u203a</button></div>' +
+    '<p class="hint month-hint">' + formatWon(s.income) + ' \u00b7 \uc9c0\ucd9c ' + formatWon(s.totalExpense) + '</p>' +
     '<input type="search" class="search-input" id="tx-search" placeholder="\uac80\uc0c9..." value="' + escapeHtml(searchQuery || '') + '" />' +
     '<div class="btn-row"><button class="btn btn-primary" id="add-income">+ \uc218\uc785</button><button class="btn btn-outline" id="add-expense">+ \uc9c0\ucd9c</button></div>' +
     '<div class="card"><div class="card-title">\uc218\uc785</div><ul class="tx-list">' + (income.length ? income.map((t) => txRow(t, 'income')).join('') : '<p class="empty">\uc5c6\uc74c</p>') + '</ul></div>' +
     '<div class="card"><div class="card-title">\uc9c0\ucd9c</div><ul class="tx-list">' + (expenses.length ? expenses.map((t) => txRow(t, 'expense')).join('') : '<p class="empty">\uc5c6\uc74c</p>') + '</ul></div>'
   )
 
-  main.querySelector('#prev-month').onclick = () => { ctx.viewMonth = viewMonth > 1 ? viewMonth - 1 : 12; ctx.render(); };
-  main.querySelector('#next-month').onclick = () => { ctx.viewMonth = viewMonth < 12 ? viewMonth + 1 : 1; ctx.render(); };
   main.querySelector('#add-income').onclick = () => showTxForm(ctx, 'income');
   main.querySelector('#add-expense').onclick = () => showTxForm(ctx, 'expense');
   main.querySelector('#tx-search').oninput = (e) => { ctx.searchQuery = e.target.value; ctx.render(); };
@@ -204,6 +200,13 @@ export function showTxForm(ctx, kind, existing = null) {
           const idx = list.findIndex((t) => t.id === existing.id);
           if (idx >= 0) list[idx] = entry;
         } else list.push(entry);
+        pushRecentTx(data, {
+          kind: isIncome ? 'income' : 'expense',
+          name: entry.name,
+          category: entry.category,
+          amount: entry.amount,
+          owner: entry.owner,
+        });
         persist();
         closeModal();
       };
@@ -217,7 +220,6 @@ export function renderBudget(ctx) {
   pageTitle.textContent = '\uc608\uc0b0';
   headerSub.textContent = monthLabel(viewMonth) + ' \uc608\uc0b0 vs \uc2e4\uc801';
   main.innerHTML =
-    '<div class="month-picker"><button id="prev-month">\u2039</button><span>' + monthLabel(viewMonth) + '</span><button id="next-month">\u203a</button></div>' +
     '<button class="btn btn-primary" id="edit-budget" style="width:100%;margin-bottom:10px">\uc608\uc0b0 \ud3b8\uc9d1</button>' +
     '<div class="card table-wrap"><table class="data"><thead><tr><th>\ud56d\ubaa9</th><th>\uc608\uc0b0</th><th>\uc2e4\uc801</th><th>%</th></tr></thead><tbody>' +
     rows.map((r) => '<tr class="' + (r.over ? 'row-over' : '') + '"><td>' + escapeHtml(r.category) + '</td><td>' + formatWon(r.budget) + '</td><td>' + formatWon(r.actual) + '</td><td>' + (r.budget ? formatPct(r.pct) : '-') + '</td></tr>').join('') +
@@ -253,7 +255,6 @@ export function renderMonthlyReport(ctx) {
   pageTitle.textContent = '\uc6d4\ubcc4 \ub9ac\ud3ec\ud2b8';
   headerSub.textContent = monthLabel(viewMonth);
   main.innerHTML =
-    '<div class="month-picker"><button id="prev-month">\u2039</button><span>' + monthLabel(viewMonth) + '</span><button id="next-month">\u203a</button></div>' +
     '<div class="card"><div class="stat-grid"><div class="stat"><div class="stat-label">\uc21c\uc218\uc785</div><div class="stat-value">' + formatWon(s.netIncome) + '</div></div>' +
     '<div class="stat"><div class="stat-label">\ucd1d\uc9c0\ucd9c</div><div class="stat-value">' + formatWon(s.totalExpense) + '</div></div></div></div>' +
     '<div class="card"><div class="card-title">\ud56d\ubaa9\ubcc4 \uc9c0\ucd9c</div>' + barChartHtml(byCat) + '</div>';
@@ -339,7 +340,7 @@ export function renderAssets(ctx) {
   });
 }
 
-function showAssetForm(ctx, key, existing = null) {
+export function showAssetForm(ctx, key, existing = null) {
   const { data, persist } = ctx;
   const isDebt = key === 'debts';
   const isTrade = key === 'trades';

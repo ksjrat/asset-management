@@ -19,6 +19,7 @@ export const DEFAULT = {
     cards: ['공용카드', '승재카드', '은지카드'],
     financialGoals: [],
     financialSchedule: [],
+    recentTransactions: [],
     sync: {
       enabled: false,
       provider: 'firestore',
@@ -265,6 +266,30 @@ export function monthlyTrend(data, year) {
     const s = calcSettlement(data, year, month);
     return { month, netIncome: s.netIncome, totalExpense: s.totalExpense };
   });
+}
+
+export function getNetWorth(data) {
+  return totalAssets(data) - totalLiabilities(data);
+}
+
+export function expensesByOwner(data, year, month) {
+  const m = getMonth(data, year, month);
+  const map = {};
+  for (const t of m.expenses) {
+    const o = t.owner || '공동';
+    map[o] = (map[o] || 0) + (t.amount || 0);
+  }
+  return Object.entries(map).sort((a, b) => b[1] - a[1]);
+}
+
+export function pushRecentTx(data, entry) {
+  if (!data.settings.recentTransactions) data.settings.recentTransactions = [];
+  const sig = `${entry.kind}|${entry.name}|${entry.category}|${entry.amount}|${entry.owner}`;
+  const list = data.settings.recentTransactions.filter(
+    (x) => `${x.kind}|${x.name}|${x.category}|${x.amount}|${x.owner}` !== sig
+  );
+  list.unshift({ ...entry, at: Date.now() });
+  data.settings.recentTransactions = list.slice(0, 12);
 }
 
 export function expensesByCategoryForMonth(data, year, month) {
