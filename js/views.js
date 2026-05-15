@@ -166,7 +166,7 @@ export function showTxForm(ctx, kind, existing = null) {
     '<div class="amount-presets"><button type="button" data-amt="10000">1\ub9cc</button><button type="button" data-amt="50000">5\ub9cc</button><button type="button" data-amt="100000">10\ub9cc</button></div></div>' +
     '<div class="btn-row"><button type="submit" class="btn btn-primary">\uc800\uc7a5</button>' +
     (existing ? '<button type="button" class="btn btn-outline" id="tx-delete">\uc0ad\uc81c</button>' : '') +
-    '<button type="button" class="btn btn-outline" id="tx-cancel">\ucde8\uc18c</button></div></form>')
+    '<button type="button" class="btn btn-outline" id="tx-cancel">\ucde8\uc18c</button></div></form>'),
     (modal) => {
       modal.querySelector('#tx-cancel').onclick = closeModal;
       modal.querySelectorAll('[data-amt]').forEach((b) => {
@@ -352,7 +352,7 @@ function showAssetForm(ctx, key, existing = null) {
     '<div class="form-group"><label>\uc18c\uc720</label><select name="owner">' + ownerOpts + '</select></div>' +
     (isTrade ? '<div class="form-group"><label>\uc218\ub7c9</label><input name="quantity" type="number" value="' + (existing?.quantity || '') + '" /><label>\ud3c9\ub2e8\uac00</label><input name="avgPrice" type="number" value="' + (existing?.avgPrice || '') + '" /></div>' : '') +
     '<div class="form-group"><label>' + (isTrade ? '\ud3c9\uac00\uc561' : '\uc794\uc561') + '</label><input name="balance" type="number" value="' + (existing?.balance || '') + '" required /></div>' +
-    '<div class="btn-row"><button type="submit" class="btn btn-primary">\uc800\uc7a5</button>' + (existing ? '<button type="button" class="btn btn-outline" id="asset-delete">\uc0ad\uc81c</button>' : '') + '<button type="button" class="btn btn-outline" id="tx-cancel">\ucde8\uc18c</button></div></form>')
+    '<div class="btn-row"><button type="submit" class="btn btn-primary">\uc800\uc7a5</button>' + (existing ? '<button type="button" class="btn btn-outline" id="asset-delete">\uc0ad\uc81c</button>' : '') + '<button type="button" class="btn btn-outline" id="tx-cancel">\ucde8\uc18c</button></div></form>'),
     (modal) => {
       modal.querySelector('#tx-cancel').onclick = closeModal;
       const targetList = isDebt ? data.liabilities.debts : data.assets[key];
