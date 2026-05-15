@@ -2,37 +2,73 @@
 
 ## 항상 켜 두기 (PC 꺼져도 접속)
 
-이 앱은 **정적 웹앱**이라 **GitHub Pages** 등에 올리면 24시간 접속할 수 있습니다.
+이 앱은 **정적 웹앱**(HTML·JS만)이라 무료 호스팅에 올리면 24시간 접속할 수 있습니다.
 
-### GitHub Pages (권장)
+---
 
-1. GitHub에 이 저장소를 `main` 브랜치로 푸시합니다.
-2. 저장소 **Settings → Pages → Build and deployment**
-   - Source: **GitHub Actions**
-3. `main`에 푸시하면 `.github/workflows/pages.yml`이 자동 배포합니다.
-4. 배포 URL (예시):
-   - `https://<사용자명>.github.io/<저장소이름>/`
+## 무료 호스팅 비교
 
-### 폰·PC에서 쓰기
+| 서비스 | 비용 | 비고 |
+|--------|------|------|
+| **GitHub Pages** | **무료** (공개 저장소) | 저장소를 Public으로 두면 Pages 무료. Private만 유료 플랜 필요 |
+| **Cloudflare Pages** | 무료 | GitHub 연동, 속도 좋음, **추천 대안** |
+| **Netlify** | 무료 한도 넉넉 | 드래그 앤 드롭 또는 Git 연동 |
+| **Vercel** | 무료 한도 넉넉 | Git 연동 |
+| **Firebase Hosting** | 무료 한도 | [SYNC.md](./SYNC.md) Firebase 쓸 때 같이 쓰기 좋음 |
+
+> GitHub **저장소 자체**는 Private도 무료입니다. **Pages를 Private 저장소에** 쓰려면 유료 플랜이 필요할 수 있습니다.  
+> → **저장소를 Public**으로 두거나, **Cloudflare Pages**를 쓰면 됩니다.
+
+---
+
+## 방법 A — GitHub Pages (공개 저장소, 무료)
+
+1. GitHub에 저장소 생성 → **Public** 선택
+2. 코드를 `main` 브랜치로 푸시
+3. **Settings → Pages → Build and deployment → Source: `GitHub Actions`** (Branch / Deploy from a branch 아님)
+4. **Actions** 탭에서 실패한 워크플로 **Re-run** 또는 `main`에 다시 push
+5. 배포 완료 후 접속:  
+   `https://<사용자명>.github.io/<저장소이름>/`
+
+저장소에 `.github/workflows/pages.yml` 이 있으면 푸시 시 자동 배포됩니다.
+
+**`Get Pages site failed` 오류가 나면:** Pages Source가 **GitHub Actions**인지 확인한 뒤 워크플로를 다시 실행하세요. (워크플로에 `enablement: true`가 있어도, 저장소 **Settings → Pages**에서 한 번 맞춰 두는 것이 가장 확실합니다.)
+
+---
+
+## 방법 B — Cloudflare Pages (무료, Private 저장소도 OK)
+
+1. [Cloudflare](https://dash.cloudflare.com/) 가입 → **Workers & Pages** → **Create**
+2. **Pages** → **Connect to Git** → GitHub 저장소 선택
+3. 빌드 설정:
+   - **Build command:** (비움)
+   - **Build output directory:** `/` (루트)
+4. Deploy 후 `https://<이름>.pages.dev` 주소 사용
+
+Private GitHub 저장소도 연동 가능합니다.
+
+---
+
+## 방법 C — Netlify (드래그만, Git 없이)
+
+1. [Netlify](https://www.netlify.com/) 가입
+2. **Sites → Add site → Deploy manually**
+3. 프로젝트 폴더 전체를 zip으로 올리거나 폴더 드래그
+4. 발급된 `https://xxxx.netlify.app` 주소 사용
+
+---
+
+## 폰·PC에서 쓰기
 
 1. 배포된 **https 주소**를 브라우저에서 엽니다.
-2. **홈 화면에 추가** (모바일) 또는 즐겨찾기 (PC).
-3. 데이터는 **그 브라우저 기기**에만 저장됩니다 (localStorage).
-
-> **데이터 연동**은 Firebase 설정이 필요합니다. [SYNC.md](./SYNC.md) 를 참고하세요.
+2. **홈 화면에 추가** (모바일) 또는 즐겐찾기 (PC).
+3. **데이터 연동**은 Firebase + 가족 암호 → [SYNC.md](./SYNC.md) · [SECURITY.md](./SECURITY.md)
 
 ---
 
 ## PC 버전
 
-화면 너비 **900px 이상**이면 자동으로 PC 레이아웃이 적용됩니다.
-
-- 왼쪽: 메뉴(홈·목표·예산·리포트·설정)
-- 오른쪽: 본문
-- 모달: 화면 가운데
-- 좁은 화면: 기존 모바일(하단 탭) UI
-
-별도 설치 없이 **Chrome / Edge / Safari**에서 URL만 열면 됩니다.
+화면 너비 **900px 이상**이면 왼쪽 메뉴 + 넓은 본문(PC 레이아웃)이 자동 적용됩니다.
 
 ---
 

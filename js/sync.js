@@ -1,5 +1,13 @@
-import { deepMerge } from './merge.js';
 import { DATA_VERSION } from './store.js';
+import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
+import {
+  encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
+  getCloudPassphraseSession,
+} from './sync-crypto.js';
+
+export {
+  setCloudPassphraseSession, hasCloudPassphraseSession, clearCloudPassphraseSession,
+} from './sync-crypto.js';
 
 const FIREBASE_VER = '10.14.1';
 
@@ -30,7 +38,7 @@ async function loadFirebase() {
 }
 
 export function extractSyncPayload(data) {
-  return {
+  return stripSensitiveFromPayload({
     version: DATA_VERSION,
     assets: data.assets,
     goals: data.goals,
@@ -49,7 +57,7 @@ export function extractSyncPayload(data) {
       inviteExpiresAt: data.auth.inviteExpiresAt,
       householdId: data.auth.householdId,
     },
-  };
+  });
 }
 
 function preserveLocalAuth(local, merged) {
@@ -71,7 +79,7 @@ export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
   const localMerged = local._syncMeta?.lastMergedAt || 0;
   if (remoteUpdatedAt && remoteUpdatedAt <= localMerged) return local;
 
-  const merged = deepMerge(structuredClone(local), remotePayload);
+  const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
   merged._syncMeta = { ...(local._syncMeta || {}), lastMergedAt: remoteUpdatedAt || Date.now() };
   return merged;
@@ -92,6 +100,24 @@ export function getSyncStatus(data) {
   if (!enabled) return 'off';
   if (!data || !ensureHouseholdId(data)) return 'no-code';
   return 'on';
+}
+
+async function unpackCloudDoc(snapData, householdId) {
+  if (!snapData) return null;
+  if (snapData.encrypted && snapData.envelope) {
+    const pass = getCloudPassphraseSession();
+    if (!pass) return null;
+    return decryptPayload(snapData.envelope, pass, householdId);
+  }
+  return snapData.payload || null;
+}
+
+async function packCloudDoc(data, householdId) {
+  const payload = extractSyncPayload(data);
+  const pass = getCloudPassphraseSession();
+  if (!pass) return null;
+  const envelope = await encryptPayload(payload, pass, householdId);
+  return { encrypted: true, envelope, version: DATA_VERSION };
 }
 
 export async function initSync(handlers = {}) {
@@ -125,11 +151,14 @@ export async function bindHouseholdSync(data) {
   const { doc, onSnapshot } = firestoreApi;
   if (unsubscribe) unsubscribe();
 
-  unsubscribe = onSnapshot(doc(db, 'households', hid), (snap) => {
+  unsubscribe = onSnapshot(doc(db, 'households', hid), async (snap) => {
     if (!snap.exists() || applyingRemote) return;
-    const { payload, updatedAt } = snap.data();
-    if (!payload) return;
+    const docData = snap.data();
+    const { updatedAt } = docData;
     if (updatedAt && Math.abs(updatedAt - lastPushAt) < 500) return;
+
+    const payload = await unpackCloudDoc(docData, hid);
+    if (!payload) return;
 
     applyingRemote = true;
     try {
@@ -149,8 +178,10 @@ export async function pullFromCloud(data) {
     const { doc, getDoc } = firestoreApi;
     const snap = await getDoc(doc(db, 'households', hid));
     if (!snap.exists()) return data;
-    const { payload, updatedAt } = snap.data();
-    return applyRemotePayload(data, payload, updatedAt);
+    const docData = snap.data();
+    const payload = await unpackCloudDoc(docData, hid);
+    if (!payload) return data;
+    return applyRemotePayload(data, payload, docData.updatedAt);
   } catch (e) {
     console.warn('Pull failed', e);
     return data;
@@ -162,15 +193,15 @@ export async function pushToCloud(data) {
   const hid = ensureHouseholdId(data);
   if (!hid) return;
 
+  if (!hasCloudPassphraseSession()) return;
+
   try {
     const { doc, setDoc } = firestoreApi;
+    const packed = await packCloudDoc(data, hid);
+    if (!packed) return;
     const updatedAt = Date.now();
     lastPushAt = updatedAt;
-    await setDoc(doc(db, 'households', hid), {
-      payload: extractSyncPayload(data),
-      updatedAt,
-      version: DATA_VERSION,
-    }, { merge: true });
+    await setDoc(doc(db, 'households', hid), { ...packed, updatedAt }, { merge: true });
     data._syncMeta = { ...(data._syncMeta || {}), lastPushedAt: updatedAt, lastMergedAt: updatedAt };
   } catch (e) {
     console.warn('Push failed', e);

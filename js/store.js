@@ -178,7 +178,9 @@ export function createSnapshot(data, year, month) {
 }
 
 export function generateInviteCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 export function addCategory(data, name, recordDay = null) {

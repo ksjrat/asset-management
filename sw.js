@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v28';
+const CACHE = 'couple-asset-v29';
 const ASSETS = [
   './',
   './index.html',
@@ -32,6 +32,8 @@ const ASSETS = [
   './js/sync.js',
   './js/sync-config.js',
   './js/sync-service.js',
+  './js/sync-privacy.js',
+  './js/sync-crypto.js',
 ];
 
 self.addEventListener('install', (e) => {

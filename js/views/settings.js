@@ -1,6 +1,6 @@
 import { state, persist } from '../state.js';
 import { getBudgetStart } from '../budget-engine.js';
-import { isSyncEnabled, getSyncStatus } from '../sync.js';
+import { isSyncEnabled, getSyncStatus, hasCloudPassphraseSession, setCloudPassphraseSession } from '../sync.js';
 import { syncManualRefresh, syncEnsureHousehold } from '../sync-service.js';
 import { fmtMonth } from '../format.js';
 import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm, copyText } from '../ui.js';
@@ -14,9 +14,13 @@ export function renderSettings() {
   const syncOn = isSyncEnabled();
   const syncStatus = getSyncStatus(state.data);
   const familyCode = state.data.auth.householdId || state.data.auth.inviteCode;
-  const syncMeta = syncOn
-    ? (syncStatus === 'on' ? '클라우드 연동 중' : '가족 코드 발급 필요')
-  : '로컬만 (docs/SYNC.md 참고)';
+  const syncMeta = !syncOn
+    ? '로컬만 (docs/SYNC.md)'
+    : syncStatus === 'no-code'
+      ? '가족 코드 발급 필요'
+      : !hasCloudPassphraseSession()
+        ? '가족 암호 입력 필요'
+        : '암호화 연동 중';
   return `
     <div class="settings-group">
       <p class="settings-group-title">보안</p>
@@ -49,6 +53,10 @@ export function renderSettings() {
       ${familyCode ? `<button type="button" class="settings-row" id="btn-copy-family-code">
         <span><strong>가족 코드</strong><span class="settings-row-meta">${esc(familyCode)}</span></span>
         <span class="settings-chevron">복사</span>
+      </button>` : ''}
+      ${syncOn ? `<button type="button" class="settings-row" id="btn-cloud-pass">
+        <span><strong>가족 암호</strong><span class="settings-row-meta">${hasCloudPassphraseSession() ? '입력됨 (이 기기)' : '미입력'}</span></span>
+        <span class="settings-chevron">›</span>
       </button>` : ''}
       ${syncOn ? `<button type="button" class="settings-row" id="btn-sync-refresh">
         <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기에서 받아오기</span></span>
@@ -124,7 +132,29 @@ export function bindSettings() {
     const code = state.data.auth.householdId || state.data.auth.inviteCode;
     if (code) copyText(code);
   });
+  document.getElementById('btn-cloud-pass')?.addEventListener('click', async () => {
+    const res = await openModal({
+      title: '가족 암호',
+      body: `<p class="field-hint">클라우드에 올리는 데이터를 암호화합니다. 배우자·다른 기기에도 <strong>같은 암호</strong>를 입력하세요. 앱 소스는 공개되어도 암호 없이는 읽을 수 없습니다.</p>
+        ${formField('가족 암호', '<input class="input" name="pass" type="password" minlength="6" autocomplete="off" required />')}`,
+      actions: [{ label: '취소', value: null }, { label: '확인', value: 'save', primary: true }],
+    });
+    if (modalValue(res) !== 'save') return;
+    const pass = modalForm(res)?.get('pass')?.toString();
+    if (!pass || pass.length < 6) {
+      toast('6자 이상 입력하세요', 'error');
+      return;
+    }
+    setCloudPassphraseSession(pass);
+    toast('이 기기에서 암호가 적용되었습니다', 'success');
+    syncEnsureHousehold();
+    rerender();
+  });
   document.getElementById('btn-sync-refresh')?.addEventListener('click', async () => {
+    if (!hasCloudPassphraseSession()) {
+      toast('먼저 설정에서 가족 암호를 입력하세요', 'error');
+      return;
+    }
     const ok = await syncManualRefresh();
     toast(ok ? '동기화되었습니다' : '동기화할 수 없습니다', ok ? 'success' : 'error');
   });
