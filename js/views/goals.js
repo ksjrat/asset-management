@@ -3,7 +3,7 @@ import { GOAL_TEMPLATES, computeGoalProgress, getCategorySpend, getVisibleCatego
 import { fmtMoney, fmtDate } from '../format.js';
 import { esc } from '../ui.js';
 import { progressRing } from '../charts.js';
-import { openModal, toast, formField } from '../ui.js';
+import { openModal, toast, formField, emptyState } from '../ui.js';
 import { showGoalForm, bindGoalTemplatePicker, showContributionForm } from './modals.js';
 
 function goalCard(g) {
@@ -95,7 +95,7 @@ export function renderGoals() {
     <section class="section">
       <div class="section-head"><h2>재정 목표</h2>
         <button type="button" class="text-btn" id="btn-add-goal">+ 생성</button></div>
-      ${state.data.goals.length ? state.data.goals.map(goalCard).join('') : '<p class="empty">목표를 만들어 함께 달성해 보세요</p>'}
+      ${state.data.goals.length ? state.data.goals.map(goalCard).join('') : emptyState('🎯', '목표가 없어요', '함께 달성할 재정 목표를 만들어 보세요', '목표 만들기', 'empty-add-goal')}
     </section>`;
 }
 
@@ -110,6 +110,9 @@ export function bindGoals() {
       state.subView = 'detail';
       rerender();
     });
+  });
+  document.getElementById('empty-add-goal')?.addEventListener('click', () => {
+    document.getElementById('btn-add-goal')?.click();
   });
   document.getElementById('btn-add-goal')?.addEventListener('click', async () => {
     await showGoalForm(rerender);

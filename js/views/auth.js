@@ -1,6 +1,14 @@
 import { state, persist } from '../state.js';
 import { generateInviteCode, seedDemoData } from '../store.js';
-import { formField, toast, esc } from '../ui.js';
+import { formField, toast, esc, copyText } from '../ui.js';
+
+const ONBOARD_STEPS = ['welcome', 'login', 'signup', 'biometric', 'invite', 'policy'];
+function stepBar(screen) {
+  const idx = ONBOARD_STEPS.indexOf(screen);
+  if (idx < 0) return '';
+  const pct = Math.round(((idx + 1) / ONBOARD_STEPS.length) * 100);
+  return `<div class="step-bar" aria-hidden="true"><div class="step-fill" style="width:${pct}%"></div></div>`;
+}
 
 export function renderAuth() {
   const s = state.authScreen;
@@ -21,6 +29,7 @@ export function renderAuth() {
   if (s === 'login' || s === 'signup') {
     return `
       <div class="auth-screen">
+        ${stepBar(s)}
         <button type="button" class="back-link" data-auth="welcome">← 돌아가기</button>
         <h1>${s === 'login' ? '로그인' : '회원가입'}</h1>
         <form class="auth-form" id="auth-form">
@@ -46,12 +55,17 @@ export function renderAuth() {
   if (s === 'invite') {
     return `
       <div class="auth-screen">
+        ${stepBar(s)}
         <h1>배우자 연결</h1>
         <p class="muted">초대 코드를 발급하거나<br>배우자 코드를 입력하세요</p>
         <div class="card">
           <p class="card-label">내 초대 코드</p>
           <p class="invite-code">${esc(state.data.auth.inviteCode || '—')}</p>
-          <button type="button" class="btn btn-ghost btn-sm" data-auth="gen-invite">코드 발급 (24시간)</button>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost btn-sm" data-auth="gen-invite">코드 발급</button>
+            ${state.data.auth.inviteCode ? '<button type="button" class="btn btn-primary btn-sm" data-auth="copy-invite">복사</button>' : ''}
+          </div>
+          <p class="field-hint">같은 기기 데모: 발급 후 같은 코드를 아래에 입력하세요</p>
         </div>
         <form class="auth-form" id="accept-invite-form">
           ${formField('배우자 초대 코드', '<input type="text" name="code" class="input" placeholder="ABC123" maxlength="8" style="text-transform:uppercase" />')}
@@ -89,6 +103,10 @@ export function bindAuth(onFinish) {
         persist();
         import('./index.js').then((m) => m.renderApp());
         toast('초대 코드가 발급되었습니다');
+        return;
+      }
+      if (a === 'copy-invite' && state.data.auth.inviteCode) {
+        copyText(state.data.auth.inviteCode);
         return;
       }
       if (a === 'invite-skip') { state.authScreen = 'policy'; import('./index.js').then((m) => m.renderApp()); return; }
