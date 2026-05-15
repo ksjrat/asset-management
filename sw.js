@@ -15,6 +15,8 @@ const ASSETS = [
   './js/csv-import.js',
   './js/sync.js',
   './js/list-editor.js',
+  './js/xlsx-import.js',
+  './import.html',
   './manifest.json',
   './icons/icon.svg',
 ];

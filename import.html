@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e4d3a" />
+  <title>스프레드시트 가져오기</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .import-page { padding: 16px; max-width: 480px; margin: 0 auto; }
+    .import-page h1 { font-size: 1.1rem; margin-bottom: 8px; }
+    .import-page ol { font-size: 0.85rem; color: var(--muted); margin: 12px 0 16px 20px; line-height: 1.5; }
+    .import-log { font-size: 0.8rem; background: var(--surface); border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; margin-top: 12px; }
+    .import-log li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="import-page">
+    <h1>스프레드시트 → 앱 가져오기</h1>
+    <p class="hint">구글 시트에서 받은 <strong>.xlsx</strong> 파일을 앱 데이터로 변환합니다.</p>
+
+    <ol>
+      <li>구글 시트 → <strong>파일</strong> → <strong>다운로드</strong> → <strong>Microsoft Excel(.xlsx)</strong></li>
+      <li>아래에서 파일 선택</li>
+      <li>미리보기 확인 후 <strong>앱에 적용</strong></li>
+      <li>메인 앱으로 이동해 데이터 확인</li>
+    </ol>
+
+    <label class="btn btn-primary file-label" style="width:100%;display:block;text-align:center">
+      엑셀 파일 선택 (.xlsx)
+      <input type="file" id="file-xlsx" accept=".xlsx,.xls" hidden />
+    </label>
+
+    <div id="preview" class="card hidden" style="margin-top:12px">
+      <div class="card-title">가져오기 미리보기</div>
+      <p id="preview-summary"></p>
+      <ul id="preview-log" class="import-log"></ul>
+      <button type="button" class="btn btn-primary" id="btn-apply" style="width:100%;margin-top:8px">앱에 적용 (기존 데이터 덮어쓰기)</button>
+    </div>
+
+    <a href="index.html" class="btn btn-outline" style="width:100%;display:block;text-align:center;margin-top:12px;text-decoration:none">← 가계부 앱으로</a>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <script type="module">
+    import { parseXlsxBuffer, saveImportedData } from './js/xlsx-import.js';
+
+    let pending = null;
+
+    document.getElementById('file-xlsx').onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const buf = await file.arrayBuffer();
+      try {
+        const { data, stats } = parseXlsxBuffer(buf, 2026);
+        pending = data;
+        document.getElementById('preview').classList.remove('hidden');
+        document.getElementById('preview-summary').textContent =
+          `월별 시트 ${stats.months}개 · 수입 ${stats.income}건 · 지출 ${stats.expenses}건 · 자산 ${stats.assets}건`;
+        document.getElementById('preview-log').innerHTML =
+          stats.sheets.length
+            ? stats.sheets.map((s) => '<li>' + s + '</li>').join('')
+            : '<li>인식된 시트가 없습니다. 시트 이름이 1월~12월, 계좌현황 등인지 확인하세요.</li>';
+      } catch (err) {
+        alert('파일 읽기 실패: ' + err.message);
+      }
+    };
+
+    document.getElementById('btn-apply').onclick = () => {
+      if (!pending) return;
+      if (!confirm('현재 앱 데이터를 스프레드시트 내용으로 교체합니다. 계속할까요?')) return;
+      saveImportedData(pending);
+      alert('가져오기 완료! 가계부 앱에서 확인하세요.');
+      location.href = 'index.html';
+    };
+  </script>
+</body>
+</html>

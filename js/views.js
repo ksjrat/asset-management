@@ -480,10 +480,11 @@ export function renderSettings(ctx) {
     '<div class="form-group"><label>\uc6d4 \ubaa9\ud45c \uc800\ucd95\ub960 (0~1)</label><input name="monthlySavingsRateGoal" type="number" step="0.01" value="' + data.settings.monthlySavingsRateGoal + '" /></div>' +
     '<div class="form-group"><label>\uc774\ub984 (\uc27c\ud45c)</label><input name="names" value="' + escapeHtml(data.settings.names.join(', ')) + '" /></div>' +
     '<label class="checkbox-row"><input type="checkbox" name="autoCarryOver" ' + (data.settings.autoCarryOver ? 'checked' : '') + ' /> \uc804\uc6d4 \uc794\uc561 \uc790\ub3d9 \uc774\uc6d4</label>' +
-    '<hr class="divider" /><p class="hint">\ubc31\uc5c5</p>' +
+    '<hr class="divider" /><p class="hint">\ubc31\uc5c5 \u00b7 \uc2a4\ud504\ub808\ub4dc\uc2dc\ud2b8</p>' +
+    '<a href="import.html" class="btn btn-primary" style="width:100%;display:block;text-align:center;margin-bottom:8px;text-decoration:none">\uc5d1\uc140 \ud30c\uc77c \uac00\uc838\uc624\uae30 (.xlsx)</a>' +
     '<button type="button" class="btn btn-outline" id="btn-export" style="width:100%;margin-bottom:6px">JSON \ub0b4\ubcf4\ub0b4\uae30</button>' +
     '<label class="btn btn-outline file-label">\uac00\uc838\uc624\uae30 (JSON)<input type="file" id="import-json" accept=".json" hidden /></label>' +
-    '<label class="btn btn-outline file-label">CSV \uac70\ub798 \uac00\uc838\uc624\uae30<input type="file" id="import-csv" accept=".csv" hidden /></label>' +
+    '<label class="btn btn-outline file-label">CSV \uac70\ub798 (\ud604\uc7ac \uc6d4\ub9cc)<input type="file" id="import-csv" accept=".csv" hidden /></label>' +
     '<hr class="divider" /><p class="hint">Firestore \ub3d9\uae30\ud654</p>' +
     '<label class="checkbox-row"><input type="checkbox" name="syncEnabled" ' + (sync.enabled ? 'checked' : '') + ' /> \uc0ac\uc6a9</label>' +
     '<div class="form-group"><label>API Key</label><input name="apiKey" value="' + escapeHtml(sync.apiKey || '') + '" /></div>' +
