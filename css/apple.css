@@ -40,10 +40,10 @@
   --mesh-b: rgba(88, 86, 214, 0.04);
   --mesh-c: rgba(52, 199, 89, 0.03);
 
-  /* Squircle */
-  --squircle-r: 22px;
-  --squircle-r-sm: 14px;
-  --squircle-r-lg: 28px;
+  /* Squircle — 차분한 곡률 */
+  --squircle-r: 16px;
+  --squircle-r-sm: 10px;
+  --squircle-r-lg: 18px;
 
   /* Soft depth — 배경과 카드 분리 */
   --depth-card:
@@ -146,6 +146,7 @@
 :is(
   .squircle,
   .header,
+  .tab-bar,
   .hero-card, .hero-card.small, .rollover-card,
   .mini-card, .summary-row .mini-card,
   .goal-card, .guide-card, .actions-card,
@@ -165,6 +166,7 @@
   :is(
     .squircle,
     .header,
+    .tab-bar,
     .hero-card, .mini-card, .goal-card, .budget-envelope,
     .settings-group, .list-group, .card, .modal-sheet,
     .quick-btn, .tip-banner, .empty-state, .setup-list
@@ -347,7 +349,7 @@ html, body {
 /* ── Main — Airy spacing ── */
 .main {
   padding: var(--space-md) var(--space-md) var(--space-xl);
-  padding-bottom: calc(var(--tab-h) + var(--safe-bottom, 0px) + 96px);
+  padding-bottom: calc(var(--tab-h) + max(8px, env(safe-area-inset-bottom)) + 96px + 16px);
 }
 
 .main.page-enter {
@@ -359,32 +361,24 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Tab Bar — Translucent blur (iOS) ── */
+/* ── Tab Bar — Glass · Squircle (floating) ── */
 .tab-bar {
   position: fixed;
-  bottom: 0;
+  bottom: max(8px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  width: calc(100% - 2 * var(--space-md));
+  max-width: calc(480px - 2 * var(--space-md));
+  display: flex;
+  padding: 6px 4px 8px;
   background: var(--tab-glass);
   backdrop-filter: var(--tab-blur);
   -webkit-backdrop-filter: var(--tab-blur);
-  border-top: 0.33px solid rgba(255, 255, 255, 0.35);
-  border-radius: 0;
-  box-shadow:
-    0 -0.5px 0 rgba(0, 0, 0, 0.06),
-    0 -12px 40px -8px rgba(0, 0, 0, 0.04);
+  border: 0.5px solid var(--glass-border);
+  box-shadow: var(--depth-card);
   z-index: 20;
   isolation: isolate;
-}
-
-@media (prefers-color-scheme: dark) {
-  .tab-bar {
-    border-top-color: rgba(255, 255, 255, 0.08);
-  }
+  overflow: hidden;
 }
 
 .tab-btn {
@@ -914,7 +908,7 @@ html, body {
   font-weight: 300;
   border: none;
   right: max(var(--space-md), calc(50% - 240px + var(--space-md)));
-  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + var(--space-md));
+  bottom: calc(var(--tab-h) + max(8px, env(safe-area-inset-bottom)) + var(--space-md) + 16px);
 }
 
 .fab-secondary {
@@ -1092,15 +1086,24 @@ html, body {
 }
 
 .app-shell .tab-bar {
-  width: 100% !important;
-  max-width: 480px !important;
+  width: calc(100% - 2 * var(--space-md)) !important;
+  max-width: calc(480px - 2 * var(--space-md)) !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  bottom: 0 !important;
-  border-radius: 0 !important;
+  bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  border-radius: var(--squircle-r) !important;
+  border: 0.5px solid var(--glass-border) !important;
+  box-shadow: var(--depth-card) !important;
   background: var(--tab-glass) !important;
   backdrop-filter: var(--tab-blur) !important;
   -webkit-backdrop-filter: var(--tab-blur) !important;
+}
+
+@supports (corner-shape: superellipse(1.55)) {
+  .app-shell .tab-bar {
+    corner-shape: superellipse(1.55);
+    border-radius: var(--squircle-r-lg) !important;
+  }
 }
 
 .app-shell .hero-card {
