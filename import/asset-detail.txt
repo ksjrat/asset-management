@@ -1,0 +1,59 @@
+﻿=== 적금관리 (17, 20)
+    0        1       2            3              4                    5                    6    7     8     9      10     11
+0  NaN  ◀  적금관리     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+1  NaN      NaN     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+2  NaN      NaN     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+3  NaN      NaN     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+4  NaN      NaN     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+5  NaN      NaN     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+6  NaN      No.      은행          적금명             비고                  가입일                  만기일   기간  가입기간  남은기간  만기 여부  월 적립액
+7  NaN        1    국민은행     kb청년도약계좌        금리 4.5%  2025-05-21 00:00:00  2028-07-11 00:00:00   중기    37    25    NaN  50000
+8  NaN        2  키움저축은행  e-plus 정기적금     금리 4% / 1년                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+9  NaN        3  키움저축은행  e-plus 정기적금     금리 4% / 1년                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+10 NaN        4   카카오뱅크        세이프박스  금리 1.6% / 비상금                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+11 NaN        5   카카오뱅크        세이프박스  금리 1.6% / 경조사                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+12 NaN        6     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+13 NaN        7     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+14 NaN        8     NaN          NaN            NaN                  NaN                  NaN  NaN   NaN   NaN    NaN    NaN
+
+=== 투자관리 (136, 16)
+    0         1           2          3            4                    5           6         7            8         9         10        11
+0  NaN  ◀  투자 관리         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+1  NaN       NaN         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+2  NaN        매매         NaN        NaN          NaN  ※ 어둡게 음영처리 되어 있는...         NaN       NaN          NaN       NaN       NaN       NaN
+3  NaN       NaN         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+4  NaN        총계         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+5  NaN    시작 예수금      총 보유금액     총 매수금액       총 매도금액                 총 비용        총 손익       손익률  예수금 대비\n손익률    총 평가금액    총 평가손익   총 평가손익률
+6  NaN       NaN    31272224   38375090     39030920           132650.522  566058.884  0.014751          NaN  46568675  15296451  0.489139
+7  NaN       NaN         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+8  NaN     월별 손익         NaN        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+9  NaN         월      월별 손익계  월별\n평균손익률  월별 최고\n수익종목                  NaN   월별 최고\n수익       NaN          NaN       NaN       NaN       NaN
+10 NaN         1           0        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+11 NaN         2           0        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+12 NaN         3           0        NaN          NaN                  NaN         NaN       NaN          NaN       NaN       NaN       NaN
+13 NaN         4  298519.436   0.013163      SK 하이닉스                  NaN    167932.6       NaN          NaN       NaN       NaN       NaN
+14 NaN         5   16360.042   0.000474       수산세보틱스                  NaN  176322.874       NaN          NaN       NaN       NaN       NaN
+
+=== 부채관리 (11, 13)
+    0        1      2       3                    4                    5     6     7          8            9            10       11
+0  NaN  ◀  부채관리    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN          NaN          NaN      NaN
+1  NaN      NaN    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN          NaN          NaN      NaN
+2  NaN      NaN    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN          NaN           총계  현재누적상환금
+3  NaN      NaN    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN          NaN          NaN  5011800
+4  NaN      NaN    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN          NaN          NaN      NaN
+5  NaN      No.    기관명     대출명                  대출일                  만기일  가입기간  남은기간       대출금액       총 대출이자       총 상환금액  현재누적상환금
+6  NaN        1  새마을금고  주택담보대출  2025-12-05 00:00:00  2055-11-21 00:00:00   359   354  300000000  174125351.7  473292051.7  5011800
+7  NaN        2    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN            0            0      NaN
+8  NaN        3    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN            0            0      NaN
+9  NaN        4    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN            0            0      NaN
+10 NaN        5    NaN     NaN                  NaN                  NaN   NaN   NaN        NaN            0            0      NaN
+
+=== 비상금관리 (6, 15)
+   0         1    2      3    4   5     6    7      8    9   10    11
+0 NaN  ◀  비상금관리  NaN    NaN  NaN NaN   NaN  NaN    NaN  NaN NaN   NaN
+1 NaN       NaN  NaN    NaN  NaN NaN   NaN  NaN    NaN  NaN NaN   NaN
+2 NaN     비상금 계    0    NaN  NaN NaN   NaN  NaN    NaN  NaN NaN   NaN
+3 NaN       NaN  NaN    NaN  NaN NaN   NaN  NaN    NaN  NaN NaN   NaN
+4 NaN      비상금1  NaN  현재 잔액    0 NaN  비상금2  NaN  현재 잔액    0 NaN  비상금3
+5 NaN        날짜   내용     금액   잔액 NaN    날짜   내용     금액   잔액 NaN    날짜
+

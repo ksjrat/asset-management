@@ -1,0 +1,88 @@
+﻿=== 硫붿씤 ===
+    0             1   2           3   4   5   6   7   8           9
+0 NaN  ?? 2026??媛怨꾨? NaN         NaN NaN NaN NaN NaN NaN         NaN
+1 NaN           NaN NaN         NaN NaN NaN NaN NaN NaN         NaN
+2 NaN           NaN NaN  2026???щТ紐⑺몴 NaN NaN NaN NaN NaN  2026???щТ?쇱젙
+3 NaN        ????ぉ?ㅼ젙 NaN         NaN NaN NaN NaN NaN NaN         NaN
+4 NaN          ???섏엯 NaN         NaN NaN NaN NaN NaN NaN         NaN
+5 NaN   ???곌컙 ??ぉ蹂??섏엯 NaN         NaN NaN NaN NaN NaN NaN         NaN
+6 NaN          ??吏異?NaN         NaN NaN NaN NaN NaN NaN         NaN
+7 NaN   ???곌컙 移대뱶蹂?吏異?NaN         NaN NaN NaN NaN NaN NaN         NaN
+
+=== ??ぉ ===
+    0      1     2              3      4        5        6      7      8       9
+0 NaN  ?  ??ぉ   NaN            NaN    NaN      NaN      NaN    NaN    NaN     NaN
+1 NaN    NaN   NaN            NaN    NaN      NaN      NaN    NaN    NaN     NaN
+2 NaN   吏異쒓뎄遺?   ?섏엯          ?異뺤꽦吏異?    ?앸퉬      二쇨굅鍮?   ?앺솢?⑺뭹鍮? ?섎쪟誘몄슜鍮?   援먯쑁鍮?    援щ룆猷?
+3 NaN   怨꾩쥖?댁껜    ?댁썡             ?곴툑  ?쒖옣/留덊듃      ?ъ궛??   媛援?媛??    ?섎쪟     ?숆탳      荑좏뙜
+4 NaN     ?꾧툑    湲됱뿬  二쇳깮泥?빟(?吏 + ?뱀옱)  ?몄떇/諛곕떖  二쇰떞? ?먮━湲?   二쇰갑/?뺤떎   ?⑥뀡?≫솕     ?숈썝     肄붿썾??
+5 NaN   00?좎슜    ?곸뿬        IRP(?뱀옱)     媛꾩떇      愿由щ퉬   ?ㅽ뵾??臾멸뎄    ?명긽鍮?    ?꾩꽌     ?좏뒠釉?
+6 NaN   00泥댄겕  ?ъ옄?섏씡        IRP(?吏)   ???뚯떇      NaN  湲고? ?앺솢?⑺뭹  湲고? ?섎쪟     媛뺤쓽  ?좏뵆(?뱀옱)
+7 NaN    NaN    ?댁옄       ?댁쭅?곌툑(?뱀옱)    而ㅽ뵾??     NaN   湲고? ?≪?異?   ?붿옣?? 湲고? 援먯쑁  ?좏뵆(?吏)
+
+=== 寃곗옱 諛⑹떇 ===
+    0            1       2      3      4       5        6        7        8           9
+0 NaN        ?  ??ぉ     NaN    NaN    NaN     NaN      NaN      NaN      NaN         NaN
+1 NaN          NaN     NaN    NaN    NaN     NaN      NaN      NaN      NaN         NaN
+2 NaN        ?異뺤꽦吏異?  ?덉긽 湲덉븸  寃곗옱 諛⑹떇     ?앸퉬   ?덉긽 湲덉븸    寃곗옱 諛⑹떇      二쇨굅鍮?    ?덉긽湲덉븸       寃곗옱 諛⑹떇
+3 NaN           ?곴툑  500000  ?뱀옱 怨꾩쥖  ?쒖옣/留덊듃  350000  ?吏 ?좎슜移대뱶      ?ъ궛??      誘몄젙  ?⑸? ???덉궛 議곗젙
+4 NaN  二쇳깮泥?빟(?吏+?뱀옱)   40000  ?뱀옱 怨꾩쥖  ?몄떇/諛곕떖     NaN  ?吏 ?좎슜移대뱶  二쇰떞? ?먮━湲? 1810000       ?吏 怨꾩쥖
+5 NaN      IRP(?뱀옱)  250000  ?뱀옱 怨꾩쥖     媛꾩떇     NaN  ?吏 ?좎슜移대뱶      愿由щ퉬   250000     ?뱀옱 ?좎슜移대뱶
+6 NaN      IRP(?吏)  250000  ?뱀옱 怨꾩쥖   ???뚯떇     NaN  ?吏 ?좎슜移대뱶      NaN      NaN         NaN
+7 NaN     ?댁쭅?곌툑(?뱀옱)  500000  ?뱀옱 怨꾩쥖    而ㅽ뵾??    NaN  ?吏 ?좎슜移대뱶      NaN      NaN         NaN
+
+=== 1??===
+        0                                              1    2    3    4    5       6    7   8       9
+0  2026.0  ?                    01??                   ?? NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+1     1.0                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+2     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+3     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+4     NaN                                           珥??섏엯    0  NaN  NaN  NaN     NaN  NaN NaN  ?대쾲??紐⑺몴
+5     NaN                                           珥?吏異?   0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+6     NaN                                             李⑥븸    0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+7     NaN                                            NaN  NaN  NaN  NaN  NaN  臾댁?異??깃났   31 NaN     NaN
+
+=== 2??===
+        0                                              1    2    3    4    5       6    7   8       9
+0  2026.0  ?                    02??                   ?? NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+1     2.0                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+2     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+3     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+4     NaN                                           珥??섏엯    0  NaN  NaN  NaN     NaN  NaN NaN  ?대쾲??紐⑺몴
+5     NaN                                           珥?吏異?   0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+6     NaN                                             李⑥븸    0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+7     NaN                                            NaN  NaN  NaN  NaN  NaN  臾댁?異??깃났   28 NaN     NaN
+
+=== 3??===
+        0                                              1    2    3    4    5       6    7   8       9
+0  2026.0  ?                    03??                   ?? NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+1     3.0                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+2     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+3     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+4     NaN                                           珥??섏엯    0  NaN  NaN  NaN     NaN  NaN NaN  ?대쾲??紐⑺몴
+5     NaN                                           珥?吏異?   0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+6     NaN                                             李⑥븸    0  NaN       NaN     NaN  NaN NaN     NaN
+7     NaN                                            NaN  NaN  NaN  NaN  NaN  臾댁?異??깃났   31 NaN     NaN
+
+=== 4??===
+        0                                              1    2    3    4    5       6    7   8       9
+0  2026.0  ?                    04??                   ?? NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+1     4.0                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+2     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+3     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+4     NaN                                           珥??섏엯    0  NaN  NaN  NaN     NaN  NaN NaN  ?대쾲??紐⑺몴
+5     NaN                                           珥?吏異?   0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+6     NaN                                             李⑥븸    0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+7     NaN                                            NaN  NaN  NaN  NaN  NaN  臾댁?異??깃났   30 NaN     NaN
+
+=== 5??===
+        0                                              1    2    3    4    5       6    7   8       9
+0  2026.0  ?                    05??                   ?? NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+1     5.0                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+2     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+3     NaN                                            NaN  NaN  NaN  NaN  NaN     NaN  NaN NaN     NaN
+4     NaN                                           珥??섏엯    0  NaN  NaN  NaN     NaN  NaN NaN  ?대쾲??紐⑺몴
+5     NaN                                           珥?吏異?   0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+6     NaN                                             李⑥븸    0  NaN  NaN  NaN     NaN  NaN NaN     NaN
+7     NaN                                            NaN  NaN  NaN  NaN  NaN  臾댁?異??깃났   15 NaN     NaN
+

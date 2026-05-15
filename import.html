@@ -56,7 +56,8 @@
         pending = data;
         document.getElementById('preview').classList.remove('hidden');
         document.getElementById('preview-summary').textContent =
-          `월별 시트 ${stats.months}개 · 수입 ${stats.income}건 · 지출 ${stats.expenses}건 · 자산 ${stats.assets}건`;
+          `월별 ${stats.months}개 · 수입 ${stats.income} · 지출 ${stats.expenses} · 예산항목 ${stats.budgetCats} · 자산 ${stats.assets}` +
+          (stats.synthesized ? ` · 시트합계 ${stats.synthesized}건` : '');
         document.getElementById('preview-log').innerHTML =
           stats.sheets.length
             ? stats.sheets.map((s) => '<li>' + s + '</li>').join('')

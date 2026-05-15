@@ -3,6 +3,8 @@ import { deepMerge } from './merge.js';
 import { parseAmount } from './format.js';
 
 const MONTH_SHEET = /^(\d{1,2})\s*월$/;
+const LOAN_SHEET = /^대출\s*(\d)$/;
+
 const ASSET_SHEETS = {
   '계좌현황': 'accounts',
   '계좌': 'accounts',
@@ -19,7 +21,10 @@ const ASSET_SHEETS = {
   '부채': 'debts',
 };
 
-const LOAN_SHEET = /^대출\s*(\d)$/;
+const INCOME_COLS = { date: 1, cat: 2, sub: 3, name: 4, amt: 7 };
+const EXPENSE_COLS = { date: 9, type: 10, cat: 11, sub: 12, name: 13, amt: 15, pay: 16, card: 17 };
+
+const SAVING_CATS = /저축|적금|IRP|퇴직연금|청약|투자|여행\s*적금/;
 
 function norm(s) {
   return String(s ?? '').trim().replace(/\s+/g, '');
@@ -32,16 +37,6 @@ function cellStr(v) {
   return String(v).trim();
 }
 
-function findHeaderRow(rows) {
-  const keys = ['날짜', '일자', '항목', '금액', '구분', '수입', '지출', '내용', '적요'];
-  for (let r = 0; r < Math.min(rows.length, 25); r++) {
-    const line = rows[r].map(cellStr).join('|');
-    const hits = keys.filter((k) => line.includes(k)).length;
-    if (hits >= 2) return r;
-  }
-  return -1;
-}
-
 function colIndex(headers, names) {
   for (let i = 0; i < headers.length; i++) {
     const h = norm(headers[i]);
@@ -50,107 +45,328 @@ function colIndex(headers, names) {
   return -1;
 }
 
-function parseMonthSheet(rows, year, month) {
+function formatDate(v, year, month) {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = cellStr(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{1,2}[./]\d{1,2}/.test(s)) {
+    const parts = s.split(/[./]/);
+    const d = parts[1] || parts[0];
+    return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+function isSectionBreak(first) {
+  if (!first) return false;
+  return /^(총|고정|변동|부가|MEMO|날짜$|수입$|지출)/.test(first) && !/^\d{4}/.test(first);
+}
+
+function findTransactionHeaderRows(rows) {
+  const found = [];
+  for (let r = 0; r < rows.length; r++) {
+    const headers = rows[r].map(cellStr);
+    const line = headers.join('|');
+    if (line.includes('날짜') && (line.includes('금액') || line.includes('결제금액') || line.includes('지출'))) {
+      found.push(r);
+    }
+  }
+  return found;
+}
+
+function readSide(row, cols, year, month, isIncome) {
+  const amount = parseAmount(row[cols.amt]);
+  if (!amount) return null;
+
+  const cat = cellStr(row[cols.cat]);
+  const sub = cellStr(row[cols.sub]);
+  const name = cellStr(row[cols.name]);
+  if (!cat && !sub && !name) return null;
+  if (/합계|소계|total/i.test(cat + name)) return null;
+
+  let typeRaw = isIncome ? '' : cellStr(row[cols.type]);
+  if (!isIncome && !typeRaw && cat) {
+    if (SAVING_CATS.test(cat) || SAVING_CATS.test(sub)) typeRaw = '저축성';
+  }
+
+  const isSaving = /저축/.test(typeRaw) || SAVING_CATS.test(cat);
+
+  return {
+    id: uid(),
+    date: formatDate(row[cols.date], year, month),
+    owner: '공동',
+    name: name || sub || cat,
+    category: cat || (isIncome ? '기타수입' : '기타'),
+    subCategory: sub,
+    amount,
+    card: !isIncome && cols.card != null ? cellStr(row[cols.card]) : '',
+    payment: !isIncome && cols.pay != null ? cellStr(row[cols.pay]) : '',
+    type: isSaving ? 'saving' : 'consumption',
+  };
+}
+
+function parseMonthTransactions(rows, year, month) {
   const income = [];
   const expenses = [];
-  const hr = findHeaderRow(rows);
-  if (hr < 0) return { income, expenses };
+  const headerRows = findTransactionHeaderRows(rows);
 
-  const headers = rows[hr].map(cellStr);
-  const iDate = colIndex(headers, ['날짜', '일자', 'date']);
-  const iType = colIndex(headers, ['구분', '수입지출', 'type']);
-  const iCat = colIndex(headers, ['항목', '카테고리', '대분류', 'category']);
-  const iSub = colIndex(headers, ['세부', '세부항목']);
-  const iAmt = colIndex(headers, ['금액', 'amount']);
-  const iName = colIndex(headers, ['내용', '적요', '메모', 'name']);
-  const iCard = colIndex(headers, ['카드']);
-  const iPay = colIndex(headers, ['결제', '결재']);
-  const iOwner = colIndex(headers, ['소유', '담당', '이름']);
+  for (const hr of headerRows) {
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || row.every((c) => cellStr(c) === '')) continue;
 
-  for (let r = hr + 1; r < rows.length; r++) {
-    const row = rows[r];
-    if (!row || row.every((c) => cellStr(c) === '')) continue;
+      const first = cellStr(row[1]) || cellStr(row[9]);
+      if (isSectionBreak(first)) break;
+      if (norm(first) === '날짜') continue;
 
-    const amount = parseAmount(iAmt >= 0 ? row[iAmt] : 0);
-    if (!amount) continue;
+      const inc = readSide(row, INCOME_COLS, year, month, true);
+      if (inc) income.push(inc);
 
-    let typeRaw = iType >= 0 ? cellStr(row[iType]) : '';
-    const cat = iCat >= 0 ? cellStr(row[iCat]) : '';
-    if (!typeRaw && cat) {
-      if (/수입|급여|이자/.test(cat)) typeRaw = '수입';
+      const exp = readSide(row, EXPENSE_COLS, year, month, false);
+      if (exp) expenses.push(exp);
     }
-    const isIncome = /수입|income/i.test(typeRaw) || /^\+/.test(cellStr(row[iAmt]));
-
-    let date = iDate >= 0 ? cellStr(row[iDate]) : '';
-    if (date && /^\d{1,2}[./]\d{1,2}/.test(date)) {
-      const parts = date.split(/[./]/);
-      date = `${year}-${String(month).padStart(2, '0')}-${String(parts[1] || parts[0]).padStart(2, '0')}`;
-    } else if (!date || !/^\d{4}/.test(date)) {
-      date = `${year}-${String(month).padStart(2, '0')}-01`;
-    }
-
-    const entry = {
-      id: uid(),
-      date,
-      owner: iOwner >= 0 ? cellStr(row[iOwner]) || '공동' : '공동',
-      name: iName >= 0 ? cellStr(row[iName]) : '',
-      category: cat || '기타',
-      subCategory: iSub >= 0 ? cellStr(row[iSub]) : '',
-      amount,
-      card: iCard >= 0 ? cellStr(row[iCard]) : '',
-      payment: iPay >= 0 ? cellStr(row[iPay]) : '',
-      type: cat === '저축성' ? 'saving' : 'consumption',
-    };
-
-    if (isIncome) income.push(entry);
-    else expenses.push(entry);
   }
   return { income, expenses };
 }
 
-function parseAssetSheet(rows, sheetName) {
-  const list = [];
-  const hr = findHeaderRow(rows);
-  const start = hr >= 0 ? hr + 1 : 0;
-  const headers = hr >= 0 ? rows[hr].map(cellStr) : [];
+function parseMonthCategorySummary(rows, year, month) {
+  const items = [];
+  const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
-  const iName = colIndex(headers, ['이름', '계좌', '상품', '적요']);
-  const iInst = colIndex(headers, ['금융', '은행', '기관']);
-  const iBal = colIndex(headers, ['잔액', '평가', '금액']);
-  const iOwner = colIndex(headers, ['소유', '담당']);
-
-  for (let r = start; r < rows.length; r++) {
+  for (let r = 8; r < Math.min(rows.length, 28); r++) {
     const row = rows[r];
     if (!row) continue;
-    const balance = parseAmount(iBal >= 0 ? row[iBal] : row[row.length - 1]);
-    const name = iName >= 0 ? cellStr(row[iName]) : cellStr(row[0]);
-    if (!name && !balance) continue;
-    if (/합계|소계|total/i.test(name)) continue;
+    const cat = cellStr(row[9]);
+    if (!cat || /항목|분석|MEMO|지출|예산/i.test(cat)) continue;
+
+    const spent = parseAmount(row[10]);
+    const budget = parseAmount(row[11]);
+    const actual = parseAmount(row[12]) || spent;
+    if (!actual && !budget) continue;
+
+    items.push({ category: cat, budget, actual, spent });
+  }
+
+  return { items, lastDay };
+}
+
+function synthesizeFromCategorySummary(summary, lastDay) {
+  const expenses = [];
+  for (const { category, actual } of summary) {
+    if (!actual || actual <= 0) continue;
+    expenses.push({
+      id: uid(),
+      date: lastDay,
+      owner: '공동',
+      name: '(시트 카테고리 합계)',
+      category,
+      subCategory: '',
+      amount: actual,
+      card: '',
+      payment: '',
+      type: SAVING_CATS.test(category) ? 'saving' : 'consumption',
+    });
+  }
+  return expenses;
+}
+
+function synthesizeIncomeFromBudget(budget, year, month) {
+  const income = [];
+  const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+  const incomeCats = ['급여', '상여', '투자수익', '이자', '부수익', '기타 수입', '기타수입'];
+
+  for (const cat of incomeCats) {
+    const amt = (budget[cat] || {})[month];
+    if (!amt || amt <= 0) continue;
+    income.push({
+      id: uid(),
+      date: lastDay,
+      owner: '공동',
+      name: '(예산 시트)',
+      category: cat.replace(/\s/g, ''),
+      subCategory: '',
+      amount: amt,
+      card: '',
+      payment: '',
+      type: 'consumption',
+    });
+  }
+  return income;
+}
+
+function parseBudgetSheet(rows) {
+  const budget = {};
+  let headerRow = -1;
+  let monthCols = [];
+
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const v = cellStr(row[c]);
+      const m = v.match(/^(\d{1,2})월$/);
+      if (m) {
+        headerRow = r;
+        monthCols = [];
+        for (let c2 = 0; c2 < row.length; c2++) {
+          const mv = cellStr(row[c2]).match(/^(\d{1,2})월$/);
+          if (mv) monthCols.push({ col: c2, month: parseInt(mv[1], 10) });
+        }
+        break;
+      }
+    }
+    if (headerRow >= 0) break;
+  }
+
+  if (headerRow < 0) return budget;
+
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    let cat = '';
+    for (let c = 0; c < Math.min(3, row.length); c++) {
+      const v = cellStr(row[c]);
+      if (v && !/nan/i.test(v)) {
+        cat = v;
+        break;
+      }
+    }
+    if (!cat || /예산|구분|총계|합계/i.test(cat)) continue;
+
+    budget[cat] = budget[cat] || {};
+    for (const { col, month } of monthCols) {
+      const v = parseAmount(row[col]);
+      if (v) budget[cat][month] = v;
+    }
+  }
+  return budget;
+}
+
+function parseCategoriesSheet(rows) {
+  const incomeCategories = [];
+  const expenseCategories = [];
+  const subCategories = {};
+
+  for (let r = 2; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const group = cellStr(row[1]);
+    if (!group || group.includes('◀')) continue;
+
+    if (group === '지출구분') {
+      for (let c = 2; c < row.length; c++) {
+        const v = cellStr(row[c]);
+        if (v) expenseCategories.push(v);
+      }
+      continue;
+    }
+
+    if (['계좌이체', '현금'].includes(group) || /신용|체크/.test(group)) continue;
+
+    if (/수입|저축/.test(group) || incomeCategories.length < 8) {
+      for (let c = 2; c < row.length; c++) {
+        const v = cellStr(row[c]);
+        if (v && !incomeCategories.includes(v)) incomeCategories.push(v);
+      }
+    }
+
+    const parent = group;
+    if (!subCategories[parent]) subCategories[parent] = [];
+    for (let c = 2; c < row.length; c++) {
+      const v = cellStr(row[c]);
+      if (v && !subCategories[parent].includes(v)) subCategories[parent].push(v);
+    }
+  }
+
+  return { incomeCategories, expenseCategories, subCategories };
+}
+
+function findHeaderRow(rows, keys, maxRow = 30) {
+  for (let r = 0; r < Math.min(rows.length, maxRow); r++) {
+    const line = rows[r].map(cellStr).join('|');
+    if (keys.filter((k) => line.includes(k)).length >= 2) return r;
+  }
+  return -1;
+}
+
+function parseAccountsSheet(rows) {
+  const list = [];
+  const hr = findHeaderRow(rows, ['은행', '계좌'], 15);
+  if (hr < 0) return list;
+
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const no = cellStr(row[1]);
+    const bank = cellStr(row[2]);
+    const name = cellStr(row[5]) || cellStr(row[4]);
+    if (!bank && !name) continue;
+    if (/합계|No/i.test(no + bank)) continue;
 
     list.push({
       id: uid(),
-      name: name || sheetName,
-      institution: iInst >= 0 ? cellStr(row[iInst]) : '',
-      owner: iOwner >= 0 ? cellStr(row[iOwner]) || '공동' : '공동',
-      balance,
+      name: name || bank,
+      institution: bank,
+      owner: /은지/.test(name + cellStr(row[7])) ? '은지' : /승재/.test(name + cellStr(row[7])) ? '승재' : '공동',
+      balance: 0,
+      accountType: cellStr(row[3]),
+      accountNo: cellStr(row[6]),
+      purpose: cellStr(row[7]),
     });
   }
   return list;
 }
 
-function parseBudgetSheet(rows, year) {
-  const budget = {};
-  for (const row of rows) {
-    if (!row || !row.length) continue;
-    const cat = cellStr(row[0]);
-    if (!cat || /항목|구분|예산/i.test(cat)) continue;
-    budget[cat] = {};
-    for (let m = 1; m <= 12; m++) {
-      const v = parseAmount(row[m]);
-      if (v) budget[cat][m] = v;
-    }
+function parseSavingsSheet(rows) {
+  const list = [];
+  const hr = findHeaderRow(rows, ['은행', '적금'], 15);
+  if (hr < 0) return list;
+
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const name = cellStr(row[3]) || cellStr(row[2]);
+    const bank = cellStr(row[2]);
+    if (!name || /No|합계/i.test(name)) continue;
+
+    list.push({
+      id: uid(),
+      name,
+      institution: bank,
+      owner: '공동',
+      balance: parseAmount(row[11]) || 0,
+      note: cellStr(row[4]),
+      monthlyDeposit: parseAmount(row[11]),
+    });
   }
-  return budget;
+  return list;
+}
+
+function parseDebtsSheet(rows) {
+  const list = [];
+  const hr = findHeaderRow(rows, ['기관', '대출'], 15);
+  if (hr < 0) return list;
+  const headers = rows[hr].map(cellStr);
+  const iBal = colIndex(headers, ['대출금액', '잔액', '금액']);
+
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const lender = cellStr(row[2]);
+    const name = cellStr(row[3]);
+    const balance = iBal >= 0 ? parseAmount(row[iBal]) : parseAmount(row[8]);
+    if (!lender && !name) continue;
+    if (!balance) continue;
+
+    list.push({
+      id: uid(),
+      name: name || lender,
+      institution: lender,
+      owner: '공동',
+      balance,
+    });
+  }
+  return list;
 }
 
 function sheetToRows(ws) {
@@ -174,9 +390,47 @@ function sheetToRows(ws) {
  */
 export function parseXlsxBuffer(buffer, year = 2026) {
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-  const data = deepMerge(structuredClone(DEFAULT), { year, months: {}, budget: {}, assets: structuredClone(DEFAULT.assets), liabilities: structuredClone(DEFAULT.liabilities) });
+  const data = deepMerge(structuredClone(DEFAULT), {
+    year,
+    months: {},
+    budget: {},
+    assets: structuredClone(DEFAULT.assets),
+    liabilities: structuredClone(DEFAULT.liabilities),
+  });
 
-  const stats = { months: 0, income: 0, expenses: 0, assets: 0, sheets: [] };
+  const stats = {
+    months: 0,
+    income: 0,
+    expenses: 0,
+    assets: 0,
+    budgetCats: 0,
+    synthesized: 0,
+    sheets: [],
+  };
+
+  for (const sheetName of wb.SheetNames) {
+    const rows = sheetToRows(wb.Sheets[sheetName]);
+    if (!rows.length) continue;
+
+    if (sheetName.includes('항목') && !sheetName.includes('결재')) {
+      const cats = parseCategoriesSheet(rows);
+      if (cats.incomeCategories.length) data.settings.incomeCategories = cats.incomeCategories;
+      if (cats.expenseCategories.length) data.settings.expenseCategories = cats.expenseCategories;
+      if (Object.keys(cats.subCategories).length) {
+        data.settings.subCategories = { ...data.settings.subCategories, ...cats.subCategories };
+      }
+      stats.sheets.push(`항목: 수입 ${cats.incomeCategories.length}, 지출 ${cats.expenseCategories.length}그룹`);
+      continue;
+    }
+
+    if (sheetName.includes('예산')) {
+      const b = parseBudgetSheet(rows);
+      Object.assign(data.budget, b);
+      stats.budgetCats = Object.keys(b).length;
+      stats.sheets.push(`예산: ${stats.budgetCats}개 항목`);
+      continue;
+    }
+  }
 
   for (const sheetName of wb.SheetNames) {
     const rows = sheetToRows(wb.Sheets[sheetName]);
@@ -186,27 +440,58 @@ export function parseXlsxBuffer(buffer, year = 2026) {
     if (monthM) {
       const month = parseInt(monthM[1], 10);
       const key = `${year}-${String(month).padStart(2, '0')}`;
-      const { income, expenses } = parseMonthSheet(rows, year, month);
-      if (income.length || expenses.length) {
+      let { income, expenses } = parseMonthTransactions(rows, year, month);
+      const { items, lastDay } = parseMonthCategorySummary(rows, year, month);
+
+      if (!expenses.length && items.some((i) => i.actual > 0)) {
+        expenses = synthesizeFromCategorySummary(items, lastDay);
+        stats.synthesized += expenses.length;
+      }
+      if (!income.length) {
+        const fromBudget = synthesizeIncomeFromBudget(data.budget, year, month);
+        if (fromBudget.length) {
+          income = fromBudget;
+          stats.synthesized += income.length;
+        }
+      }
+
+      if (income.length || expenses.length || items.length) {
         data.months[key] = { carryOver: 0, income, expenses };
         stats.months++;
         stats.income += income.length;
         stats.expenses += expenses.length;
-        stats.sheets.push(`${sheetName}: 수입 ${income.length}, 지출 ${expenses.length}`);
+        const syn = stats.synthesized ? ' (시트합계)' : '';
+        stats.sheets.push(`${sheetName}: 수입 ${income.length}, 지출 ${expenses.length}${syn}`);
       }
       continue;
     }
 
-    if (sheetName.includes('예산')) {
-      Object.assign(data.budget, parseBudgetSheet(rows, year));
-      stats.sheets.push('예산 시트 반영');
+    const assetKey = ASSET_SHEETS[sheetName] || ASSET_SHEETS[sheetName.replace(/\s/g, '')];
+    if (assetKey === 'accounts') {
+      const items = parseAccountsSheet(rows);
+      data.assets.accounts.push(...items);
+      stats.assets += items.length;
+      stats.sheets.push(`${sheetName}: ${items.length}건`);
       continue;
     }
-
-    const assetKey = ASSET_SHEETS[sheetName] || ASSET_SHEETS[sheetName.replace(/\s/g, '')];
-    if (assetKey) {
-      const items = parseAssetSheet(rows, sheetName);
-      data.assets[assetKey].push(...items);
+    if (assetKey === 'savings') {
+      const items = parseSavingsSheet(rows);
+      data.assets.savings.push(...items);
+      stats.assets += items.length;
+      stats.sheets.push(`${sheetName}: ${items.length}건`);
+      continue;
+    }
+    if (assetKey === 'debts') {
+      const items = parseDebtsSheet(rows);
+      data.liabilities.debts.push(...items);
+      if (items[0] && data.liabilities.loans[0]) {
+        data.liabilities.loans[0] = {
+          ...data.liabilities.loans[0],
+          name: items[0].name,
+          lender: items[0].institution,
+          balance: items[0].balance,
+        };
+      }
       stats.assets += items.length;
       stats.sheets.push(`${sheetName}: ${items.length}건`);
       continue;
@@ -215,12 +500,12 @@ export function parseXlsxBuffer(buffer, year = 2026) {
     const loanM = sheetName.match(LOAN_SHEET);
     if (loanM) {
       const idx = parseInt(loanM[1], 10) - 1;
-      const items = parseAssetSheet(rows, sheetName);
+      const items = parseDebtsSheet(rows);
       if (items[0] && data.liabilities.loans[idx]) {
         Object.assign(data.liabilities.loans[idx], {
           lender: items[0].institution,
           balance: items[0].balance,
-          name: data.liabilities.loans[idx].name,
+          name: items[0].name || data.liabilities.loans[idx].name,
         });
         stats.sheets.push(`${sheetName} 반영`);
       }
