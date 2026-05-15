@@ -164,6 +164,10 @@ export function getBudgetVsActual(data, year, month) {
 }
 
 export function totalAssets(data) {
+  const summary = data.assets.summary || [];
+  const totalRow = summary.find((s) => /총자산/.test(s.label || ''));
+  if (totalRow?.balance) return totalRow.balance;
+
   const lists = [
     ...data.assets.accounts,
     ...data.assets.emergency,
@@ -172,7 +176,10 @@ export function totalAssets(data) {
     ...data.assets.investments,
     ...data.assets.trades,
   ];
-  return lists.reduce((s, a) => s + (a.balance || 0), 0);
+  const listTotal = lists.reduce((s, a) => s + (a.balance || 0), 0);
+  if (listTotal > 0) return listTotal;
+
+  return summary.reduce((s, a) => s + (a.balance || 0), 0);
 }
 
 export function totalLiabilities(data) {
@@ -182,7 +189,7 @@ export function totalLiabilities(data) {
 }
 
 export function assetBreakdown(data) {
-  return [
+  const fromLists = [
     { id: 'accounts', label: '계좌', total: sumList(data.assets.accounts) },
     { id: 'emergency', label: '비상금', total: sumList(data.assets.emergency) },
     { id: 'deposits', label: '예금', total: sumList(data.assets.deposits) },
@@ -190,6 +197,26 @@ export function assetBreakdown(data) {
     { id: 'investments', label: '투자', total: sumList(data.assets.investments) },
     { id: 'trades', label: '매매', total: sumList(data.assets.trades) },
   ];
+
+  const summary = data.assets.summary || [];
+  if (!summary.length) return fromLists;
+
+  const sheetMap = {
+    금융자산: 'accounts',
+    부동자산: 'deposits',
+    비상금: 'emergency',
+    예금: 'deposits',
+    적금: 'savings',
+    투자: 'investments',
+  };
+
+  return summary
+    .filter((s) => s.balance && !/총자산|순자산|부채/.test(s.label || ''))
+    .map((s) => {
+      const key = Object.entries(sheetMap).find(([k]) => (s.label || '').includes(k))?.[1] || 'accounts';
+      return { id: key, label: s.label, total: s.balance };
+    })
+    .concat(fromLists.filter((r) => r.total > 0 && !summary.some((s) => (s.label || '').includes(r.label))));
 }
 
 function sumList(list) {

@@ -377,6 +377,9 @@ function parseAccountsSheet(rows) {
   const hr = findHeaderRow(rows, ['은행', '계좌'], 15);
   if (hr < 0) return list;
 
+  const headers = rows[hr].map(cellStr);
+  const iBal = colIndex(headers, ['연동금액', '잔액', '금액']);
+
   for (let r = hr + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
@@ -386,16 +389,60 @@ function parseAccountsSheet(rows) {
     if (!bank && !name) continue;
     if (/합계|No/i.test(no + bank)) continue;
 
+    const balance = iBal >= 0 ? parseAmount(row[iBal]) : parseAmount(row[10]);
+
     list.push({
       id: uid(),
       name: name || bank,
       institution: bank,
       owner: /은지/.test(name + cellStr(row[7])) ? '은지' : /승재/.test(name + cellStr(row[7])) ? '승재' : '공동',
-      balance: 0,
+      balance,
       accountType: cellStr(row[3]),
       accountNo: cellStr(row[6]),
       purpose: cellStr(row[7]),
     });
+  }
+  return list;
+}
+
+function parseAssetSummarySheet(rows) {
+  const summary = [];
+  for (let r = 2; r < Math.min(rows.length, 12); r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const label = cellStr(row[3]) || cellStr(row[1]);
+    const balance = parseAmount(row[4]);
+    if (!label || !balance) continue;
+    if (/◀|NaN/i.test(label)) continue;
+
+    const clean = label.replace(/\s*계$/, '').trim();
+    summary.push({
+      id: uid(),
+      label: clean,
+      balance,
+    });
+  }
+  return summary;
+}
+
+function parseInvestmentSheet(rows) {
+  const list = [];
+  for (let r = 0; r < Math.min(rows.length, 12); r++) {
+    const headers = rows[r].map(cellStr);
+    if (!headers.some((h) => /평가금액/.test(h) && !/손익/.test(h))) continue;
+    const dataRow = rows[r + 1] || rows[r];
+    const iEval = headers.findIndex((h) => /평가금액/.test(h) && !/손익/.test(h));
+    const balance = parseAmount(dataRow[iEval >= 0 ? iEval : 8]);
+    if (balance > 100000) {
+      list.push({
+        id: uid(),
+        name: '투자 평가 합계 (시트)',
+        institution: '투자관리',
+        owner: '공동',
+        balance,
+      });
+    }
+    break;
   }
   return list;
 }
@@ -405,21 +452,25 @@ function parseSavingsSheet(rows) {
   const hr = findHeaderRow(rows, ['은행', '적금'], 15);
   if (hr < 0) return list;
 
+  const headers = rows[hr].map(cellStr);
+  const iMonthly = colIndex(headers, ['월적립', '적립액']);
+
   for (let r = hr + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
-    const name = cellStr(row[3]) || cellStr(row[2]);
+    const name = cellStr(row[3]);
     const bank = cellStr(row[2]);
-    if (!name || /No|합계/i.test(name)) continue;
+    if (!name || /No|합계|^\d+$/.test(name)) continue;
+    if (!bank && !cellStr(row[4])) continue;
 
     list.push({
       id: uid(),
       name,
       institution: bank,
       owner: '공동',
-      balance: parseAmount(row[11]) || 0,
+      balance: 0,
       note: cellStr(row[4]),
-      monthlyDeposit: parseAmount(row[11]),
+      monthlyDeposit: iMonthly >= 0 ? parseAmount(row[iMonthly]) : parseAmount(row[11]),
     });
   }
   return list;
@@ -568,6 +619,13 @@ export function parseXlsxBuffer(buffer, year = 2026) {
       continue;
     }
 
+    if (sheetName.includes('자산현황') || sheetName.replace(/\s/g, '') === '자산현황') {
+      data.assets.summary = parseAssetSummarySheet(rows);
+      stats.assets += data.assets.summary.length;
+      stats.sheets.push(`자산현황: 요약 ${data.assets.summary.length}항목`);
+      continue;
+    }
+
     const assetKey = ASSET_SHEETS[sheetName] || ASSET_SHEETS[sheetName.replace(/\s/g, '')];
     if (assetKey === 'accounts') {
       const items = parseAccountsSheet(rows);
@@ -581,6 +639,15 @@ export function parseXlsxBuffer(buffer, year = 2026) {
       data.assets.savings.push(...items);
       stats.assets += items.length;
       stats.sheets.push(`${sheetName}: ${items.length}건`);
+      continue;
+    }
+    if (assetKey === 'investments' || sheetName.includes('투자')) {
+      const items = parseInvestmentSheet(rows);
+      if (items.length) {
+        data.assets.investments.push(...items);
+        stats.assets += items.length;
+        stats.sheets.push(`${sheetName}: 투자 ${items.length}건`);
+      }
       continue;
     }
     if (assetKey === 'debts') {

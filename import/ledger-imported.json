@@ -197,34 +197,61 @@
     ]
   },
   "assets": {
+    "summary": [
+      {
+        "id": "금융자산 계",
+        "label": "금융자산",
+        "balance": 65885792
+      },
+      {
+        "id": "부동자산 계",
+        "label": "부동자산",
+        "balance": 721500000
+      },
+      {
+        "id": "부채",
+        "label": "부채",
+        "balance": 294988200
+      },
+      {
+        "id": "총자산",
+        "label": "총자산",
+        "balance": 1082373992
+      },
+      {
+        "id": "순자산(자본)",
+        "label": "순자산(자본)",
+        "balance": 492397592
+      }
+    ],
     "accounts": [
       {
         "id": "주택청약종합저축",
         "name": "주택청약종합저축",
         "institution": "국민",
         "owner": "공동",
-        "balance": 0
+        "balance": 8080000
       },
       {
         "id": "급여하나통장(승재)",
         "name": "급여하나통장(승재)",
         "institution": "하나",
-        "owner": "공동",
-        "balance": 0
+        "owner": "승재",
+        "balance": 2415342
       },
       {
         "id": "kb청년도약계좌",
         "name": "kb청년도약계좌",
         "institution": "국민",
         "owner": "공동",
-        "balance": 0
+        "balance": 1850000
       },
       {
         "id": "온라인자립예탁금(은지)",
         "name": "온라인자립예탁금(은지)",
         "institution": "새마을",
-        "owner": "공동",
-        "balance": 0
+        "owner": "은지",
+        "balance": 6255252
       },
       {
         "id": "IRP",
@@ -250,8 +277,57 @@
     ],
     "emergency": [],
     "deposits": [],
-    "savings": [],
-    "investments": [],
+    "savings": [
+      {
+        "id": "kb청년도약계좌",
+        "name": "kb청년도약계좌",
+        "institution": "국민은행",
+        "owner": "공동",
+        "balance": 0,
+        "note": "금리 4.5%"
+      },
+      {
+        "id": "e-plus 정기적금",
+        "name": "e-plus 정기적금",
+        "institution": "키움저축은행",
+        "owner": "공동",
+        "balance": 0,
+        "note": "금리 4% / 1년"
+      },
+      {
+        "id": "e-plus 정기적금",
+        "name": "e-plus 정기적금",
+        "institution": "키움저축은행",
+        "owner": "공동",
+        "balance": 0,
+        "note": "금리 4% / 1년"
+      },
+      {
+        "id": "세이프박스",
+        "name": "세이프박스",
+        "institution": "카카오뱅크",
+        "owner": "공동",
+        "balance": 0,
+        "note": "금리 1.6% / 비상금"
+      },
+      {
+        "id": "세이프박스",
+        "name": "세이프박스",
+        "institution": "카카오뱅크",
+        "owner": "공동",
+        "balance": 0,
+        "note": "금리 1.6% / 경조사"
+      }
+    ],
+    "investments": [
+      {
+        "id": "invest-total",
+        "name": "투자 평가 합계 (시트)",
+        "institution": "투자관리",
+        "owner": "공동",
+        "balance": 46568675
+      }
+    ],
     "trades": []
   },
   "liabilities": {

@@ -166,14 +166,76 @@ def import_accounts(df):
             break
     if hr is None:
         return items
+    headers = [cell_str(x) for x in df.iloc[hr].tolist()]
+    i_bal = next(
+        (i for i, h in enumerate(headers) if "연동금액" in h.replace(" ", "") or h in ("잔액", "금액")),
+        10,
+    )
     for i in range(hr + 1, len(df)):
         row = df.iloc[i]
         bank = cell_str(row.iloc[2]) if len(row) > 2 else ""
         name = cell_str(row.iloc[5]) if len(row) > 5 else ""
         if not bank and not name:
             continue
-        items.append({"id": name or bank, "name": name or bank, "institution": bank, "owner": "공동", "balance": 0})
+        bal = parse_amount(row.iloc[i_bal]) if len(row) > i_bal else 0
+        owner = "은지" if "은지" in name else ("승재" if "승재" in name else "공동")
+        items.append({
+            "id": name or bank, "name": name or bank, "institution": bank,
+            "owner": owner, "balance": bal,
+        })
     return items
+
+
+def import_asset_summary(df):
+    summary = []
+    for i in range(2, min(12, len(df))):
+        label = cell_str(df.iloc[i, 3]) if len(df.columns) > 3 else ""
+        if not label:
+            label = cell_str(df.iloc[i, 1]) if len(df.columns) > 1 else ""
+        bal = parse_amount(df.iloc[i, 4]) if len(df.columns) > 4 else 0
+        if label and bal and "◀" not in label:
+            summary.append({"id": label, "label": label.replace(" 계", "").strip(), "balance": bal})
+    return summary
+
+
+def import_savings(df):
+    items = []
+    hr = None
+    for i in range(min(15, len(df))):
+        line = "|".join(cell_str(x) for x in df.iloc[i].tolist())
+        if "은행" in line and "적금" in line:
+            hr = i
+            break
+    if hr is None:
+        return items
+    for i in range(hr + 1, len(df)):
+        row = df.iloc[i]
+        name = cell_str(row.iloc[3]) if len(row) > 3 else ""
+        bank = cell_str(row.iloc[2]) if len(row) > 2 else ""
+        if not name or name in ("No.", "No") or name.isdigit():
+            continue
+        items.append({
+            "id": name, "name": name, "institution": bank, "owner": "공동",
+            "balance": 0, "note": cell_str(row.iloc[4]) if len(row) > 4 else "",
+        })
+    return items
+
+
+def import_investments(df):
+    for i in range(min(12, len(df))):
+        headers = [cell_str(x) for x in df.iloc[i].tolist()]
+        if not any("평가금액" in h for h in headers):
+            continue
+        data_row = df.iloc[i + 1] if i + 1 < len(df) else df.iloc[i]
+        for c, h in enumerate(headers):
+            if "평가금액" in h.replace(" ", "") and "손익" not in h:
+                v = parse_amount(data_row.iloc[c] if c < len(data_row) else 0)
+                if v > 100000:
+                    return [{
+                        "id": "invest-total", "name": "투자 평가 합계 (시트)",
+                        "institution": "투자관리", "owner": "공동", "balance": v,
+                    }]
+    return []
 
 
 SETTLEMENT_SKIP = re.compile(r"^(소비성지출|수입\s*총|총계|합계|누계|총\s*예산)")
@@ -279,7 +341,10 @@ def main():
         "months": {},
         "budget": {},
         "settings": {"title": "승재·은지 가계부", "names": ["승재", "은지"]},
-        "assets": {k: [] for k in ["accounts", "emergency", "deposits", "savings", "investments", "trades"]},
+        "assets": {
+            "summary": [],
+            **{k: [] for k in ["accounts", "emergency", "deposits", "savings", "investments", "trades"]},
+        },
         "liabilities": {
             "debts": [],
             "loans": [{"name": f"대출{i}", "lender": "", "balance": 0} for i in range(1, 6)],
@@ -332,9 +397,21 @@ def main():
                 mo = data["months"][key]
                 print(f"{name}: 수입 {len(mo['income'])}, 지출 {len(mo['expenses'])}")
             continue
+        if "자산현황" in name:
+            data["assets"]["summary"] = import_asset_summary(df)
+            print(f"자산현황: {len(data['assets']['summary'])}항목")
         if name == "계좌현황":
             data["assets"]["accounts"] = import_accounts(df)
-            print(f"계좌: {len(data['assets']['accounts'])}건")
+            bal = sum(a.get("balance", 0) for a in data["assets"]["accounts"])
+            print(f"계좌: {len(data['assets']['accounts'])}건 (연동잔액 합 {bal:,})")
+        if name == "적금관리":
+            data["assets"]["savings"] = import_savings(df)
+            print(f"적금: {len(data['assets']['savings'])}건")
+        if "투자" in name:
+            inv = import_investments(df)
+            if inv:
+                data["assets"]["investments"] = inv
+                print(f"투자: 평가 {inv[0]['balance']:,}")
         if name == "부채관리":
             debts = import_debts(df)
             data["liabilities"]["debts"] = debts
