@@ -4,8 +4,8 @@
   "description": "신혼부부 공동 자산·목표·예산 관리",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f2f2f7",
-  "theme_color": "#f2f2f7",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
   "lang": "ko",
   "icons": [
     {

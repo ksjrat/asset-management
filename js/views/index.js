@@ -11,12 +11,20 @@ import { renderSettings, bindSettings } from './settings.js';
 import { renderSetup, bindSetup } from './setup.js';
 import { showActualForm } from './modals.js';
 
+const TAB_SVG = {
+  dashboard: '<svg class="tab-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8.5Z"/><path d="M9 21V12h6v9"/></svg>',
+  goals: '<svg class="tab-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>',
+  budget: '<svg class="tab-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>',
+  reports: '<svg class="tab-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10M12 20V4M18 20v-6"/></svg>',
+  settings: '<svg class="tab-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+};
+
 const TABS = [
-  { id: 'dashboard', label: '홈', icon: '🏠' },
-  { id: 'goals', label: '목표', icon: '🎯' },
-  { id: 'budget', label: '예산', icon: '💳' },
-  { id: 'reports', label: '리포트', icon: '📋' },
-  { id: 'settings', label: '설정', icon: '⚙️' },
+  { id: 'dashboard', label: '홈' },
+  { id: 'goals', label: '목표' },
+  { id: 'budget', label: '예산' },
+  { id: 'reports', label: '리포트' },
+  { id: 'settings', label: '설정' },
 ];
 
 const MONTH_TABS = new Set(['budget', 'reports']);
@@ -95,7 +103,7 @@ export function renderApp() {
       ${TABS.map((t) => `
         <button type="button" class="tab-btn ${state.tab === t.id ? 'active' : ''}"
           data-tab="${t.id}" role="tab" aria-selected="${state.tab === t.id}" aria-label="${t.label}">
-          <span class="tab-icon">${t.icon}</span>
+          <span class="tab-icon">${TAB_SVG[t.id] || ''}</span>
           <span class="tab-label">${t.label}</span>
         </button>`).join('')}
     </nav>
