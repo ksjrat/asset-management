@@ -73,20 +73,18 @@ export function renderApp() {
 
   root.className = 'app-shell';
   root.innerHTML = `
-    <header class="header">
+    <header class="header${showMonth ? '' : ' header--compact'}">
       <div class="header-row">
         ${showMonth ? monthHeader() : `
-          <span class="icon-spacer"></span>
-          <div class="header-titles">
+          <div class="header-titles header-titles--compact">
             <h1 class="header-title">${esc(tab?.label || '우리 자산')}</h1>
             <p class="header-sub">
               <span class="couple-pill ${data.auth.spouseConnected ? 'connected' : ''}">
                 ${data.auth.spouseConnected ? '💑' : '⏳'}
-                ${data.auth.spouseConnected ? esc(data.auth.spouseName) : '배우자 연결 대기'}
+                ${data.auth.spouseConnected ? esc(data.auth.spouseName) : '연결 대기'}
               </span>
             </p>
           </div>
-          <span class="icon-spacer"></span>
         `}
       </div>
     </header>

@@ -247,8 +247,8 @@ html, body {
   color: var(--text);
 }
 
-/* Large Title — 메인 탭 */
-.header-titles .header-title {
+/* Large Title — 메인 탭 (예산·리포트 등) */
+.header-titles:not(.header-titles--compact) .header-title {
   font-size: var(--text-large-title);
   font-weight: var(--fw-display);
   letter-spacing: -0.04em;
@@ -260,6 +260,38 @@ html, body {
   font-size: var(--text-footnote);
   font-weight: var(--fw-medium);
   color: var(--text-secondary);
+}
+
+/* 홈·목표·설정 — 컴팩트 한 줄 헤더 */
+.header--compact {
+  padding: 8px var(--space-md) 10px;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+.header-titles--compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.header-titles--compact .header-title {
+  font-size: var(--text-title-2);
+  font-weight: var(--fw-title);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.header-titles--compact .header-sub {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.header--compact .couple-pill {
+  padding: 3px 9px;
+  font-size: var(--text-caption);
+  gap: 3px;
 }
 
 .couple-pill {
