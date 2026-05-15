@@ -1,5 +1,6 @@
 import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
+import { ensureBudgetStructure, migrateBudgetModel, setAnnualAmount } from './budget-engine.js';
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -53,14 +54,22 @@ export const DEFAULT = {
     lockOnSensitive: false,
     alertQuietStart: '22:00',
     alertQuietEnd: '08:00',
+    alertFrequency: 'once',
+    defaultThresholdWarn: 80,
+    defaultThresholdOver: 100,
     snapshotDay: 28,
     hiddenCategories: [],
     categoryThresholds: {},
   },
+  policyConsents: [],
   assets: { items: [], snapshots: [] },
   goals: [],
   budget: {
-    categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat-${i}`, name, hidden: false })),
+    setupDone: false,
+    defaultRecordDay: 25,
+    categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat-${i}`, name, hidden: false, recordDay: null })),
+    annual: {},
+    actuals: {},
     monthly: {},
   },
   transactions: [],
@@ -75,8 +84,12 @@ function now() {
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(DEFAULT);
-    return deepMerge(structuredClone(DEFAULT), JSON.parse(raw));
+    const data = raw
+      ? deepMerge(structuredClone(DEFAULT), JSON.parse(raw))
+      : structuredClone(DEFAULT);
+    ensureBudgetStructure(data);
+    migrateBudgetModel(data);
+    return data;
   } catch {
     return structuredClone(DEFAULT);
   }
@@ -146,8 +159,16 @@ export function getMonthTransactions(data, year, month) {
 }
 
 export function getCategorySpend(data, year, month) {
-  const txs = getMonthTransactions(data, year, month).filter((t) => t.type === 'expense');
   const map = {};
+  const key = ymKey(year, month);
+  const actuals = data.budget?.actuals?.[key];
+  if (actuals && data.budget?.setupDone) {
+    for (const [catId, entry] of Object.entries(actuals)) {
+      if (entry?.amount != null) map[catId] = entry.amount;
+    }
+    if (Object.keys(map).length) return map;
+  }
+  const txs = getMonthTransactions(data, year, month).filter((t) => t.type === 'expense');
   for (const t of txs) {
     map[t.categoryId] = (map[t.categoryId] || 0) + t.amount;
   }
@@ -166,6 +187,49 @@ export function createSnapshot(data, year, month) {
 
 export function generateInviteCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+export function getCategoryThresholds(data, categoryId) {
+  const custom = data.settings.categoryThresholds[categoryId];
+  return {
+    warn: custom?.warn ?? data.settings.defaultThresholdWarn ?? 80,
+    over: custom?.over ?? data.settings.defaultThresholdOver ?? 100,
+  };
+}
+
+export function addCategory(data, name, recordDay = null) {
+  const id = uid();
+  data.budget.categories.push({ id, name: name.trim(), hidden: false, recordDay });
+  return id;
+}
+
+export function guideExecutionRate(data) {
+  const checks = Object.values(data.guideChecks || {});
+  if (!checks.length) return 0;
+  const done = checks.filter((v) => v === 'done').length;
+  return done / checks.length;
+}
+
+export function buildReportShareText(data, year, month) {
+  const txs = getMonthTransactions(data, year, month);
+  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const nw = computeNetWorth(data);
+  const lines = [
+    `[우리 자산] ${year}년 ${month}월 보고서`,
+    `순자산: ${nw.net.toLocaleString('ko-KR')}원`,
+    `수입: ${income.toLocaleString('ko-KR')}원 / 지출: ${expense.toLocaleString('ko-KR')}원`,
+    `목표 ${data.goals.length}개 · 배우자 ${data.auth.spouseConnected ? '연결됨' : '미연결'}`,
+  ];
+  return lines.join('\n');
+}
+
+export function recordPolicyConsent(data) {
+  data.policyConsents = data.policyConsents || [];
+  data.policyConsents.push({
+    version: data.auth.policyVersion,
+    at: now(),
+  });
 }
 
 export function seedDemoData(data) {
@@ -212,10 +276,11 @@ export function seedDemoData(data) {
   });
   const y = new Date().getFullYear();
   const m = new Date().getMonth() + 1;
-  const mb = getMonthBudget(data, y, m);
   const cats = getVisibleCategories(data);
-  const budgets = [800000, 1500000, 300000, 150000, 400000, 200000, 0, 300000, 400000, 2500000, 200000];
-  cats.forEach((c, i) => { mb[c.id] = budgets[i] ?? 300000; });
+  const annualAmounts = [9600000, 18000000, 3600000, 1800000, 4800000, 2400000, 0, 3600000, 4800000, 30000000, 2400000];
+  cats.forEach((c, i) => setAnnualAmount(data, y, c.id, annualAmounts[i] ?? 3600000));
+  data.budget.setupDone = true;
+  data.budget.defaultRecordDay = 25;
 
   const samples = [
     { type: 'income', amount: 5500000, catIdx: 0, memo: '급여', day: 25 },

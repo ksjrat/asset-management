@@ -2,9 +2,10 @@ import { state } from '../state.js';
 import {
   computeNetWorth, computeGoalProgress, getMonthBudget,
   getMonthTransactions, getCategorySpend, getVisibleCategories,
+  buildReportShareText,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtMonth } from '../format.js';
-import { esc } from '../ui.js';
+import { esc, copyText, toast } from '../ui.js';
 import { barChart } from '../charts.js';
 
 export function renderReports() {
@@ -71,5 +72,13 @@ export function renderReports() {
     <section class="section insight-section">
       <h2>💡 인사이트 · 다음 달 제안</h2>
       <ul class="insight-list">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-    </section>`;
+    </section>
+    <button type="button" class="btn btn-primary btn-block share-report-btn" id="btn-share-report">📤 보고서 공유하기</button>`;
+}
+
+export function bindReports() {
+  document.getElementById('btn-share-report')?.addEventListener('click', () => {
+    const text = buildReportShareText(state.data, state.selectedYear, state.selectedMonth);
+    copyText(text);
+  });
 }

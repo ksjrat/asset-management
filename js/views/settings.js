@@ -1,38 +1,64 @@
 import { state, persist } from '../state.js';
 import { seedDemoData } from '../store.js';
-import { openModal, toast, confirmDialog, formField, esc } from '../ui.js';
+import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm } from '../ui.js';
 
 export function renderSettings() {
   const a = state.data.auth;
   const s = state.data.settings;
   return `
-    <section class="section">
-      <h2>앱 잠금</h2>
+    <div class="settings-group">
+      <p class="settings-group-title">보안</p>
       <label class="toggle-row"><span>생체 인증</span>
         <input type="checkbox" id="toggle-bio" ${a.biometricEnabled ? 'checked' : ''} /></label>
       <label class="toggle-row"><span>앱 시작 시 잠금</span>
         <input type="checkbox" id="toggle-lock" ${s.lockOnLaunch !== false ? 'checked' : ''} /></label>
-      <button type="button" class="btn btn-ghost btn-block" id="btn-password">앱 비밀번호 설정</button>
-    </section>
-    <section class="section">
-      <h2>배우자 연결</h2>
-      <p class="muted">${a.spouseConnected ? `${esc(a.spouseName)}님과 연결됨` : '연결되지 않음'}</p>
-      ${!a.spouseConnected ? '<button type="button" class="btn btn-ghost btn-block" id="btn-connect">배우자 연결</button>' : ''}
-      <button type="button" class="btn btn-danger btn-block" id="btn-disconnect">연결 해제</button>
-    </section>
-    <section class="section">
-      <h2>과소비 알림</h2>
-      <p class="muted">조용한 시간 ${esc(s.alertQuietStart)} ~ ${esc(s.alertQuietEnd)}</p>
-      <button type="button" class="btn btn-ghost btn-block" id="btn-alert">알림 설정</button>
-    </section>
-    <section class="section">
-      <h2>정책</h2>
-      <button type="button" class="btn btn-ghost btn-block" id="btn-policy">개인정보 처리방침</button>
-    </section>
-    <section class="section">
+      <label class="toggle-row"><span>민감 화면 진입 시 잠금</span>
+        <input type="checkbox" id="toggle-lock-sensitive" ${s.lockOnSensitive ? 'checked' : ''} /></label>
+      <button type="button" class="settings-row" id="btn-password">
+        <span><strong>앱 비밀번호</strong><span class="settings-row-meta">${a.appPasswordSet ? '설정됨' : '미설정'}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">배우자</p>
+      <div class="settings-row" style="cursor:default">
+        <span><strong>연결 상태</strong><span class="settings-row-meta">${a.spouseConnected ? `${esc(a.spouseName)}님과 연결됨` : '연결되지 않음'}</span></span>
+      </div>
+      ${!a.spouseConnected ? `<button type="button" class="settings-row" id="btn-connect"><span><strong>배우자 연결</strong><span class="settings-row-meta">초대 코드 발급</span></span><span class="settings-chevron">›</span></button>` : ''}
+      ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
+        <span><strong>연결 해제</strong></span><span class="settings-chevron">›</span>
+      </button>` : ''}
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">예산</p>
+      <button type="button" class="settings-row" id="btn-budget-setup">
+        <span><strong>예산 설정 다시하기</strong><span class="settings-row-meta">항목·연간예산·정산일</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">알림</p>
+      <button type="button" class="settings-row" id="btn-alert">
+        <span><strong>과소비 알림</strong><span class="settings-row-meta">${esc(s.alertQuietStart)} ~ ${esc(s.alertQuietEnd)} · ${s.alertFrequency === 'once' ? '월 1회' : '매번'}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">정책</p>
+      <button type="button" class="settings-row" id="btn-policy">
+        <span><strong>개인정보 처리방침</strong><span class="settings-row-meta">동의 ${a.policyAccepted ? '완료' : '미완료'} · v${esc(state.data.auth.policyVersion)}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+    </div>
+
+    <div class="settings-group">
       <button type="button" class="btn btn-ghost btn-block" id="btn-demo">데모 데이터 불러오기</button>
       <button type="button" class="btn btn-danger btn-block" id="btn-logout">로그아웃</button>
-    </section>`;
+    </div>`;
 }
 
 export function bindSettings() {
@@ -44,13 +70,16 @@ export function bindSettings() {
   document.getElementById('toggle-lock')?.addEventListener('change', (e) => {
     state.data.settings.lockOnLaunch = e.target.checked; persist();
   });
+  document.getElementById('toggle-lock-sensitive')?.addEventListener('change', (e) => {
+    state.data.settings.lockOnSensitive = e.target.checked; persist();
+  });
   document.getElementById('btn-password')?.addEventListener('click', async () => {
     const res = await openModal({
       title: '앱 비밀번호',
       body: formField('비밀번호', '<input class="input" name="pin" type="password" minlength="4" />'),
       actions: [{ label: '취소', value: null }, { label: '설정', value: 'save', primary: true }],
     });
-    if (res === 'save') { state.data.auth.appPasswordSet = true; persist(); toast('설정되었습니다'); }
+    if (modalValue(res) === 'save') { state.data.auth.appPasswordSet = true; persist(); toast('설정되었습니다'); }
   });
   document.getElementById('btn-connect')?.addEventListener('click', async () => {
     const { generateInviteCode } = await import('../store.js');
@@ -72,6 +101,11 @@ export function bindSettings() {
       persist(); toast('연결이 해제되었습니다'); rerender();
     }
   });
+  document.getElementById('btn-budget-setup')?.addEventListener('click', () => {
+    state.data.budget.setupDone = false;
+    state.setupStep = 1;
+    rerender();
+  });
   document.getElementById('btn-alert')?.addEventListener('click', async () => {
     const s = state.data.settings;
     const res = await openModal({
@@ -79,14 +113,23 @@ export function bindSettings() {
       body: `<form id="alert-form" class="form-stack">
         ${formField('조용한 시간 시작', `<input class="input" name="start" type="time" value="${s.alertQuietStart}" />`)}
         ${formField('종료', `<input class="input" name="end" type="time" value="${s.alertQuietEnd}" />`)}
-        <p class="field-hint">카테고리 80%/100% 도달 시 알림 (시뮬레이션)</p>
+        ${formField('기본 경고 %', `<input class="input" name="warn" type="number" value="${s.defaultThresholdWarn}" />`)}
+        ${formField('기본 초과 %', `<input class="input" name="over" type="number" value="${s.defaultThresholdOver}" />`)}
+        ${formField('알림 빈도', `<select name="freq" class="input">
+          <option value="once" ${s.alertFrequency === 'once' ? 'selected' : ''}>월 1회만</option>
+          <option value="always" ${s.alertFrequency === 'always' ? 'selected' : ''}>매번</option>
+        </select>`)}
+        <p class="field-hint">예산 탭 진입 시 앱 내 토스트 (푸시 아님)</p>
       </form>`,
       actions: [{ label: '저장', value: 'save', primary: true }],
     });
-    if (res === 'save') {
-      const fd = new FormData(document.getElementById('alert-form'));
+    if (modalValue(res) === 'save') {
+      const fd = modalForm(res) || new FormData(document.getElementById('alert-form'));
       s.alertQuietStart = fd.get('start');
       s.alertQuietEnd = fd.get('end');
+      s.defaultThresholdWarn = Number(fd.get('warn')) || 80;
+      s.defaultThresholdOver = Number(fd.get('over')) || 100;
+      s.alertFrequency = fd.get('freq');
       persist(); toast('저장되었습니다');
     }
   });

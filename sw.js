@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v7';
+const CACHE = 'couple-asset-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,9 @@ const ASSETS = [
   './js/views/reports.js',
   './js/views/settings.js',
   './js/views/modals.js',
+  './js/validators.js',
+  './js/budget-engine.js',
+  './js/views/setup.js',
 ];
 
 self.addEventListener('install', (e) => {

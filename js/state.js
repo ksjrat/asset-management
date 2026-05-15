@@ -17,17 +17,25 @@ export const state = {
   txFilter: 'all',
   locked: true,
   authScreen: 'welcome',
+  setupStep: 1,
 };
 
 export function persist() {
   save(state.data);
 }
 
+const SENSITIVE_TABS = new Set(['settings']);
+
 export function setTab(tab) {
   state.tab = tab;
   state.subView = null;
   state.txSearch = '';
   try { localStorage.setItem('couple-asset-tab', tab); } catch { /* ignore */ }
+  const s = state.data.settings;
+  const a = state.data.auth;
+  if (s?.lockOnSensitive && SENSITIVE_TABS.has(tab) && (a.biometricEnabled || a.appPasswordSet)) {
+    state.locked = true;
+  }
 }
 
 export function goToToday() {

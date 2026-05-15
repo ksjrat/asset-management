@@ -6,7 +6,7 @@ export function initUI() {
   modalEl = document.getElementById('modal-root');
 }
 
-export function openModal({ title, body, actions = [] }) {
+export function openModal({ title, body, actions = [], onOpen }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -20,11 +20,17 @@ export function openModal({ title, body, actions = [] }) {
     `;
     const sheet = overlay.querySelector('.modal-sheet');
     const actionsEl = overlay.querySelector('.modal-actions');
+    const snapshotForm = () => {
+      const form = sheet.querySelector('form');
+      if (!form) return null;
+      return Object.fromEntries(new FormData(form).entries());
+    };
     const finish = (value) => {
       if (overlay.dataset.closing) return;
       overlay.dataset.closing = '1';
+      const form = snapshotForm();
       closeModal(overlay);
-      resolve(value);
+      resolve(form ? { value, form } : value);
     };
     for (const act of actions) {
       const btn = document.createElement('button');
@@ -52,6 +58,7 @@ export function openModal({ title, body, actions = [] }) {
     activeOverlay = overlay;
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => overlay.classList.add('open'));
+    if (onOpen) onOpen(sheet);
     const firstInput = sheet.querySelector('input, select, textarea');
     if (firstInput) setTimeout(() => firstInput.focus(), 120);
     const form = sheet.querySelector('form');
@@ -66,7 +73,7 @@ function closeModal(overlay) {
   setTimeout(() => overlay.remove(), 220);
 }
 
-const TOAST_ICON = { success: '??, error: '??, info: '?? };
+const TOAST_ICON = { success: '✓', error: '✕', info: 'ℹ' };
 
 export function toast(msg, type = 'info') {
   let el = document.querySelector('.toast');
@@ -82,13 +89,24 @@ export function toast(msg, type = 'info') {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
+export function modalValue(res) {
+  return res && typeof res === 'object' && 'value' in res ? res.value : res;
+}
+
+export function modalForm(res) {
+  if (!res || typeof res !== 'object' || !res.form) return null;
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(res.form)) fd.append(k, v);
+  return fd;
+}
+
 export function confirmDialog(title, message) {
   return openModal({
     title,
     body: `<p class="modal-text">${message}</p>`,
     actions: [
       { label: '취소', value: false },
-      { label: '?�인', value: true, primary: true },
+      { label: '확인', value: true, primary: true },
     ],
   });
 }
@@ -113,10 +131,10 @@ export function emptyState(icon, title, desc, btnLabel, btnId) {
 export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
-    toast('?�립보드??복사?�습?�다', 'success');
+    toast('클립보드에 복사했습니다', 'success');
     return true;
   } catch {
-    toast('복사???�패?�습?�다', 'error');
+    toast('복사에 실패했습니다', 'error');
     return false;
   }
 }
@@ -138,7 +156,7 @@ export function bindAmountPreview(form, inputName = 'amount') {
   }
   const update = () => {
     const n = Number(input.value);
-    hint.textContent = n > 0 ? `??${new Intl.NumberFormat('ko-KR').format(n)}?? : '';
+    hint.textContent = n > 0 ? `₩${new Intl.NumberFormat('ko-KR').format(n)}원` : '';
   };
   input.addEventListener('input', update);
   update();

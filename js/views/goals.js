@@ -3,14 +3,17 @@ import { GOAL_TEMPLATES, computeGoalProgress, getCategorySpend, getVisibleCatego
 import { fmtMoney, fmtDate } from '../format.js';
 import { esc } from '../ui.js';
 import { progressRing } from '../charts.js';
-import { openModal, toast, formField, emptyState } from '../ui.js';
-import { showGoalForm, bindGoalTemplatePicker, showContributionForm } from './modals.js';
+import { openModal, toast, formField, emptyState, modalValue } from '../ui.js';
+import { showGoalForm, showGoalEditForm, showContributionForm } from './modals.js';
+import { guideExecutionRate } from '../store.js';
+import { fmtPct } from '../format.js';
 
 function goalCard(g) {
   const { current, rate } = computeGoalProgress(g);
   const statusLabel = { proposed: '제안됨', active: '진행', achieved: '달성', paused: '보류' }[g.status];
   const tpl = GOAL_TEMPLATES.find((t) => t.id === g.template);
   return `<button type="button" class="goal-card" data-goal-id="${g.id}">
+    <span class="goal-pct">${Math.round(rate * 100)}%</span>
     <div class="goal-top">
       <span class="goal-icon">${tpl?.icon || '🎯'}</span>
       <span class="badge badge-${g.status}">${statusLabel}</span>
@@ -71,7 +74,8 @@ function renderDetail(g) {
         </div>`).join('') || '<p class="empty">기여 내역이 없습니다</p>'}
     </section>
     <section class="section">
-      <h2>맞춤 달성 가이드</h2>
+      <div class="section-head"><h2>맞춤 달성 가이드</h2>
+        <span class="muted">실행률 ${fmtPct(guideExecutionRate(state.data))}</span></div>
       ${guides.map((guide) => `
         <div class="guide-card">
           <h4>${esc(guide.title)}</h4><p>${esc(guide.desc)}</p>
@@ -81,6 +85,14 @@ function renderDetail(g) {
             <button type="button" class="btn btn-sm btn-ghost" data-guide="${guide.id}" data-val="later">다음에</button>
           </div>
         </div>`).join('')}
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>변경 이력</h2>
+        <button type="button" class="text-btn" id="btn-edit-goal">수정</button></div>
+      ${(g.history || []).length
+        ? g.history.slice().reverse().map((h) =>
+          `<p class="timeline-item">${fmtDate(String(h.at).slice(0, 10))} · ${esc(h.text)}</p>`).join('')
+        : '<p class="muted">이력 없음</p>'}
     </section>`;
 }
 
@@ -114,9 +126,10 @@ export function bindGoals() {
   document.getElementById('empty-add-goal')?.addEventListener('click', () => {
     document.getElementById('btn-add-goal')?.click();
   });
-  document.getElementById('btn-add-goal')?.addEventListener('click', async () => {
-    await showGoalForm(rerender);
-    bindGoalTemplatePicker();
+  document.getElementById('btn-add-goal')?.addEventListener('click', () => showGoalForm(rerender));
+  document.getElementById('btn-edit-goal')?.addEventListener('click', () => {
+    const g = state.data.goals.find((x) => x.id === state.selectedGoalId);
+    if (g) showGoalEditForm(g, rerender);
   });
   document.getElementById('btn-add-contrib')?.addEventListener('click', () => {
     showContributionForm(state.selectedGoalId, rerender);
@@ -138,8 +151,9 @@ export function bindGoals() {
       body: formField('사유', '<textarea class="input" name="reason" rows="3"></textarea>'),
       actions: [{ label: '취소', value: null }, { label: '반려', value: 'reject', danger: true }],
     });
-    if (res !== 'reject') return;
+    if (modalValue(res) !== 'reject') return;
     g.status = 'paused';
+    g.history = g.history || [];
     g.history.push({ at: new Date().toISOString(), text: '배우자 반려' });
     persist(); toast('반려되었습니다'); rerender();
   });

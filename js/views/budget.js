@@ -1,78 +1,100 @@
 import { state } from '../state.js';
-import { getVisibleCategories, getMonthBudget, getMonthTransactions, getCategorySpend } from '../store.js';
-import { fmtMoney, fmtDate, fmtShort } from '../format.js';
+import { getVisibleCategories } from '../store.js';
+import {
+  getCategoryPeriodSummary,
+  getPeriodTotals,
+  isRecordDue,
+  canRecordActual,
+  getRecordDay,
+} from '../budget-engine.js';
+import { fmtShort, fmtPct, fmtMonth } from '../format.js';
 import { esc, emptyState } from '../ui.js';
 import { budgetBar } from '../charts.js';
-import { showTxForm, showBudgetForm } from './modals.js';
+import {
+  showCategoryManage,
+  showAnnualBudgetForm,
+  showActualForm,
+} from './modals.js';
 
 export function renderBudget() {
-  const { data, selectedYear: y, selectedMonth: m, txSearch, txFilter } = state;
-  const mb = getMonthBudget(data, y, m);
-  const spend = getCategorySpend(data, y, m);
-  let txs = getMonthTransactions(data, y, m);
-  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const { data, selectedYear: y, selectedMonth: m } = state;
   const cats = getVisibleCategories(data);
+  const recordDay = data.budget.defaultRecordDay ?? 25;
+  const totals = getPeriodTotals(data, y, m, cats);
 
-  if (txFilter !== 'all') txs = txs.filter((t) => t.type === txFilter);
-  if (txSearch.trim()) {
-    const q = txSearch.trim().toLowerCase();
-    txs = txs.filter((t) => {
-      const cat = cats.find((c) => c.id === t.categoryId);
-      return (cat?.name || '').toLowerCase().includes(q)
-        || (t.memo || '').toLowerCase().includes(q)
-        || String(t.amount).includes(q);
-    });
-  }
+  const dueBanner = totals.dueCount > 0
+    ? `<button type="button" class="tip-banner" id="btn-record-due">📌 실적 입력 ${totals.dueCount}건 대기 · ${recordDay}일부터 입력 가능</button>`
+    : '';
 
   const catRows = cats.map((c) => {
-    const budget = mb[c.id] || 0;
-    const used = spend[c.id] || 0;
-    const pct = budget > 0 ? used / budget : 0;
-    return `<div class="budget-row">
-      <div class="budget-head"><span>${esc(c.name)}</span><span class="${pct >= 1 ? 'danger-text' : ''}">${fmtShort(used)} / ${fmtShort(budget)}</span></div>
-      ${budgetBar(used, budget, '#1e4d3a')}
-      ${pct >= 0.8 ? `<p class="budget-warn">${pct >= 1 ? '⚠ 예산 초과' : '⚠ 80% 사용'}</p>` : ''}
-    </div>`;
+    const s = getCategoryPeriodSummary(data, y, m, c.id);
+    const day = getRecordDay(data, c);
+    const due = isRecordDue(data, y, m, c.id);
+    const canEdit = canRecordActual(data, y, m, c.id);
+    const pct = s.available > 0 ? s.actual / s.available : 0;
+    const statusClass = !s.hasActual ? 'pending' : pct > 1 ? 'over' : pct >= 0.9 ? 'warn' : 'ok';
+    return `
+      <div class="budget-envelope budget-envelope--${statusClass}">
+        <div class="budget-envelope-head">
+          <div>
+            <strong>${esc(c.name)}</strong>
+            <span class="budget-envelope-meta">정산 ${day}일 · 연 ${fmtShort(s.annual)}</span>
+          </div>
+          <div class="budget-envelope-badges">
+            ${due ? '<span class="badge badge-proposed">입력 대기</span>' : ''}
+            ${s.hasActual ? `<span class="badge badge-active">${fmtPct(pct)}</span>` : ''}
+          </div>
+        </div>
+        <div class="budget-envelope-grid">
+          <div><span class="lbl">월 예산</span><span>${fmtShort(s.monthlyPlanned)}</span></div>
+          <div><span class="lbl">이월</span><span class="${s.rolloverIn >= 0 ? 'income' : 'danger'}">${s.rolloverIn >= 0 ? '+' : ''}${fmtShort(s.rolloverIn)}</span></div>
+          <div><span class="lbl">사용 가능</span><strong>${fmtShort(s.available)}</strong></div>
+          <div><span class="lbl">실적</span><strong class="${s.hasActual ? '' : 'muted'}">${s.hasActual ? fmtShort(s.actual) : '—'}</strong></div>
+        </div>
+        ${budgetBar(s.actual, s.available, '#1a5c44')}
+        <div class="budget-envelope-foot">
+          <span class="${s.remaining >= 0 ? 'income' : 'danger'}">잔액 ${fmtShort(s.remaining)}</span>
+          ${s.remaining > 0 && s.hasActual ? '<span class="muted">→ 다음 달 이월</span>' : ''}
+          ${canEdit
+    ? `<button type="button" class="btn btn-sm ${due ? 'btn-primary' : 'btn-ghost'}" data-record-cat="${c.id}">${s.hasActual ? '실적 수정' : '실적 입력'}</button>`
+    : '<span class="muted">정산일 이후 입력</span>'}
+        </div>
+      </div>`;
   }).join('');
-
-  const txRows = txs.sort((a, b) => b.date.localeCompare(a.date)).map((t) => {
-    const cat = cats.find((c) => c.id === t.categoryId);
-    return `<button type="button" class="list-item" data-tx-id="${t.id}">
-      <span class="list-icon">${t.type === 'income' ? '📥' : '📤'}</span>
-      <span class="list-body">
-        <span class="list-title">${esc(cat?.name || '기타')}${t.shared ? ' · 공동' : ''}</span>
-        <span class="list-meta">${fmtDate(t.date)} · ${esc(t.memo || t.paymentMethod || '')}</span>
-      </span>
-      <span class="list-amount ${t.type === 'income' ? 'income' : ''}">${t.type === 'income' ? '+' : '-'}${fmtMoney(t.amount)}</span>
-    </button>`;
-  }).join('');
-
-  const seg = (id, label) =>
-    `<button type="button" class="seg-btn ${txFilter === id ? 'active' : ''}" data-tx-filter="${id}">${label}</button>`;
 
   return `
+    ${dueBanner}
+    <p class="month-label">${fmtMonth(y, m)} · 예산 vs 실적</p>
+
     <section class="summary-row">
-      <div class="mini-card"><span>수입</span><strong class="income">${fmtShort(income)}</strong></div>
-      <div class="mini-card"><span>지출</span><strong class="danger">${fmtShort(expense)}</strong></div>
-      <div class="mini-card"><span>잔액</span><strong class="${income - expense >= 0 ? 'income' : 'danger'}">${fmtShort(income - expense)}</strong></div>
+      <div class="mini-card"><span>월 예산 합계</span><strong>${fmtShort(totals.planned)}</strong></div>
+      <div class="mini-card"><span>이월 포함</span><strong>${fmtShort(totals.available)}</strong></div>
+      <div class="mini-card"><span>실적 합계</span><strong class="${totals.actual > totals.available ? 'danger' : ''}">${fmtShort(totals.actual)}</strong></div>
+    </section>
+    <section class="hero-card small rollover-card">
+      <p class="hero-label">이번 달 잔액 (다음 달 이월 예정)</p>
+      <p class="hero-value ${totals.remaining >= 0 ? 'up' : 'down'}">${fmtShort(totals.remaining)}</p>
+      <p class="hero-sub">이월 반영 ${fmtShort(totals.rolloverIn)} · 실적 ${fmtShort(totals.actual)}</p>
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>카테고리 예산</h2>
-        <button type="button" class="text-btn" id="btn-edit-budget">설정</button></div>
-      ${catRows}
+      <div class="section-head">
+        <h2>항목별 비교</h2>
+        <div class="btn-row-inline">
+          <button type="button" class="text-btn" id="btn-categories">항목</button>
+          <button type="button" class="text-btn" id="btn-edit-annual">연간 예산</button>
+        </div>
+      </div>
+      ${cats.length ? catRows : emptyState('📋', '항목이 없어요', '처음 설정을 다시 진행해 보세요', '항목 설정', 'btn-setup-again')}
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>거래 내역</h2></div>
-      <div class="search-row">
-        <input type="search" class="input search-input" id="tx-search" placeholder="메모·카테고리·금액 검색" value="${esc(txSearch)}" />
-      </div>
-      <div class="seg-control">${seg('all', '전체')}${seg('expense', '지출')}${seg('income', '수입')}</div>
-      <div class="list-group">
-        ${txRows || emptyState('📝', '거래가 없어요', txSearch ? '검색어를 바꿔 보세요' : '지출·수입을 기록해 보세요', txSearch ? '' : '지출 입력', txSearch ? '' : 'empty-add-expense')}
-      </div>
+      <div class="section-head"><h2>이용 방법</h2></div>
+      <ol class="setup-flow-list compact">
+        <li>연간 예산 ÷ 12 = 매월 기본 예산</li>
+        <li>전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
+        <li>정산일 이후 항목별 <strong>실적</strong>을 입력하세요</li>
+      </ol>
     </section>`;
 }
 
@@ -80,30 +102,18 @@ export function bindBudget() {
   const rerender = () => import('./index.js').then((m) => m.renderApp());
   const { selectedYear: y, selectedMonth: m } = state;
 
-  document.getElementById('btn-edit-budget')?.addEventListener('click', () => showBudgetForm(y, m, rerender));
-  document.getElementById('empty-add-expense')?.addEventListener('click', () => showTxForm('expense', null, rerender));
-
-  const search = document.getElementById('tx-search');
-  let searchTimer;
-  search?.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      state.txSearch = search.value;
-      rerender();
-    }, 280);
+  document.getElementById('btn-categories')?.addEventListener('click', () => showCategoryManage(rerender));
+  document.getElementById('btn-edit-annual')?.addEventListener('click', () => showAnnualBudgetForm(y, rerender));
+  document.getElementById('btn-setup-again')?.addEventListener('click', () => {
+    state.data.budget.setupDone = false;
+    state.setupStep = 1;
+    rerender();
   });
-
-  document.querySelectorAll('[data-tx-filter]').forEach((b) => {
-    b.addEventListener('click', () => {
-      state.txFilter = b.dataset.txFilter;
-      rerender();
-    });
+  document.getElementById('btn-record-due')?.addEventListener('click', () => {
+    const due = getVisibleCategories(state.data).find((c) => isRecordDue(state.data, y, m, c.id));
+    if (due) showActualForm(due.id, y, m, rerender);
   });
-
-  document.querySelectorAll('[data-tx-id]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const t = state.data.transactions.find((x) => x.id === b.dataset.txId);
-      if (t) showTxForm(t.type, t, rerender);
-    });
+  document.querySelectorAll('[data-record-cat]').forEach((btn) => {
+    btn.addEventListener('click', () => showActualForm(btn.dataset.recordCat, y, m, rerender));
   });
 }

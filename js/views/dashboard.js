@@ -11,8 +11,9 @@ import { showAssetForm } from './modals.js';
 function itemRow(item) {
   const type = ASSET_TYPES.find((t) => t.id === item.type);
   const owner = OWNERS.find((o) => o.id === item.owner);
+  const icon = type?.group === 'asset' ? '💰' : '📉';
   return `<button type="button" class="list-item" data-asset-id="${item.id}">
-    <span class="list-icon">${type?.group === 'asset' ? '💰' : '📉'}</span>
+    <span class="avatar avatar--asset" aria-hidden="true">${icon}</span>
     <span class="list-body">
       <span class="list-title">${esc(item.name)}${item.private ? ' 🔒' : ''}</span>
       <span class="list-meta">${esc(type?.label)} · ${esc(owner?.label)}</span>

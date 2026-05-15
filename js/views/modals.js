@@ -2,9 +2,42 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getMonthBudget,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
+  getCategoryThresholds, addCategory,
 } from '../store.js';
-import { fmtMonth, todayISO, uid } from '../format.js';
-import { openModal, toast, formField, esc } from '../ui.js';
+import {
+  getAnnualAmount, setAnnualAmount, getMonthlyPlanned,
+  getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
+} from '../budget-engine.js';
+import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
+import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
+import { validateGoalInput, projectGoalImpact, parseTags } from '../validators.js';
+
+function bindGoalImpactPreview(form, current = 0) {
+  const impactEl = form.querySelector('#goal-impact');
+  if (!impactEl) return;
+  const update = () => {
+    const target = Number(form.targetAmount?.value) || 0;
+    const monthly = Number(form.monthlyContribution?.value) || 0;
+    const end = form.endDate?.value;
+    const r = projectGoalImpact(target, current, monthly, end);
+    impactEl.textContent = r.text;
+    impactEl.className = `goal-impact field-hint ${r.warn ? 'warn' : ''}`;
+  };
+  ['targetAmount', 'monthlyContribution', 'endDate'].forEach((n) => {
+    form[n]?.addEventListener('input', update);
+  });
+  form.mode?.addEventListener('change', () => {
+    const mode = form.mode.value;
+    const target = Number(form.targetAmount.value) || 0;
+    const months = monthsBetween(form.startDate.value, form.endDate.value);
+    if (mode !== 'custom' && months > 0) {
+      form.monthlyContribution.value = calcMonthlyContribution(target, months, mode);
+    }
+    form.monthlyContribution.readOnly = mode !== 'custom';
+    update();
+  });
+  update();
+}
 
 export async function showAssetForm(item, rerender) {
   const typeOpts = ASSET_TYPES.map((t) =>
@@ -27,15 +60,15 @@ export async function showAssetForm(item, rerender) {
       { label: '저장', value: 'save', primary: true },
     ],
   });
-  if (!res) return;
-  const form = document.getElementById('asset-form');
-  if (!form) return;
-  if (res === 'delete' && item) {
+  const action = modalValue(res);
+  if (!action) return;
+  if (action === 'delete' && item) {
     state.data.assets.items = state.data.assets.items.filter((i) => i.id !== item.id);
     persist(); toast('삭제되었습니다'); rerender(); return;
   }
-  if (res !== 'save') return;
-  const fd = new FormData(form);
+  if (action !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
   const payload = {
     type: fd.get('type'), name: fd.get('name'),
     amount: Number(fd.get('amount')), owner: fd.get('owner'),
@@ -67,18 +100,44 @@ export async function showGoalForm(rerender) {
         ${formField('시작일', `<input class="input" name="startDate" type="date" value="${todayISO()}" required />`)}
         ${formField('목표일', '<input class="input" name="endDate" type="date" required />')}
         ${formField('월 기여 방식', `<select name="mode" class="input">
-          <option value="equal">월별 균등</option><option value="accelerating">후반 가속</option></select>`)}
+          <option value="equal">월별 균등</option>
+          <option value="accelerating">후반 가속</option>
+          <option value="custom">직접 입력</option></select>`)}
         ${formField('월 기여금', '<input class="input" name="monthlyContribution" type="number" min="0" />')}
+        <p id="goal-impact" class="goal-impact field-hint"></p>
       </form>`,
     actions: [{ label: '취소', value: null }, { label: '제안하기', value: 'save', primary: true }],
+    onOpen: (sheet) => {
+      sheet.querySelectorAll('[data-tpl]').forEach((tpl) => {
+        tpl.addEventListener('click', () => {
+          const t = GOAL_TEMPLATES.find((x) => x.id === tpl.dataset.tpl);
+          const form = sheet.querySelector('#goal-form');
+          if (!form || !t) return;
+          form.classList.remove('hidden');
+          form.template.value = t.id;
+          form.title.value = t.id === 'custom' ? '' : t.label;
+          form.targetAmount.value = t.defaultAmount;
+          const end = new Date();
+          end.setMonth(end.getMonth() + t.defaultMonths);
+          form.endDate.value = end.toISOString().slice(0, 10);
+          form.monthlyContribution.value = calcMonthlyContribution(t.defaultAmount, t.defaultMonths, 'equal');
+          bindGoalImpactPreview(form);
+        });
+      });
+    },
   });
-  if (res !== 'save') return;
-  const form = document.getElementById('goal-form');
-  const fd = new FormData(form);
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
   const target = Number(fd.get('targetAmount'));
+  const errors = validateGoalInput({
+    title: fd.get('title'), targetAmount: target,
+    startDate: fd.get('startDate'), endDate: fd.get('endDate'),
+  });
+  if (errors.length) { toast(errors[0], 'error'); return showGoalForm(rerender); }
   const months = monthsBetween(fd.get('startDate'), fd.get('endDate'));
   const mode = fd.get('mode') || 'equal';
-  const goal = {
+  state.data.goals.push({
     id: uid(), title: fd.get('title'), template: fd.get('template') || 'custom',
     targetAmount: target, currentAmount: 0,
     startDate: fd.get('startDate'), endDate: fd.get('endDate'),
@@ -89,29 +148,62 @@ export async function showGoalForm(rerender) {
     contributions: [], proposedBy: 'self', approvedBy: null,
     history: [{ at: new Date().toISOString(), text: '목표 생성' }],
     createdAt: new Date().toISOString(),
-  };
-  state.data.goals.push(goal);
+  });
   persist();
   toast(state.data.auth.spouseConnected ? '배우자에게 제안되었습니다' : '목표가 생성되었습니다', 'success');
   rerender();
 }
 
-export function bindGoalTemplatePicker() {
-  document.querySelectorAll('[data-tpl]').forEach((tpl) => {
-    tpl.addEventListener('click', () => {
-      const t = GOAL_TEMPLATES.find((x) => x.id === tpl.dataset.tpl);
-      const form = document.getElementById('goal-form');
-      if (!form || !t) return;
-      form.classList.remove('hidden');
-      form.template.value = t.id;
-      form.title.value = t.id === 'custom' ? '' : t.label;
-      form.targetAmount.value = t.defaultAmount;
-      const end = new Date();
-      end.setMonth(end.getMonth() + t.defaultMonths);
-      form.endDate.value = end.toISOString().slice(0, 10);
-      form.monthlyContribution.value = calcMonthlyContribution(t.defaultAmount, t.defaultMonths, 'equal');
-    });
+export function bindGoalTemplatePicker() {}
+
+export async function showGoalEditForm(goal, rerender) {
+  const { current } = computeGoalProgress(goal);
+  const res = await openModal({
+    title: '목표 수정',
+    body: `<form id="goal-edit-form" class="form-stack">
+      ${formField('목표명', `<input class="input" name="title" required value="${esc(goal.title)}" />`)}
+      ${formField('목표 금액', `<input class="input" name="targetAmount" type="number" required min="1" value="${goal.targetAmount}" />`)}
+      ${formField('시작일', `<input class="input" name="startDate" type="date" value="${goal.startDate}" required />`)}
+      ${formField('목표일', `<input class="input" name="endDate" type="date" value="${goal.endDate}" required />`)}
+      ${formField('상태', `<select name="status" class="input">
+        <option value="active" ${goal.status === 'active' ? 'selected' : ''}>진행</option>
+        <option value="achieved" ${goal.status === 'achieved' ? 'selected' : ''}>달성</option>
+        <option value="paused" ${goal.status === 'paused' ? 'selected' : ''}>보류</option>
+        <option value="proposed" ${goal.status === 'proposed' ? 'selected' : ''}>제안됨</option>
+      </select>`)}
+      ${formField('월 기여금', `<input class="input" name="monthlyContribution" type="number" min="0" value="${goal.monthlyContribution}" />`)}
+      <p id="goal-impact" class="goal-impact field-hint"></p>
+      ${formField('마일스톤 (%)', `<input class="input" name="milestones" placeholder="25, 50, 75" value="${(goal.milestones || []).map((m) => m.percent).join(', ')}" />`, '쉼표로 구분')}
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+    onOpen: (sheet) => bindGoalImpactPreview(sheet.querySelector('#goal-edit-form'), current),
   });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const errors = validateGoalInput({
+    title: fd.get('title'), targetAmount: Number(fd.get('targetAmount')),
+    startDate: fd.get('startDate'), endDate: fd.get('endDate'),
+  });
+  if (errors.length) { toast(errors[0], 'error'); return; }
+  const monthly = Number(fd.get('monthlyContribution'));
+  const impact = projectGoalImpact(Number(fd.get('targetAmount')), current, monthly, fd.get('endDate'));
+  goal.title = fd.get('title');
+  goal.targetAmount = Number(fd.get('targetAmount'));
+  goal.startDate = fd.get('startDate');
+  goal.endDate = fd.get('endDate');
+  goal.status = fd.get('status');
+  goal.monthlyContribution = monthly;
+  const ms = fd.get('milestones')?.toString().split(/[,，\s]+/).map(Number).filter((n) => n > 0 && n < 100);
+  if (ms?.length) {
+    const { rate } = computeGoalProgress(goal);
+    goal.milestones = ms.map((p) => ({ percent: p, reached: rate * 100 >= p }));
+  }
+  goal.history = goal.history || [];
+  goal.history.push({ at: new Date().toISOString(), text: `목표 수정 · ${impact.text}` });
+  persist();
+  toast('저장되었습니다', 'success');
+  rerender();
 }
 
 export async function showTxForm(type, item, rerender) {
@@ -126,9 +218,12 @@ export async function showTxForm(type, item, rerender) {
       ${formField('금액', `<input class="input" name="amount" type="number" required min="1" value="${item?.amount ?? ''}" />`)}
       ${formField('카테고리', `<select name="categoryId" class="input">${catOpts}</select>`)}
       ${formField('결제수단', `<select name="paymentMethod" class="input">
-        <option value="현금">현금</option><option value="카드">카드</option><option value="이체">이체</option></select>`)}
+        <option value="현금" ${item?.paymentMethod === '현금' ? 'selected' : ''}>현금</option>
+        <option value="카드" ${item?.paymentMethod === '카드' ? 'selected' : ''}>카드</option>
+        <option value="이체" ${item?.paymentMethod === '이체' ? 'selected' : ''}>이체</option></select>`)}
       ${formField('메모', `<input class="input" name="memo" value="${esc(item?.memo || '')}" />`)}
-      <label class="toggle-row"><span>배우자 공유</span>
+      ${formField('태그', `<input class="input" name="tags" placeholder="외식, 데이트" value="${esc((item?.tags || []).join(', '))}" />`)}
+      <label class="toggle-row"><span>공동 지출로 표시</span>
         <input type="checkbox" name="shared" ${item?.shared !== false ? 'checked' : ''} /></label>
     </form>`,
     actions: [
@@ -136,21 +231,74 @@ export async function showTxForm(type, item, rerender) {
       { label: '취소', value: null }, { label: '저장', value: 'save', primary: true },
     ],
   });
-  if (!res) return;
-  if (res === 'delete' && item) {
+  const action = modalValue(res);
+  if (!action) return;
+  if (action === 'delete' && item) {
     state.data.transactions = state.data.transactions.filter((t) => t.id !== item.id);
     persist(); rerender(); return;
   }
-  if (res !== 'save') return;
-  const fd = new FormData(document.getElementById('tx-form'));
+  if (action !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
   const payload = {
     date: fd.get('date'), amount: Number(fd.get('amount')), type: fd.get('type'),
     categoryId: fd.get('categoryId'), paymentMethod: fd.get('paymentMethod'),
-    memo: fd.get('memo'), shared: !!fd.get('shared'), createdBy: 'self',
+    memo: fd.get('memo'), tags: parseTags(fd.get('tags')),
+    shared: !!fd.get('shared'), createdBy: item?.createdBy || 'self',
   };
   if (item) Object.assign(item, payload);
   else state.data.transactions.push({ id: uid(), ...payload });
   persist(); toast('저장되었습니다', 'success'); rerender();
+}
+
+export async function showAnnualBudgetForm(year, rerender) {
+  const cats = getVisibleCategories(state.data);
+  const fields = cats.map((c) => {
+    const annual = getAnnualAmount(state.data, year, c.id);
+    return formField(
+      `${c.name} (연간)`,
+      `<input class="input" name="${c.id}" type="number" min="0" step="10000" value="${annual || ''}" />
+       <span class="field-hint">월 ${fmtMoney(getMonthlyPlanned(annual))}</span>`,
+    );
+  }).join('');
+  const res = await openModal({
+    title: `${year}년 연간 예산`,
+    body: `<form id="annual-form" class="form-stack"><p class="field-hint">언제든 수정할 수 있습니다.</p>${fields}</form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  for (const c of cats) setAnnualAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
+  persist();
+  toast('연간 예산이 저장되었습니다', 'success');
+  rerender();
+}
+
+export async function showActualForm(catId, year, month, rerender) {
+  const cat = state.data.budget.categories.find((c) => c.id === catId);
+  if (!cat) return;
+  const s = getCategoryPeriodSummary(state.data, year, month, catId);
+  const current = getActualAmount(state.data, year, month, catId);
+  const res = await openModal({
+    title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
+    body: `<form id="actual-form" class="form-stack">
+      <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
+      ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" required value="${current ?? ''}" />`)}
+      ${formField('메모', '<input class="input" name="memo" />')}
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  setActualAmount(state.data, year, month, catId, Number(fd.get('amount')) || 0);
+  persist();
+  const after = getCategoryPeriodSummary(state.data, year, month, catId);
+  toast(after.remaining >= 0
+    ? `저장됨 · 잔액 ${fmtMoney(after.remaining)}이 다음 달로 이월됩니다`
+    : `저장됨 · ${fmtMoney(-after.remaining)} 초과 사용`, after.remaining >= 0 ? 'success' : 'error');
+  rerender();
 }
 
 export async function showBudgetForm(y, m, rerender) {
@@ -163,10 +311,85 @@ export async function showBudgetForm(y, m, rerender) {
     body: `<form id="budget-form" class="form-stack">${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
-  if (res !== 'save') return;
-  const fd = new FormData(document.getElementById('budget-form'));
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
   for (const c of cats) mb[c.id] = Number(fd.get(c.id)) || 0;
   persist(); toast('예산이 저장되었습니다', 'success'); rerender();
+}
+
+export async function showCategoryManage(rerender) {
+  const cats = state.data.budget.categories;
+    const rows = cats.map((c) =>
+      `<div class="cat-manage-row ${c.hidden ? 'hidden-cat' : ''}">
+        <span>${esc(c.name)}${c.hidden ? ' (숨김)' : ''}</span>
+        <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
+      </div>`).join('');
+  const res = await openModal({
+      title: '카테고리 관리',
+      body: `<div class="list-group">${rows}</div>
+        <p class="field-hint">기본 임계치: ${state.data.settings.defaultThresholdWarn}% / ${state.data.settings.defaultThresholdOver}%</p>`,
+      actions: [
+        { label: '카테고리 추가', value: 'add' },
+        { label: '닫기', value: null, primary: true },
+      ],
+      onOpen: (sheet) => {
+        sheet.querySelectorAll('[data-cat-edit]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const cat = cats.find((c) => c.id === btn.dataset.catEdit);
+            if (!cat) return;
+            const th = getCategoryThresholds(state.data, cat.id);
+            const editRes = await openModal({
+              title: '카테고리 편집',
+              body: `<form id="cat-form" class="form-stack">
+                ${formField('이름', `<input class="input" name="name" value="${esc(cat.name)}" required />`)}
+                <label class="toggle-row"><span>숨김</span>
+                  <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
+                ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
+                ${formField('경고 %', `<input class="input" name="warn" type="number" value="${th.warn}" />`)}
+                ${formField('초과 %', `<input class="input" name="over" type="number" value="${th.over}" />`)}
+              </form>`,
+              actions: [
+                { label: '숨김', value: 'delete', danger: true },
+                { label: '저장', value: 'save', primary: true },
+              ],
+            });
+            const ea = modalValue(editRes);
+            if (ea === 'delete') { cat.hidden = true; persist(); toast('숨김 처리'); rerender(); showCategoryManage(rerender); return; }
+            if (ea !== 'save') return;
+            const efd = modalForm(editRes);
+            if (!efd) return;
+            cat.name = efd.get('name');
+            cat.hidden = !!efd.get('hidden');
+            const rd = efd.get('recordDay');
+            cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
+            state.data.settings.categoryThresholds[cat.id] = {
+              warn: Number(efd.get('warn')) || 80,
+              over: Number(efd.get('over')) || 100,
+            };
+            persist(); toast('저장됨', 'success'); rerender(); showCategoryManage(rerender);
+          });
+        });
+      },
+    });
+  if (modalValue(res) === 'add') {
+    const addRes = await openModal({
+      title: '카테고리 추가',
+      body: formField('이름', '<input class="input" name="name" required />'),
+      actions: [{ label: '취소', value: null }, { label: '추가', value: 'save', primary: true }],
+    });
+    if (modalValue(addRes) === 'save') {
+      const fd = modalForm(addRes);
+      if (fd?.get('name')?.trim()) {
+        addCategory(state.data, fd.get('name').trim());
+        persist();
+        toast('추가되었습니다', 'success');
+        showCategoryManage(rerender);
+        return;
+      }
+    }
+  }
+  rerender();
 }
 
 export async function showContributionForm(goalId, rerender) {
@@ -179,10 +402,11 @@ export async function showContributionForm(goalId, rerender) {
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
-  if (res !== 'save') return;
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
   const g = state.data.goals.find((x) => x.id === goalId);
   if (!g) return;
-  const fd = new FormData(document.getElementById('contrib-form'));
   g.contributions = g.contributions || [];
   g.contributions.push({
     id: uid(), date: fd.get('date'), amount: Number(fd.get('amount')), memo: fd.get('memo'),

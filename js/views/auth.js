@@ -1,5 +1,5 @@
 import { state, persist } from '../state.js';
-import { generateInviteCode, seedDemoData } from '../store.js';
+import { generateInviteCode, seedDemoData, recordPolicyConsent } from '../store.js';
 import { formField, toast, esc, copyText } from '../ui.js';
 
 const ONBOARD_STEPS = ['welcome', 'login', 'signup', 'biometric', 'invite', 'policy'];
@@ -19,6 +19,11 @@ export function renderAuth() {
           <div class="auth-logo">💑</div>
           <h1>우리 자산</h1>
           <p>신혼부부를 위한<br>공동 자산 관리</p>
+          <ul class="auth-features">
+            <li>순자산·예산 한눈에</li>
+            <li>함께 달성하는 재정 목표</li>
+            <li>기기 안에서 안전하게</li>
+          </ul>
         </div>
         <div class="auth-actions">
           <button type="button" class="btn btn-primary btn-block" data-auth="login">로그인</button>
@@ -157,10 +162,16 @@ export function bindAuth(onFinish) {
 export function finishOnboarding() {
   state.data.auth.policyAccepted = true;
   state.data.auth.onboardingDone = true;
-  seedDemoData(state.data);
+  recordPolicyConsent(state.data);
+  state.data.budget.categories = [];
+  state.data.budget.annual = {};
+  state.data.budget.actuals = {};
+  state.data.budget.setupDone = false;
+  state.data.budget.defaultRecordDay = 25;
+  state.setupStep = 1;
   persist();
   state.locked = false;
   state.authScreen = 'welcome';
   import('./index.js').then((m) => m.renderApp());
-  toast('우리 자산에 오신 것을 환영합니다!', 'success');
+  toast('예산 항목을 설정해 주세요', 'success');
 }
