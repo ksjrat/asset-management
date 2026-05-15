@@ -6,6 +6,8 @@ import {
   isRecordDue,
   canRecordActual,
   getRecordDay,
+  getBudgetStart,
+  isBeforeBudgetStart,
 } from '../budget-engine.js';
 import { fmtShort, fmtPct, fmtMonth } from '../format.js';
 import { esc, emptyState } from '../ui.js';
@@ -21,8 +23,13 @@ export function renderBudget() {
   const cats = getVisibleCategories(data);
   const recordDay = data.budget.defaultRecordDay ?? 25;
   const totals = getPeriodTotals(data, y, m, cats);
+  const start = getBudgetStart(data);
+  const beforeStart = isBeforeBudgetStart(data, y, m);
+  const preStartBanner = beforeStart && start
+    ? `<p class="tip-banner">${fmtMonth(start.year, start.month)}부터 예산을 관리합니다. 이 달은 집계되지 않습니다.</p>`
+    : '';
 
-  const dueBanner = totals.dueCount > 0
+  const dueBanner = !beforeStart && totals.dueCount > 0
     ? `<button type="button" class="tip-banner" id="btn-record-due">📌 실적 입력 ${totals.dueCount}건 대기 · ${recordDay}일부터 입력 가능</button>`
     : '';
 
@@ -30,7 +37,7 @@ export function renderBudget() {
     const s = getCategoryPeriodSummary(data, y, m, c.id);
     const day = getRecordDay(data, c);
     const due = isRecordDue(data, y, m, c.id);
-    const canEdit = canRecordActual(data, y, m, c.id);
+    const canEdit = !s.beforeStart && canRecordActual(data, y, m, c.id);
     const pct = s.available > 0 ? s.actual / s.available : 0;
     const statusClass = !s.hasActual ? 'pending' : pct > 1 ? 'over' : pct >= 0.9 ? 'warn' : 'ok';
     return `
@@ -57,14 +64,15 @@ export function renderBudget() {
           ${s.remaining > 0 && s.hasActual ? '<span class="muted">→ 다음 달 이월</span>' : ''}
           ${canEdit
     ? `<button type="button" class="btn btn-sm ${due ? 'btn-primary' : 'btn-ghost'}" data-record-cat="${c.id}">${s.hasActual ? '실적 수정' : '실적 입력'}</button>`
-    : '<span class="muted">정산일 이후 입력</span>'}
+    : s.beforeStart ? '<span class="muted">관리 시작 전</span>' : '<span class="muted">정산일 이후 입력</span>'}
         </div>
       </div>`;
   }).join('');
 
   return `
+    ${preStartBanner}
     ${dueBanner}
-    <p class="month-label">${fmtMonth(y, m)} · 예산 vs 실적</p>
+    <p class="month-label">${fmtMonth(y, m)} · 예산 vs 실적${start ? ` · 시작 ${fmtMonth(start.year, start.month)}` : ''}</p>
 
     <section class="summary-row">
       <div class="mini-card"><span>월 예산 합계</span><strong>${fmtShort(totals.planned)}</strong></div>
@@ -92,7 +100,7 @@ export function renderBudget() {
       <div class="section-head"><h2>이용 방법</h2></div>
       <ol class="setup-flow-list compact">
         <li>항목별 <strong>월간 예산</strong>을 설정합니다</li>
-        <li>전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
+        <li>시작 월 이후, 전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
         <li>정산일 이후 항목별 <strong>실적</strong>을 입력하세요</li>
       </ol>
     </section>`;

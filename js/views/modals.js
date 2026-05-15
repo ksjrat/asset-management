@@ -7,6 +7,7 @@ import {
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
   getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
+  getBudgetStart, setBudgetStart,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
@@ -249,6 +250,42 @@ export async function showTxForm(type, item, rerender) {
   if (item) Object.assign(item, payload);
   else state.data.transactions.push({ id: uid(), ...payload });
   persist(); toast('저장되었습니다', 'success'); rerender();
+}
+
+export async function showBudgetStartForm(rerender) {
+  const now = new Date();
+  const start = getBudgetStart(state.data) || { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const years = [start.year - 1, start.year, start.year + 1];
+  const yearOpts = years.map((y) =>
+    `<option value="${y}" ${y === start.year ? 'selected' : ''}>${y}년</option>`).join('');
+  const monthOpts = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    return `<option value="${m}" ${m === start.month ? 'selected' : ''}>${m}월</option>`;
+  }).join('');
+  const res = await openModal({
+    title: '가계부 시작 월',
+    body: `<form id="budget-start-form" class="form-stack">
+      <p class="field-hint">이 달부터 예산·이월을 관리합니다. 그 이전 달은 이월되지 않습니다.</p>
+      <label class="field">
+        <span class="field-label">시작 월</span>
+        <div class="setup-start-row">
+          <select class="input" name="startYear">${yearOpts}</select>
+          <select class="input" name="startMonth">${monthOpts}</select>
+        </div>
+      </label>
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const sy = Number(fd.get('startYear'));
+  const sm = Number(fd.get('startMonth'));
+  if (!sy || !sm) return;
+  setBudgetStart(state.data, sy, sm);
+  persist();
+  toast(`${fmtMonth(sy, sm)}부터 관리합니다`, 'success');
+  rerender();
 }
 
 export async function showMonthlyBudgetForm(year, rerender) {

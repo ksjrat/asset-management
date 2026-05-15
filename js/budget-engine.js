@@ -4,6 +4,10 @@ function now() {
   return new Date().toISOString();
 }
 
+export function monthIndex(year, month) {
+  return year * 12 + month;
+}
+
 export function ensureBudgetStructure(data) {
   const b = data.budget;
   if (!b.monthlyPlan) b.monthlyPlan = {};
@@ -13,6 +17,31 @@ export function ensureBudgetStructure(data) {
   for (const c of b.categories) {
     if (c.recordDay == null) c.recordDay = null;
   }
+}
+
+export function getBudgetStart(data) {
+  ensureBudgetStructure(data);
+  const { startYear, startMonth } = data.budget;
+  if (startYear && startMonth) return { year: startYear, month: startMonth };
+  return null;
+}
+
+export function setBudgetStart(data, year, month) {
+  ensureBudgetStructure(data);
+  data.budget.startYear = year;
+  data.budget.startMonth = Math.min(12, Math.max(1, month));
+}
+
+export function isBeforeBudgetStart(data, year, month) {
+  const start = getBudgetStart(data);
+  if (!start) return false;
+  return monthIndex(year, month) < monthIndex(start.year, start.month);
+}
+
+export function isBudgetStartMonth(data, year, month) {
+  const start = getBudgetStart(data);
+  if (!start) return false;
+  return start.year === year && start.month === month;
 }
 
 export function getRecordDay(data, category) {
@@ -52,13 +81,35 @@ export function setActualAmount(data, year, month, catId, amount) {
   };
 }
 
-/** 이전 달 잔액 이월 (같은 해 내) */
+/** 이전 달 잔액 이월 — 시작월 이전·시작월에는 이월 없음 */
 export function getRolloverIn(data, year, month, catId) {
-  if (month <= 1) return 0;
-  return getCategoryPeriodSummary(data, year, month - 1, catId).remaining;
+  const start = getBudgetStart(data);
+  const cur = monthIndex(year, month);
+  if (start && cur <= monthIndex(start.year, start.month)) return 0;
+
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  if (start && monthIndex(prevYear, prevMonth) < monthIndex(start.year, start.month)) return 0;
+
+  return getCategoryPeriodSummary(data, prevYear, prevMonth, catId).remaining;
 }
 
 export function getCategoryPeriodSummary(data, year, month, catId) {
+  if (isBeforeBudgetStart(data, year, month)) {
+    const entry = getActualEntry(data, year, month, catId);
+    const hasActual = entry != null;
+    return {
+      monthlyPlanned: 0,
+      rolloverIn: 0,
+      available: 0,
+      actual: hasActual ? entry.amount : 0,
+      remaining: 0,
+      hasActual,
+      usedPct: 0,
+      beforeStart: true,
+    };
+  }
+
   const monthlyPlanned = getMonthlyPlanAmount(data, year, catId);
   const rolloverIn = getRolloverIn(data, year, month, catId);
   const available = monthlyPlanned + rolloverIn;
@@ -75,6 +126,7 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
     remaining,
     hasActual,
     usedPct,
+    beforeStart: false,
   };
 }
 
@@ -99,6 +151,7 @@ export function getPeriodTotals(data, year, month, categories) {
 
 /** 해당 월·항목 실적 입력 가능 여부 (정산일 이후 또는 과거 월) */
 export function canRecordActual(data, year, month, catId) {
+  if (isBeforeBudgetStart(data, year, month)) return false;
   const cat = data.budget.categories.find((c) => c.id === catId);
   const recordDay = getRecordDay(data, cat);
   const today = new Date();
@@ -153,5 +206,10 @@ export function migrateBudgetModel(data) {
   if (hasPlan || Object.keys(b.monthlyPlan[yKey] || {}).length > 0) {
     const visible = b.categories.filter((c) => !c.hidden);
     if (visible.length > 0 && !b.setupDone) b.setupDone = true;
+  }
+
+  if (b.setupDone && (!b.startYear || !b.startMonth)) {
+    const now = new Date();
+    setBudgetStart(data, now.getFullYear(), now.getMonth() + 1);
   }
 }

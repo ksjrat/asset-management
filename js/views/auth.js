@@ -168,6 +168,8 @@ export function finishOnboarding() {
   state.data.budget.actuals = {};
   state.data.budget.setupDone = false;
   state.data.budget.defaultRecordDay = 25;
+  state.data.budget.startYear = null;
+  state.data.budget.startMonth = null;
   state.setupStep = 1;
   persist();
   state.locked = false;

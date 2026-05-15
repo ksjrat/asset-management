@@ -1,13 +1,16 @@
-import { state, persist } from '../state.js';
+import { state, persist, setMonth } from '../state.js';
 import { addCategory, getVisibleCategories } from '../store.js';
-import { setMonthlyPlanAmount, getMonthlyPlanAmount } from '../budget-engine.js';
+import {
+  setMonthlyPlanAmount, getMonthlyPlanAmount, setBudgetStart, getBudgetStart,
+} from '../budget-engine.js';
 import { esc, toast } from '../ui.js';
-import { fmtMoney } from '../format.js';
+import { fmtMoney, fmtMonth } from '../format.js';
 
 const STEPS = [
   { n: 1, title: '항목 설정', desc: '관리할 지출 항목을 만드세요' },
   { n: 2, title: '월간 예산', desc: '항목별 매월 예산 (언제든 수정 가능)' },
-  { n: 3, title: '실적 입력일', desc: '매달 실제 사용액을 입력할 날짜' },
+  { n: 3, title: '시작 월', desc: '가계부 관리를 시작할 달' },
+  { n: 4, title: '실적 입력일', desc: '매달 실제 사용액을 입력할 날짜' },
 ];
 
 function stepHeader(step) {
@@ -60,23 +63,49 @@ function renderStep2() {
 }
 
 function renderStep3() {
+  const now = new Date();
+  const start = getBudgetStart(state.data) || { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const years = [start.year - 1, start.year, start.year + 1];
+  const yearOpts = years.map((y) =>
+    `<option value="${y}" ${y === start.year ? 'selected' : ''}>${y}년</option>`).join('');
+  const monthOpts = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    return `<option value="${m}" ${m === start.month ? 'selected' : ''}>${m}월</option>`;
+  }).join('');
+  return `
+    ${stepHeader(3)}
+    <form id="setup-start-form" class="form-stack">
+      <label class="field">
+        <span class="field-label">가계부 시작 월</span>
+        <div class="setup-start-row">
+          <select class="input" name="startYear">${yearOpts}</select>
+          <select class="input" name="startMonth">${monthOpts}</select>
+        </div>
+      </label>
+      <p class="field-hint"><strong>${fmtMonth(start.year, start.month)}</strong>부터 예산·이월을 관리합니다. 그 이전 달(예: 1~4월)은 이월되지 않습니다.</p>
+    </form>`;
+}
+
+function renderStep4() {
   const day = state.data.budget.defaultRecordDay ?? 25;
+  const start = getBudgetStart(state.data);
   const cats = getVisibleCategories(state.data);
   const preview = cats.slice(0, 3).map((c) => esc(c.name)).join(', ');
   return `
-    ${stepHeader(3)}
+    ${stepHeader(4)}
     <form id="setup-record-form" class="form-stack">
       <label class="field">
         <span class="field-label">매달 실적 입력일 (1~28일)</span>
         <input class="input input-lg" name="recordDay" type="number" min="1" max="28" value="${day}" required />
       </label>
       <p class="field-hint">설정한 날짜가 되면 <strong>${preview}${cats.length > 3 ? '…' : ''}</strong> 등 항목별 실제 사용 금액을 입력할 수 있습니다.</p>
+      ${start ? `<p class="field-hint">관리 시작: <strong>${fmtMonth(start.year, start.month)}</strong></p>` : ''}
       <div class="setup-info-card">
         <h3>이후 흐름</h3>
         <ol class="setup-flow-list">
           <li>정산일 이후 → 항목별 <strong>실제 사용액</strong> 입력</li>
           <li>월간 예산과 비교 → 초과·절약 확인</li>
-          <li>남은 금액 → <strong>다음 달로 이월</strong></li>
+          <li>남은 금액 → <strong>다음 달로 이월</strong> (시작 월 이후만)</li>
         </ol>
       </div>
     </form>`;
@@ -87,9 +116,10 @@ export function renderSetup() {
   let body = '';
   if (step === 1) body = renderStep1();
   else if (step === 2) body = renderStep2();
-  else body = renderStep3();
+  else if (step === 3) body = renderStep3();
+  else body = renderStep4();
 
-  const nextLabel = step === 3 ? '시작하기' : '다음';
+  const nextLabel = step === 4 ? '시작하기' : '다음';
   return `
     <div class="setup-screen">
       ${body}
@@ -165,14 +195,36 @@ export function bindSetup() {
       return;
     }
     if (state.setupStep === 3) {
+      const form = document.getElementById('setup-start-form');
+      if (form) {
+        const fd = new FormData(form);
+        const sy = Number(fd.get('startYear'));
+        const sm = Number(fd.get('startMonth'));
+        if (!sy || !sm) {
+          toast('시작 월을 선택해 주세요', 'error');
+          return;
+        }
+        setBudgetStart(state.data, sy, sm);
+        persist();
+      }
+      state.setupStep = 4;
+      rerender();
+      return;
+    }
+    if (state.setupStep === 4) {
       const form = document.getElementById('setup-record-form');
       const day = Number(new FormData(form).get('recordDay')) || 25;
       state.data.budget.defaultRecordDay = Math.min(28, Math.max(1, day));
+      if (!getBudgetStart(state.data)) {
+        const now = new Date();
+        setBudgetStart(state.data, now.getFullYear(), now.getMonth() + 1);
+      }
       state.data.budget.setupDone = true;
       state.setupStep = 1;
       persist();
       toast('예산 설정이 완료되었습니다', 'success');
       state.tab = 'budget';
+      setMonth(state.data.budget.startYear, state.data.budget.startMonth);
       rerender();
     }
   });

@@ -1,9 +1,14 @@
 import { state, persist } from '../state.js';
+import { getBudgetStart } from '../budget-engine.js';
+import { fmtMonth } from '../format.js';
 import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm } from '../ui.js';
+import { showBudgetStartForm } from './modals.js';
 
 export function renderSettings() {
   const a = state.data.auth;
   const s = state.data.settings;
+  const start = getBudgetStart(state.data);
+  const startLabel = start ? fmtMonth(start.year, start.month) : '미설정';
   return `
     <div class="settings-group">
       <p class="settings-group-title">보안</p>
@@ -30,8 +35,12 @@ export function renderSettings() {
 
     <div class="settings-group">
       <p class="settings-group-title">예산</p>
+      <button type="button" class="settings-row" id="btn-budget-start">
+        <span><strong>가계부 시작 월</strong><span class="settings-row-meta">${startLabel}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
       <button type="button" class="settings-row" id="btn-budget-setup">
-        <span><strong>예산 설정 다시하기</strong><span class="settings-row-meta">항목·월간예산·정산일</span></span>
+        <span><strong>예산 설정 다시하기</strong><span class="settings-row-meta">항목·월간예산·시작월·정산일</span></span>
         <span class="settings-chevron">›</span>
       </button>
     </div>
@@ -85,6 +94,9 @@ export function bindSettings() {
       state.data.auth.spouseName = '';
       persist(); toast('연결이 해제되었습니다'); rerender();
     }
+  });
+  document.getElementById('btn-budget-start')?.addEventListener('click', () => {
+    showBudgetStartForm(rerender);
   });
   document.getElementById('btn-budget-setup')?.addEventListener('click', () => {
     state.data.budget.setupDone = false;

@@ -60,6 +60,8 @@ export const DEFAULT = {
   budget: {
     setupDone: false,
     defaultRecordDay: 25,
+    startYear: null,
+    startMonth: null,
     categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat-${i}`, name, hidden: false, recordDay: null })),
     monthlyPlan: {},
     actuals: {},
