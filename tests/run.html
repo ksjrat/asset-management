@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>store tests</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    .pass { color: green; }
+    .fail { color: red; }
+  </style>
+</head>
+<body>
+  <h1>store.js tests</h1>
+  <ul id="results"></ul>
+  <script type="module">
+    import {
+      calcSettlement, isSavingExpense, getBudgetVsActual, totalAssets, DEFAULT,
+    } from '../js/store.js';
+
+    const results = document.getElementById('results');
+    let passed = 0;
+    let failed = 0;
+
+    function test(name, fn) {
+      try {
+        fn();
+        passed++;
+        results.innerHTML += '<li class="pass">PASS: ' + name + '</li>';
+      } catch (e) {
+        failed++;
+        results.innerHTML += '<li class="fail">FAIL: ' + name + ' — ' + e.message + '</li>';
+      }
+    }
+
+    const data = structuredClone(DEFAULT);
+    const m = data.months['2026-01'] = { carryOver: 1000, income: [{ amount: 5000000, category: '급여' }], expenses: [
+      { amount: 500000, category: '식비', type: 'consumption' },
+      { amount: 2000000, category: '저축성', type: 'saving' },
+    ]};
+
+    test('isSavingExpense by category', () => {
+      if (!isSavingExpense({ category: '저축성' })) throw new Error('category');
+    });
+
+    test('calcSettlement saving split', () => {
+      const s = calcSettlement(data, 2026, 1);
+      if (s.savingExpense !== 2000000) throw new Error('saving ' + s.savingExpense);
+      if (s.consumptionExpense !== 500000) throw new Error('consumption');
+      if (s.balance !== 1000 + 5000000 - 2500000) throw new Error('balance');
+    });
+
+    test('budget vs actual', () => {
+      data.budget['식비'] = { 1: 400000 };
+      const rows = getBudgetVsActual(data, 2026, 1);
+      const food = rows.find((r) => r.category === '식비');
+      if (!food || food.actual !== 500000) throw new Error('actual');
+      if (!food.over) throw new Error('over flag');
+    });
+
+    results.innerHTML += '<li><strong>' + passed + ' passed, ' + failed + ' failed</strong></li>';
+  </script>
+</body>
+</html>

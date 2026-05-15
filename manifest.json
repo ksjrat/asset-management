@@ -1,0 +1,20 @@
+{
+  "name": "승재·은지 가계부",
+  "short_name": "가계부",
+  "description": "2026년 부부 가계부 — 스프레드시트 양식 모바일",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f5",
+  "theme_color": "#1e4d3a",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
