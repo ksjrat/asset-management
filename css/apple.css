@@ -145,6 +145,7 @@
 /* Squircle — Continuous curve (all cards) */
 :is(
   .squircle,
+  .header,
   .hero-card, .hero-card.small, .rollover-card,
   .mini-card, .summary-row .mini-card,
   .goal-card, .guide-card, .actions-card,
@@ -163,6 +164,7 @@
 @supports (corner-shape: superellipse(1.55)) {
   :is(
     .squircle,
+    .header,
     .hero-card, .mini-card, .goal-card, .budget-envelope,
     .settings-group, .list-group, .card, .modal-sheet,
     .quick-btn, .tip-banner, .empty-state, .setup-list
@@ -228,16 +230,21 @@ html, body {
   pointer-events: none;
 }
 
-/* ── Large Title Navigation (Glass) ── */
+/* ── Large Title Navigation (Glass · Squircle) ── */
 .header {
+  position: sticky;
+  top: max(8px, env(safe-area-inset-top));
+  z-index: 10;
+  margin: 0 var(--space-md) var(--space-sm);
   background: var(--glass-bg-thick);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text);
-  border-bottom: 0.5px solid var(--separator);
-  box-shadow: none;
-  padding: var(--space-sm) var(--space-md) var(--space-sm);
-  padding-top: max(var(--space-sm), env(safe-area-inset-top));
+  border: 0.5px solid var(--glass-border);
+  border-bottom: none;
+  box-shadow: var(--depth-card);
+  padding: var(--space-sm) var(--space-md);
+  overflow: hidden;
 }
 
 .header-title {
@@ -265,7 +272,6 @@ html, body {
 /* 홈·목표·설정 — 컴팩트 한 줄 헤더 */
 .header--compact {
   padding: 8px var(--space-md) 10px;
-  padding-top: max(8px, env(safe-area-inset-top));
 }
 
 .header-titles--compact {
@@ -1070,6 +1076,21 @@ html, body {
 }
 
 /* ═══ Strict HIG — overrides legacy styles.css ═══ */
+.app-shell .header {
+  background: var(--glass-bg-thick) !important;
+  color: var(--text) !important;
+  box-shadow: var(--depth-card) !important;
+  border: 0.5px solid var(--glass-border) !important;
+  border-radius: var(--squircle-r) !important;
+}
+
+@supports (corner-shape: superellipse(1.55)) {
+  .app-shell .header {
+    corner-shape: superellipse(1.55);
+    border-radius: var(--squircle-r-lg) !important;
+  }
+}
+
 .app-shell .tab-bar {
   width: 100% !important;
   max-width: 480px !important;
