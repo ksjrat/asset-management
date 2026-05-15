@@ -43,6 +43,7 @@ export const DEFAULT = {
     spouseConnected: false,
     inviteCode: null,
     inviteExpiresAt: null,
+    householdId: null,
     biometricEnabled: false,
     appPasswordSet: false,
     policyAccepted: false,

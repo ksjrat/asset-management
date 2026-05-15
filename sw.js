@@ -1,9 +1,10 @@
-const CACHE = 'couple-asset-v26';
+const CACHE = 'couple-asset-v28';
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
   './css/apple.css',
+  './css/desktop.css',
   './manifest.json',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -28,6 +29,9 @@ const ASSETS = [
   './js/budget-engine.js',
   './js/icons.js',
   './js/views/setup.js',
+  './js/sync.js',
+  './js/sync-config.js',
+  './js/sync-service.js',
 ];
 
 self.addEventListener('install', (e) => {

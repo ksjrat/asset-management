@@ -1,5 +1,7 @@
 import { state, persist } from '../state.js';
 import { generateInviteCode, recordPolicyConsent } from '../store.js';
+import { joinHousehold, isSyncEnabled } from '../sync.js';
+import { syncEnsureHousehold, syncJoinHousehold } from '../sync-service.js';
 import { formField, toast, esc, copyText } from '../ui.js';
 
 const ONBOARD_STEPS = ['welcome', 'login', 'signup', 'biometric', 'invite', 'policy'];
@@ -70,7 +72,7 @@ export function renderAuth() {
             <button type="button" class="btn btn-ghost btn-sm" data-auth="gen-invite">코드 발급</button>
             ${state.data.auth.inviteCode ? '<button type="button" class="btn btn-primary btn-sm" data-auth="copy-invite">복사</button>' : ''}
           </div>
-          <p class="field-hint">같은 기기 데모: 발급 후 같은 코드를 아래에 입력하세요</p>
+          <p class="field-hint">배우자에게 코드를 공유하세요. 다른 기기에서 같은 코드를 입력하면 데이터가 연동됩니다.</p>
         </div>
         <form class="auth-form" id="accept-invite-form">
           ${formField('배우자 초대 코드', '<input type="text" name="code" class="input" placeholder="ABC123" maxlength="8" style="text-transform:uppercase" />')}
@@ -84,7 +86,7 @@ export function renderAuth() {
       <div class="auth-screen">
         <h1>개인정보 처리방침</h1>
         <div class="policy-box">
-          <p>본 앱은 입력하신 금융 정보를 기기 내(localStorage)에만 저장합니다. 외부 서버로 전송하지 않으며, 배우자 연결 시 공동 데이터만 상대방과 공유됩니다.</p>
+          <p>금융 정보는 기기에도 저장됩니다. 클라우드 동기화를 켜면 가족 코드로 PC·폰·배우자 기기가 같은 데이터를 공유합니다.</p>
           <p>민감 정보(비상금 등)는 '비공개' 설정으로 배우자에게 숨길 수 있습니다.</p>
           <p class="muted">버전 ${esc(state.data.auth.policyVersion)}</p>
         </div>
@@ -104,10 +106,12 @@ export function bindAuth(onFinish) {
       if (a === 'bio-skip') { state.authScreen = 'invite'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'gen-invite') {
         state.data.auth.inviteCode = generateInviteCode();
+        state.data.auth.householdId = state.data.auth.inviteCode;
         state.data.auth.inviteExpiresAt = Date.now() + 86400000;
         persist();
+        syncEnsureHousehold();
         import('./index.js').then((m) => m.renderApp());
-        toast('초대 코드가 발급되었습니다');
+        toast('가족 코드가 발급되었습니다');
         return;
       }
       if (a === 'copy-invite' && state.data.auth.inviteCode) {
@@ -130,30 +134,35 @@ export function bindAuth(onFinish) {
     import('./index.js').then((m) => m.renderApp());
   });
 
-  document.getElementById('accept-invite-form')?.addEventListener('submit', (e) => {
+  document.getElementById('accept-invite-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const code = new FormData(e.target).get('code')?.toString().trim().toUpperCase();
     if (!code || code.length < 4) {
-      toast('4자 이상의 초대 코드를 입력하세요', 'error');
+      toast('4자 이상의 가족 코드를 입력하세요', 'error');
       return;
     }
-    const expected = state.data.auth.inviteCode;
-    const expires = state.data.auth.inviteExpiresAt;
-    if (expected && code !== expected) {
-      toast('초대 코드가 일치하지 않습니다. 다시 확인해 주세요.', 'error');
+    const ownCode = state.data.auth.inviteCode;
+    if (ownCode && code === ownCode) {
+      state.data.auth.spouseConnected = true;
+      state.data.auth.spouseName = '배우자';
+      state.data.auth.householdId = code;
+      persist();
+      await syncEnsureHousehold();
+      toast('연결되었습니다', 'success');
+      state.authScreen = 'policy';
+      import('./index.js').then((m) => m.renderApp());
       return;
     }
-    if (expires && Date.now() > expires) {
-      toast('초대 코드가 만료되었습니다. 새로 발급해 주세요.', 'error');
-      return;
-    }
-    if (!expected) {
-      toast('데모: 코드 없이 연결합니다. 실제 서비스에서는 발급된 코드가 필요합니다.', 'info');
-    }
+    joinHousehold(state.data, code);
     state.data.auth.spouseConnected = true;
     state.data.auth.spouseName = '배우자';
-    toast('배우자와 연결되었습니다', 'success');
     persist();
+    if (isSyncEnabled()) {
+      await syncJoinHousehold(code);
+      toast('가족 데이터와 연결되었습니다', 'success');
+    } else {
+      toast('연결되었습니다 (클라우드 동기화 설정 시 기기 간 데이터가 맞춰집니다)', 'info');
+    }
     state.authScreen = 'policy';
     import('./index.js').then((m) => m.renderApp());
   });

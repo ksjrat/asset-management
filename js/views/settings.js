@@ -1,7 +1,9 @@
 import { state, persist } from '../state.js';
 import { getBudgetStart } from '../budget-engine.js';
+import { isSyncEnabled, getSyncStatus } from '../sync.js';
+import { syncManualRefresh, syncEnsureHousehold } from '../sync-service.js';
 import { fmtMonth } from '../format.js';
-import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm } from '../ui.js';
+import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm, copyText } from '../ui.js';
 import { showBudgetStartForm } from './modals.js';
 
 export function renderSettings() {
@@ -9,6 +11,12 @@ export function renderSettings() {
   const s = state.data.settings;
   const start = getBudgetStart(state.data);
   const startLabel = start ? fmtMonth(start.year, start.month) : '미설정';
+  const syncOn = isSyncEnabled();
+  const syncStatus = getSyncStatus(state.data);
+  const familyCode = state.data.auth.householdId || state.data.auth.inviteCode;
+  const syncMeta = syncOn
+    ? (syncStatus === 'on' ? '클라우드 연동 중' : '가족 코드 발급 필요')
+  : '로컬만 (docs/SYNC.md 참고)';
   return `
     <div class="settings-group">
       <p class="settings-group-title">보안</p>
@@ -30,6 +38,21 @@ export function renderSettings() {
       ${!a.spouseConnected ? `<button type="button" class="settings-row" id="btn-connect"><span><strong>배우자 연결</strong><span class="settings-row-meta">초대 코드 발급</span></span><span class="settings-chevron">›</span></button>` : ''}
       ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
         <span><strong>연결 해제</strong></span><span class="settings-chevron">›</span>
+      </button>` : ''}
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">동기화</p>
+      <div class="settings-row" style="cursor:default">
+        <span><strong>상태</strong><span class="settings-row-meta">${syncMeta}</span></span>
+      </div>
+      ${familyCode ? `<button type="button" class="settings-row" id="btn-copy-family-code">
+        <span><strong>가족 코드</strong><span class="settings-row-meta">${esc(familyCode)}</span></span>
+        <span class="settings-chevron">복사</span>
+      </button>` : ''}
+      ${syncOn ? `<button type="button" class="settings-row" id="btn-sync-refresh">
+        <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기에서 받아오기</span></span>
+        <span class="settings-chevron">›</span>
       </button>` : ''}
     </div>
 
@@ -79,12 +102,14 @@ export function bindSettings() {
     const { generateInviteCode } = await import('../store.js');
     if (!state.data.auth.inviteCode) {
       state.data.auth.inviteCode = generateInviteCode();
+      state.data.auth.householdId = state.data.auth.inviteCode;
       persist();
+      syncEnsureHousehold();
     }
     await openModal({
       title: '배우자 초대',
-      body: `<p class="modal-text">초대 코드: <strong class="invite-code">${esc(state.data.auth.inviteCode)}</strong></p>
-        <p class="muted">배우자에게 코드를 공유하세요. (24시간 유효)</p>`,
+      body: `<p class="modal-text">가족 코드: <strong class="invite-code">${esc(state.data.auth.inviteCode)}</strong></p>
+        <p class="muted">배우자·다른 기기에서 같은 코드를 입력하면 데이터가 연동됩니다.</p>`,
       actions: [{ label: '닫기', primary: true }],
     });
   });
@@ -94,6 +119,14 @@ export function bindSettings() {
       state.data.auth.spouseName = '';
       persist(); toast('연결이 해제되었습니다'); rerender();
     }
+  });
+  document.getElementById('btn-copy-family-code')?.addEventListener('click', () => {
+    const code = state.data.auth.householdId || state.data.auth.inviteCode;
+    if (code) copyText(code);
+  });
+  document.getElementById('btn-sync-refresh')?.addEventListener('click', async () => {
+    const ok = await syncManualRefresh();
+    toast(ok ? '동기화되었습니다' : '동기화할 수 없습니다', ok ? 'success' : 'error');
   });
   document.getElementById('btn-budget-start')?.addEventListener('click', () => {
     showBudgetStartForm(rerender);

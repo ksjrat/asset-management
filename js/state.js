@@ -1,4 +1,5 @@
 import { load, save } from './store.js';
+import { syncAfterPersist } from './sync-service.js';
 
 const savedTab = (() => {
   try { return localStorage.getItem('couple-asset-tab'); } catch { return null; }
@@ -22,6 +23,7 @@ export const state = {
 
 export function persist() {
   save(state.data);
+  syncAfterPersist();
 }
 
 export function setTab(tab) {

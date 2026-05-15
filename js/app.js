@@ -2,8 +2,9 @@ import { initUI } from './ui.js';
 import { renderApp } from './views/index.js';
 import { state } from './state.js';
 import { load } from './store.js';
+import { setupCloudSync } from './sync-service.js';
 
-function bootstrap() {
+async function bootstrap() {
   state.data = load();
   if (state.data.auth.loggedIn && state.data.auth.onboardingDone) {
     state.locked = state.data.auth.biometricEnabled && state.data.settings?.lockOnLaunch !== false;
@@ -12,6 +13,11 @@ function bootstrap() {
   }
   initUI();
   renderApp();
+  setupCloudSync().then((ok) => {
+    if (ok && state.data.auth.loggedIn) {
+      import('./views/index.js').then((m) => m.renderApp());
+    }
+  });
 }
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

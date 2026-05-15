@@ -50,19 +50,21 @@ export function renderApp() {
   const { data, locked } = state;
 
   if (!data.auth.loggedIn) {
+    root.className = 'app-auth';
     root.innerHTML = renderAuth();
     bindAuth(finishOnboarding);
     return;
   }
 
   if (locked && (data.auth.biometricEnabled || data.auth.appPasswordSet)) {
+    root.className = 'app-lock';
     root.innerHTML = renderLock();
     bindLock();
     return;
   }
 
   if (!data.budget?.setupDone) {
-    root.className = 'app-shell';
+    root.className = 'app-shell app-shell--setup';
     root.innerHTML = renderSetup();
     bindSetup();
     return;
