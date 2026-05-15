@@ -8,10 +8,15 @@ import { lineChart, legend } from '../charts.js';
 import { toast } from '../ui.js';
 import { showAssetForm } from './modals.js';
 
+const ASSET_ICONS = {
+  cash: '💵', deposit: '🏦', savings: '🐷', invest: '📈', realestate: '🏠',
+  loan: '📋', card: '💳',
+};
+
 function itemRow(item) {
   const type = ASSET_TYPES.find((t) => t.id === item.type);
   const owner = OWNERS.find((o) => o.id === item.owner);
-  const icon = type?.group === 'asset' ? '💰' : '📉';
+  const icon = ASSET_ICONS[item.type] || (type?.group === 'asset' ? '💰' : '📉');
   return `<button type="button" class="list-item" data-asset-id="${item.id}">
     <span class="avatar avatar--asset" aria-hidden="true">${icon}</span>
     <span class="list-body">

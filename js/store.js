@@ -19,6 +19,7 @@ export const ASSET_TYPES = [
   { id: 'deposit', label: '예금', group: 'asset' },
   { id: 'savings', label: '적금', group: 'asset' },
   { id: 'invest', label: '투자', group: 'asset' },
+  { id: 'realestate', label: '부동산', group: 'asset' },
   { id: 'loan', label: '대출', group: 'liability' },
   { id: 'card', label: '카드 미결제', group: 'liability' },
 ];
@@ -238,6 +239,7 @@ export function seedDemoData(data) {
     { type: 'deposit', name: '공동 예금', amount: 45000000, owner: 'joint' },
     { type: 'savings', name: '적금', amount: 12000000, owner: 'joint' },
     { type: 'invest', name: '투자 계좌', amount: 28000000, owner: 'self' },
+    { type: 'realestate', name: '아파트 (자가)', amount: 450000000, owner: 'joint' },
     { type: 'cash', name: '비상금', amount: 5000000, owner: 'self', private: true },
     { type: 'deposit', name: '급여 통장', amount: 8500000, owner: 'spouse' },
     { type: 'loan', name: '주택담보대출', amount: 180000000, owner: 'joint' },
