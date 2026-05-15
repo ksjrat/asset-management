@@ -1,0 +1,18 @@
+{
+  "name": "우리 자산 - 신혼부부 공동 자산 관리",
+  "short_name": "우리 자산",
+  "description": "신혼부부 공동 자산·목표·예산 관리",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f7f5",
+  "theme_color": "#1e4d3a",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
