@@ -2,7 +2,7 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getMonthBudget,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
-  getCategoryThresholds, addCategory,
+  addCategory,
 } from '../store.js';
 import {
   getAnnualAmount, setAnnualAmount, getMonthlyPlanned,
@@ -327,8 +327,7 @@ export async function showCategoryManage(rerender) {
       </div>`).join('');
   const res = await openModal({
       title: '카테고리 관리',
-      body: `<div class="list-group">${rows}</div>
-        <p class="field-hint">기본 임계치: ${state.data.settings.defaultThresholdWarn}% / ${state.data.settings.defaultThresholdOver}%</p>`,
+      body: `<div class="list-group">${rows}</div>`,
       actions: [
         { label: '카테고리 추가', value: 'add' },
         { label: '닫기', value: null, primary: true },
@@ -338,7 +337,6 @@ export async function showCategoryManage(rerender) {
           btn.addEventListener('click', async () => {
             const cat = cats.find((c) => c.id === btn.dataset.catEdit);
             if (!cat) return;
-            const th = getCategoryThresholds(state.data, cat.id);
             const editRes = await openModal({
               title: '카테고리 편집',
               body: `<form id="cat-form" class="form-stack">
@@ -346,8 +344,6 @@ export async function showCategoryManage(rerender) {
                 <label class="toggle-row"><span>숨김</span>
                   <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
                 ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
-                ${formField('경고 %', `<input class="input" name="warn" type="number" value="${th.warn}" />`)}
-                ${formField('초과 %', `<input class="input" name="over" type="number" value="${th.over}" />`)}
               </form>`,
               actions: [
                 { label: '숨김', value: 'delete', danger: true },
@@ -363,10 +359,6 @@ export async function showCategoryManage(rerender) {
             cat.hidden = !!efd.get('hidden');
             const rd = efd.get('recordDay');
             cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
-            state.data.settings.categoryThresholds[cat.id] = {
-              warn: Number(efd.get('warn')) || 80,
-              over: Number(efd.get('over')) || 100,
-            };
             persist(); toast('저장됨', 'success'); rerender(); showCategoryManage(rerender);
           });
         });

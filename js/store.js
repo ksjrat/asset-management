@@ -1,6 +1,6 @@
 import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
-import { ensureBudgetStructure, migrateBudgetModel, setAnnualAmount } from './budget-engine.js';
+import { ensureBudgetStructure, migrateBudgetModel } from './budget-engine.js';
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -52,15 +52,8 @@ export const DEFAULT = {
   },
   settings: {
     lockOnLaunch: true,
-    lockOnSensitive: false,
-    alertQuietStart: '22:00',
-    alertQuietEnd: '08:00',
-    alertFrequency: 'once',
-    defaultThresholdWarn: 80,
-    defaultThresholdOver: 100,
     snapshotDay: 28,
     hiddenCategories: [],
-    categoryThresholds: {},
   },
   policyConsents: [],
   assets: { items: [], snapshots: [] },
@@ -190,14 +183,6 @@ export function generateInviteCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-export function getCategoryThresholds(data, categoryId) {
-  const custom = data.settings.categoryThresholds[categoryId];
-  return {
-    warn: custom?.warn ?? data.settings.defaultThresholdWarn ?? 80,
-    over: custom?.over ?? data.settings.defaultThresholdOver ?? 100,
-  };
-}
-
 export function addCategory(data, name, recordDay = null) {
   const id = uid();
   data.budget.categories.push({ id, name: name.trim(), hidden: false, recordDay });
@@ -231,85 +216,4 @@ export function recordPolicyConsent(data) {
     version: data.auth.policyVersion,
     at: now(),
   });
-}
-
-export function seedDemoData(data) {
-  if (data.assets.items.length) return data;
-  const demo = [
-    { type: 'deposit', name: '공동 예금', amount: 45000000, owner: 'joint' },
-    { type: 'savings', name: '적금', amount: 12000000, owner: 'joint' },
-    { type: 'invest', name: '투자 계좌', amount: 28000000, owner: 'self' },
-    { type: 'realestate', name: '아파트 (자가)', amount: 450000000, owner: 'joint' },
-    { type: 'cash', name: '비상금', amount: 5000000, owner: 'self', private: true },
-    { type: 'deposit', name: '급여 통장', amount: 8500000, owner: 'spouse' },
-    { type: 'loan', name: '주택담보대출', amount: 180000000, owner: 'joint' },
-  ];
-  for (const d of demo) {
-    data.assets.items.push({
-      id: uid(),
-      ...d,
-      updatedAt: now(),
-      history: [{ amount: d.amount, at: now() }],
-    });
-  }
-  const today = todayISO();
-  const end = new Date();
-  end.setMonth(end.getMonth() + 36);
-  data.goals.push({
-    id: uid(),
-    title: '첫 아파트 마련',
-    template: 'house',
-    targetAmount: 100000000,
-    currentAmount: 15000000,
-    startDate: today,
-    endDate: end.toISOString().slice(0, 10),
-    status: 'active',
-    monthlyContribution: 2500000,
-    contributionMode: 'equal',
-    milestones: [25, 50, 75].map((p) => ({ percent: p, reached: p <= 15 })),
-    contributions: [
-      { id: uid(), date: today, amount: 5000000, memo: '초기 저축' },
-      { id: uid(), date: today, amount: 10000000, memo: '보너스' },
-    ],
-    proposedBy: 'self',
-    approvedBy: 'spouse',
-    history: [],
-    createdAt: now(),
-  });
-  const y = new Date().getFullYear();
-  const m = new Date().getMonth() + 1;
-  const cats = getVisibleCategories(data);
-  const annualAmounts = [9600000, 18000000, 3600000, 1800000, 4800000, 2400000, 0, 3600000, 4800000, 30000000, 2400000];
-  cats.forEach((c, i) => setAnnualAmount(data, y, c.id, annualAmounts[i] ?? 3600000));
-  data.budget.setupDone = true;
-  data.budget.defaultRecordDay = 25;
-
-  const samples = [
-    { type: 'income', amount: 5500000, catIdx: 0, memo: '급여', day: 25 },
-    { type: 'expense', amount: 420000, catIdx: 0, memo: '마트', day: 5 },
-    { type: 'expense', amount: 1200000, catIdx: 1, memo: '월세', day: 1 },
-    { type: 'expense', amount: 85000, catIdx: 3, memo: '통신비', day: 12 },
-    { type: 'expense', amount: 180000, catIdx: 4, memo: '보험', day: 15 },
-  ];
-  for (const s of samples) {
-    const d = new Date(y, m - 1, s.day);
-    data.transactions.push({
-      id: uid(),
-      date: d.toISOString().slice(0, 10),
-      amount: s.amount,
-      type: s.type,
-      categoryId: cats[s.catIdx]?.id || cats[0].id,
-      paymentMethod: s.type === 'income' ? '이체' : '카드',
-      memo: s.memo,
-      shared: true,
-      createdBy: 'self',
-    });
-  }
-
-  const now = new Date();
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    createSnapshot(data, d.getFullYear(), d.getMonth() + 1);
-  }
-  return data;
 }

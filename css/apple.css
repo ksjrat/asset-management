@@ -45,13 +45,23 @@
   --squircle-r-sm: 14px;
   --squircle-r-lg: 28px;
 
-  /* Depth — 은은하고 넓게 */
-  --shadow-soft:
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 12px 48px rgba(0, 0, 0, 0.06);
-  --shadow-lift:
-    0 4px 16px rgba(0, 0, 0, 0.05),
-    0 24px 64px rgba(0, 0, 0, 0.08);
+  /* Soft depth — 배경과 카드 분리 */
+  --depth-card:
+    0 0.5px 0 rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.03),
+    0 10px 28px -6px rgba(0, 0, 0, 0.07),
+    0 24px 56px -16px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --depth-float:
+    0 8px 32px -8px rgba(0, 0, 0, 0.1),
+    0 32px 64px -16px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-soft: var(--depth-card);
+  --shadow-lift: var(--depth-float);
+
+  /* Tab bar vibrancy */
+  --tab-blur: blur(80px) saturate(200%);
+  --tab-glass: rgba(255, 255, 255, 0.52);
 
   /* Typography — SF Pro hierarchy */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
@@ -120,52 +130,44 @@
     --mesh-b: rgba(94, 92, 230, 0.08);
     --mesh-c: rgba(48, 209, 88, 0.06);
 
-    --shadow-soft:
+    --depth-card:
+      0 0.5px 0 rgba(0, 0, 0, 0.5),
       0 2px 8px rgba(0, 0, 0, 0.35),
-      0 12px 48px rgba(0, 0, 0, 0.45);
-    --shadow-lift:
-      0 4px 20px rgba(0, 0, 0, 0.4),
-      0 24px 64px rgba(0, 0, 0, 0.5);
+      0 16px 40px -8px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --depth-float:
+      0 12px 40px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --tab-glass: rgba(22, 22, 24, 0.58);
   }
 }
 
-/* Squircle — Continuous curve */
-.squircle,
-.hero-card,
-.mini-card,
-.summary-row .mini-card,
-.goal-card,
-.budget-envelope,
-.settings-group,
-.list-group,
-.card,
-.modal-sheet,
-.tip-banner,
-.empty-state,
-.setup-list,
-.setup-info-card,
-.quick-btn,
-.chip,
-.seg-control,
-.auth-logo,
-.policy-box,
-.insight-section,
-.guide-card {
+/* Squircle — Continuous curve (all cards) */
+:is(
+  .squircle,
+  .hero-card, .hero-card.small, .rollover-card,
+  .mini-card, .summary-row .mini-card,
+  .goal-card, .guide-card, .actions-card,
+  .budget-envelope, .budget-row,
+  .settings-group, .list-group, .card,
+  .modal-sheet, .tip-banner, .alert-banner,
+  .empty-state, .setup-list, .setup-info-card,
+  .quick-btn, .chip, .seg-control,
+  .auth-logo, .policy-box, .insight-section,
+  .section > .list-group
+) {
   border-radius: var(--squircle-r);
+  overflow: hidden;
 }
 
-@supports (corner-shape: superellipse(1.45)) {
-  .squircle,
-  .hero-card,
-  .mini-card,
-  .goal-card,
-  .budget-envelope,
-  .settings-group,
-  .list-group,
-  .card,
-  .modal-sheet,
-  .quick-btn {
-    corner-shape: superellipse(1.45);
+@supports (corner-shape: superellipse(1.55)) {
+  :is(
+    .squircle,
+    .hero-card, .mini-card, .goal-card, .budget-envelope,
+    .settings-group, .list-group, .card, .modal-sheet,
+    .quick-btn, .tip-banner, .empty-state, .setup-list
+  ) {
+    corner-shape: superellipse(1.55);
     border-radius: var(--squircle-r-lg);
   }
 }
@@ -185,12 +187,14 @@
 .quick-btn,
 .guide-card,
 .insight-section,
-.rollover-card {
+.rollover-card,
+.alert-banner,
+.actions-card {
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 0.5px solid var(--glass-border);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--depth-card);
 }
 
 /* Ambient mesh background */
@@ -317,7 +321,7 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Tab Bar — Glass fixed bottom ── */
+/* ── Tab Bar — Translucent blur (iOS) ── */
 .tab-bar {
   position: fixed;
   bottom: 0;
@@ -327,13 +331,22 @@ html, body {
   max-width: 480px;
   padding: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: var(--glass-bg-thick);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-top: 0.5px solid var(--separator);
+  background: var(--tab-glass);
+  backdrop-filter: var(--tab-blur);
+  -webkit-backdrop-filter: var(--tab-blur);
+  border-top: 0.33px solid rgba(255, 255, 255, 0.35);
   border-radius: 0;
-  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 -0.5px 0 rgba(0, 0, 0, 0.06),
+    0 -12px 40px -8px rgba(0, 0, 0, 0.04);
   z-index: 20;
+  isolation: isolate;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab-bar {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .tab-btn {
@@ -367,18 +380,16 @@ html, body {
   height: 28px;
 }
 
-.tab-svg {
-  width: 24px;
-  height: 24px;
-  stroke: currentColor;
-  stroke-width: 1.75;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
+.tab-svg,
+.sf-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  flex-shrink: 0;
 }
 
-.tab-btn.active .tab-svg {
-  stroke-width: 2;
+.tab-btn.active .sf-icon {
+  stroke-width: 1.5;
 }
 
 /* ── Hero card — Glass depth ── */
@@ -1002,14 +1013,76 @@ html, body {
 
 .avatar {
   background: var(--primary-muted);
+  color: var(--primary);
 }
 
-.avatar--income { background: rgba(52, 199, 89, 0.15); color: var(--success); }
-.avatar--expense { background: rgba(255, 59, 48, 0.12); color: var(--danger); }
+.avatar--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 120, 128, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.avatar--icon .sf-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.avatar--income { background: rgba(52, 199, 89, 0.12); color: var(--success); }
+.avatar--expense { background: rgba(255, 59, 48, 0.1); color: var(--danger); }
 
 .boot-loading {
   color: var(--text-secondary);
   font-size: var(--text-footnote);
+}
+
+/* ═══ Strict HIG — overrides legacy styles.css ═══ */
+.app-shell .tab-bar {
+  width: 100% !important;
+  max-width: 480px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: 0 !important;
+  border-radius: 0 !important;
+  background: var(--tab-glass) !important;
+  backdrop-filter: var(--tab-blur) !important;
+  -webkit-backdrop-filter: var(--tab-blur) !important;
+}
+
+.app-shell .hero-card {
+  background: var(--glass-bg) !important;
+  color: var(--text) !important;
+  box-shadow: var(--depth-card) !important;
+  border: 0.5px solid var(--glass-border) !important;
+}
+
+.app-shell .tab-btn.active {
+  background: transparent !important;
+}
+
+.app-shell .tab-btn.active::before {
+  display: none !important;
+}
+
+.app-shell :is(.hero-card, .mini-card, .goal-card, .list-group, .settings-group, .budget-envelope, .card, .tip-banner, .empty-state, .quick-btn, .guide-card, .insight-section, .rollover-card, .alert-banner) {
+  box-shadow: var(--depth-card) !important;
+  border-radius: var(--squircle-r) !important;
+}
+
+@supports (corner-shape: superellipse(1.55)) {
+  .app-shell :is(.hero-card, .mini-card, .goal-card, .list-group, .settings-group, .budget-envelope, .modal-sheet, .quick-btn, .empty-state) {
+    corner-shape: superellipse(1.55);
+    border-radius: var(--squircle-r-lg) !important;
+  }
+}
+
+.app-shell .fab {
+  box-shadow: var(--depth-float);
+}
+
+.app-shell .modal-sheet {
+  box-shadow: var(--depth-float) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

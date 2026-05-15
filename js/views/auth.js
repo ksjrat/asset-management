@@ -1,5 +1,5 @@
 import { state, persist } from '../state.js';
-import { generateInviteCode, seedDemoData, recordPolicyConsent } from '../store.js';
+import { generateInviteCode, recordPolicyConsent } from '../store.js';
 import { formField, toast, esc, copyText } from '../ui.js';
 
 const ONBOARD_STEPS = ['welcome', 'login', 'signup', 'biometric', 'invite', 'policy'];
