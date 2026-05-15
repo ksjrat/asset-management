@@ -793,3 +793,5 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
 .card-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
 .muted { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+.boot-loading { text-align: center; padding: 48px; color: var(--muted); }
+.auth-screen a { color: var(--primary); font-weight: 600; }

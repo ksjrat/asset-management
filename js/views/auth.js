@@ -109,13 +109,28 @@ export function bindAuth(onFinish) {
 
   document.getElementById('accept-invite-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const code = new FormData(e.target).get('code')?.toString().toUpperCase();
-    if (code && code.length >= 4) {
-      state.data.auth.spouseConnected = true;
-      state.data.auth.spouseName = '배우자';
-      toast('배우자와 연결되었습니다');
-      persist();
+    const code = new FormData(e.target).get('code')?.toString().trim().toUpperCase();
+    if (!code || code.length < 4) {
+      toast('4자 이상의 초대 코드를 입력하세요', 'error');
+      return;
     }
+    const expected = state.data.auth.inviteCode;
+    const expires = state.data.auth.inviteExpiresAt;
+    if (expected && code !== expected) {
+      toast('초대 코드가 일치하지 않습니다. 다시 확인해 주세요.', 'error');
+      return;
+    }
+    if (expires && Date.now() > expires) {
+      toast('초대 코드가 만료되었습니다. 새로 발급해 주세요.', 'error');
+      return;
+    }
+    if (!expected) {
+      toast('데모: 코드 없이 연결합니다. 실제 서비스에서는 발급된 코드가 필요합니다.', 'info');
+    }
+    state.data.auth.spouseConnected = true;
+    state.data.auth.spouseName = '배우자';
+    toast('배우자와 연결되었습니다', 'success');
+    persist();
     state.authScreen = 'policy';
     import('./index.js').then((m) => m.renderApp());
   });
