@@ -152,7 +152,7 @@
   .goal-card, .guide-card, .actions-card,
   .budget-envelope, .budget-row,
   .settings-group, .list-group, .card,
-  .modal-sheet, .tip-banner, .alert-banner,
+  .tip-banner, .alert-banner,
   .empty-state, .setup-list, .setup-info-card,
   .quick-btn, .chip, .seg-control,
   .auth-logo, .policy-box, .insight-section,
@@ -168,7 +168,7 @@
     .header,
     .tab-bar,
     .hero-card, .mini-card, .goal-card, .budget-envelope,
-    .settings-group, .list-group, .card, .modal-sheet,
+    .settings-group, .list-group, .card,
     .quick-btn, .tip-banner, .empty-state, .setup-list
   ) {
     corner-shape: superellipse(1.55);
@@ -872,6 +872,9 @@ html, body {
 }
 
 .modal-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 100dvh - env(safe-area-inset-top) - 16px);
   background: var(--glass-bg-thick);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -879,6 +882,23 @@ html, body {
   border-radius: var(--squircle-r-lg) var(--squircle-r-lg) 0 0;
   padding: 10px var(--space-md) max(28px, env(safe-area-inset-bottom));
   box-shadow: var(--shadow-lift);
+  overflow: hidden;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  margin: 0 calc(-1 * var(--space-md));
+  padding: 0 var(--space-md);
+}
+
+.modal-actions {
+  flex-shrink: 0;
+  margin-top: var(--space-sm);
 }
 
 .modal-handle {

@@ -1,12 +1,12 @@
 import { state, persist } from '../state.js';
 import { addCategory, getVisibleCategories } from '../store.js';
-import { setAnnualAmount } from '../budget-engine.js';
+import { setMonthlyPlanAmount, getMonthlyPlanAmount } from '../budget-engine.js';
 import { esc, toast } from '../ui.js';
 import { fmtMoney } from '../format.js';
 
 const STEPS = [
   { n: 1, title: '항목 설정', desc: '관리할 지출 항목을 만드세요' },
-  { n: 2, title: '연간 예산', desc: '항목별 1년 예산 (언제든 수정 가능)' },
+  { n: 2, title: '월간 예산', desc: '항목별 매월 예산 (언제든 수정 가능)' },
   { n: 3, title: '실적 입력일', desc: '매달 실제 사용액을 입력할 날짜' },
 ];
 
@@ -43,21 +43,20 @@ function renderStep2() {
   const y = new Date().getFullYear();
   const cats = getVisibleCategories(state.data);
   const rows = cats.map((c) => {
-    const annual = state.data.budget.annual[String(y)]?.[c.id] ?? 0;
-    const monthly = Math.round(annual / 12);
+    const monthly = getMonthlyPlanAmount(state.data, y, c.id);
     return `
       <label class="setup-budget-row">
         <span class="setup-budget-name">${esc(c.name)}</span>
         <div class="setup-budget-inputs">
-          <input class="input" name="${c.id}" type="number" min="0" step="10000" value="${annual || ''}" placeholder="연간" />
-          <span class="setup-budget-monthly">월 ${fmtMoney(monthly)}</span>
+          <input class="input" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+          <span class="setup-budget-monthly">연 ${fmtMoney(monthly * 12)}</span>
         </div>
       </label>`;
   }).join('');
   return `
     ${stepHeader(2)}
-    <p class="field-hint">${y}년 기준 · 월 환산은 자동 계산됩니다.</p>
-    <form id="setup-annual-form" class="form-stack">${rows}</form>`;
+    <p class="field-hint">${y}년 기준 · 매월 동일 금액이 적용됩니다.</p>
+    <form id="setup-monthly-form" class="form-stack">${rows}</form>`;
 }
 
 function renderStep3() {
@@ -76,7 +75,7 @@ function renderStep3() {
         <h3>이후 흐름</h3>
         <ol class="setup-flow-list">
           <li>정산일 이후 → 항목별 <strong>실제 사용액</strong> 입력</li>
-          <li>예산과 비교 → 초과·절약 확인</li>
+          <li>월간 예산과 비교 → 초과·절약 확인</li>
           <li>남은 금액 → <strong>다음 달로 이월</strong></li>
         </ol>
       </div>
@@ -124,11 +123,11 @@ export function bindSetup() {
     });
   });
 
-  document.querySelectorAll('#setup-annual-form input').forEach((input) => {
+  document.querySelectorAll('#setup-monthly-form input').forEach((input) => {
     input.addEventListener('input', () => {
       const row = input.closest('.setup-budget-row');
       const hint = row?.querySelector('.setup-budget-monthly');
-      if (hint) hint.textContent = `월 ${fmtMoney(Math.round((Number(input.value) || 0) / 12))}`;
+      if (hint) hint.textContent = `연 ${fmtMoney((Number(input.value) || 0) * 12)}`;
     });
   });
 
@@ -149,16 +148,16 @@ export function bindSetup() {
       return;
     }
     if (state.setupStep === 2) {
-      const form = document.getElementById('setup-annual-form');
+      const form = document.getElementById('setup-monthly-form');
       if (form) {
         const fd = new FormData(form);
         for (const c of cats) {
-          setAnnualAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+          setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
         }
       }
-      const hasAny = cats.some((c) => (state.data.budget.annual[String(y)]?.[c.id] || 0) > 0);
+      const hasAny = cats.some((c) => getMonthlyPlanAmount(state.data, y, c.id) > 0);
       if (!hasAny) {
-        toast('연간 예산을 1개 이상 입력해 주세요', 'error');
+        toast('월간 예산을 1개 이상 입력해 주세요', 'error');
         return;
       }
       state.setupStep = 3;

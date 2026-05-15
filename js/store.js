@@ -1,6 +1,6 @@
 import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
-import { ensureBudgetStructure, migrateBudgetModel } from './budget-engine.js';
+import { ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount } from './budget-engine.js';
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -21,7 +21,6 @@ export const ASSET_TYPES = [
   { id: 'invest', label: '투자', group: 'asset' },
   { id: 'realestate', label: '부동산', group: 'asset' },
   { id: 'loan', label: '대출', group: 'liability' },
-  { id: 'card', label: '카드 미결제', group: 'liability' },
 ];
 
 export const OWNERS = [
@@ -62,9 +61,8 @@ export const DEFAULT = {
     setupDone: false,
     defaultRecordDay: 25,
     categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat-${i}`, name, hidden: false, recordDay: null })),
-    annual: {},
+    monthlyPlan: {},
     actuals: {},
-    monthly: {},
   },
   transactions: [],
   recurring: [],
@@ -133,16 +131,13 @@ export function monthsBetween(startISO, endISO) {
   return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()));
 }
 
-export function getMonthBudget(data, year, month) {
-  const key = ymKey(year, month);
-  if (!data.budget.monthly) data.budget.monthly = {};
-  if (!data.budget.monthly[key]) {
-    data.budget.monthly[key] = {};
-    for (const cat of getVisibleCategories(data)) {
-      data.budget.monthly[key][cat.id] = 0;
-    }
+export function getMonthBudget(data, year, _month) {
+  ensureBudgetStructure(data);
+  const map = {};
+  for (const cat of getVisibleCategories(data)) {
+    map[cat.id] = getMonthlyPlanAmount(data, year, cat.id);
   }
-  return data.budget.monthly[key];
+  return map;
 }
 
 export function getMonthTransactions(data, year, month) {

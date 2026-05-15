@@ -1,11 +1,11 @@
 import { state, persist } from '../state.js';
 import {
-  ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getMonthBudget,
+  ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
   addCategory,
 } from '../store.js';
 import {
-  getAnnualAmount, setAnnualAmount, getMonthlyPlanned,
+  getMonthlyPlanAmount, setMonthlyPlanAmount,
   getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
@@ -251,27 +251,27 @@ export async function showTxForm(type, item, rerender) {
   persist(); toast('저장되었습니다', 'success'); rerender();
 }
 
-export async function showAnnualBudgetForm(year, rerender) {
+export async function showMonthlyBudgetForm(year, rerender) {
   const cats = getVisibleCategories(state.data);
   const fields = cats.map((c) => {
-    const annual = getAnnualAmount(state.data, year, c.id);
+    const monthly = getMonthlyPlanAmount(state.data, year, c.id);
     return formField(
-      `${c.name} (연간)`,
-      `<input class="input" name="${c.id}" type="number" min="0" step="10000" value="${annual || ''}" />
-       <span class="field-hint">월 ${fmtMoney(getMonthlyPlanned(annual))}</span>`,
+      `${c.name} (월)`,
+      `<input class="input" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+       <span class="field-hint">연 ${fmtMoney(monthly * 12)}</span>`,
     );
   }).join('');
   const res = await openModal({
-    title: `${year}년 연간 예산`,
-    body: `<form id="annual-form" class="form-stack"><p class="field-hint">언제든 수정할 수 있습니다.</p>${fields}</form>`,
+    title: `${year}년 월간 예산`,
+    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">항목별 매월 예산 · 언제든 수정할 수 있습니다.</p>${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
-  for (const c of cats) setAnnualAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
+  for (const c of cats) setMonthlyPlanAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
   persist();
-  toast('연간 예산이 저장되었습니다', 'success');
+  toast('월간 예산이 저장되었습니다', 'success');
   rerender();
 }
 
@@ -302,20 +302,21 @@ export async function showActualForm(catId, year, month, rerender) {
 }
 
 export async function showBudgetForm(y, m, rerender) {
-  const mb = getMonthBudget(state.data, y, m);
   const cats = getVisibleCategories(state.data);
-  const fields = cats.map((c) =>
-    formField(c.name, `<input class="input" name="${c.id}" type="number" min="0" value="${mb[c.id] || 0}" />`)).join('');
+  const fields = cats.map((c) => {
+    const monthly = getMonthlyPlanAmount(state.data, y, c.id);
+    return formField(c.name, `<input class="input" name="${c.id}" type="number" min="0" value="${monthly || 0}" />`);
+  }).join('');
   const res = await openModal({
-    title: `${fmtMonth(y, m)} 예산 설정`,
+    title: `${fmtMonth(y, m)} 월간 예산`,
     body: `<form id="budget-form" class="form-stack">${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
-  for (const c of cats) mb[c.id] = Number(fd.get(c.id)) || 0;
-  persist(); toast('예산이 저장되었습니다', 'success'); rerender();
+  for (const c of cats) setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+  persist(); toast('월간 예산이 저장되었습니다', 'success'); rerender();
 }
 
 export async function showCategoryManage(rerender) {

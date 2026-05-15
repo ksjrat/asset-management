@@ -164,7 +164,7 @@ export function finishOnboarding() {
   state.data.auth.onboardingDone = true;
   recordPolicyConsent(state.data);
   state.data.budget.categories = [];
-  state.data.budget.annual = {};
+  state.data.budget.monthlyPlan = {};
   state.data.budget.actuals = {};
   state.data.budget.setupDone = false;
   state.data.budget.defaultRecordDay = 25;

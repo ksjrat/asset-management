@@ -12,7 +12,7 @@ import { esc, emptyState } from '../ui.js';
 import { budgetBar } from '../charts.js';
 import {
   showCategoryManage,
-  showAnnualBudgetForm,
+  showMonthlyBudgetForm,
   showActualForm,
 } from './modals.js';
 
@@ -38,7 +38,7 @@ export function renderBudget() {
         <div class="budget-envelope-head">
           <div>
             <strong>${esc(c.name)}</strong>
-            <span class="budget-envelope-meta">정산 ${day}일 · 연 ${fmtShort(s.annual)}</span>
+            <span class="budget-envelope-meta">정산 ${day}일 · 월 ${fmtShort(s.monthlyPlanned)}</span>
           </div>
           <div class="budget-envelope-badges">
             ${due ? '<span class="badge badge-proposed">입력 대기</span>' : ''}
@@ -82,7 +82,7 @@ export function renderBudget() {
         <h2>항목별 비교</h2>
         <div class="btn-row-inline">
           <button type="button" class="text-btn" id="btn-categories">항목</button>
-          <button type="button" class="text-btn" id="btn-edit-annual">연간 예산</button>
+          <button type="button" class="text-btn" id="btn-edit-monthly">월간 예산</button>
         </div>
       </div>
       ${cats.length ? catRows : emptyState('📋', '항목이 없어요', '처음 설정을 다시 진행해 보세요', '항목 설정', 'btn-setup-again')}
@@ -91,7 +91,7 @@ export function renderBudget() {
     <section class="section">
       <div class="section-head"><h2>이용 방법</h2></div>
       <ol class="setup-flow-list compact">
-        <li>연간 예산 ÷ 12 = 매월 기본 예산</li>
+        <li>항목별 <strong>월간 예산</strong>을 설정합니다</li>
         <li>전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
         <li>정산일 이후 항목별 <strong>실적</strong>을 입력하세요</li>
       </ol>
@@ -103,7 +103,7 @@ export function bindBudget() {
   const { selectedYear: y, selectedMonth: m } = state;
 
   document.getElementById('btn-categories')?.addEventListener('click', () => showCategoryManage(rerender));
-  document.getElementById('btn-edit-annual')?.addEventListener('click', () => showAnnualBudgetForm(y, rerender));
+  document.getElementById('btn-edit-monthly')?.addEventListener('click', () => showMonthlyBudgetForm(y, rerender));
   document.getElementById('btn-setup-again')?.addEventListener('click', () => {
     state.data.budget.setupDone = false;
     state.setupStep = 1;

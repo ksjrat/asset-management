@@ -31,7 +31,7 @@ export function renderSettings() {
     <div class="settings-group">
       <p class="settings-group-title">예산</p>
       <button type="button" class="settings-row" id="btn-budget-setup">
-        <span><strong>예산 설정 다시하기</strong><span class="settings-row-meta">항목·연간예산·정산일</span></span>
+        <span><strong>예산 설정 다시하기</strong><span class="settings-row-meta">항목·월간예산·정산일</span></span>
         <span class="settings-chevron">›</span>
       </button>
     </div>

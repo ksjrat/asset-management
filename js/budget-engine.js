@@ -6,7 +6,7 @@ function now() {
 
 export function ensureBudgetStructure(data) {
   const b = data.budget;
-  if (!b.annual) b.annual = {};
+  if (!b.monthlyPlan) b.monthlyPlan = {};
   if (!b.actuals) b.actuals = {};
   if (b.setupDone === undefined) b.setupDone = false;
   if (!b.defaultRecordDay) b.defaultRecordDay = 25;
@@ -19,20 +19,16 @@ export function getRecordDay(data, category) {
   return category?.recordDay ?? data.budget.defaultRecordDay ?? 25;
 }
 
-export function getAnnualAmount(data, year, catId) {
+export function getMonthlyPlanAmount(data, year, catId) {
   ensureBudgetStructure(data);
-  return data.budget.annual[String(year)]?.[catId] ?? 0;
+  return data.budget.monthlyPlan[String(year)]?.[catId] ?? 0;
 }
 
-export function setAnnualAmount(data, year, catId, amount) {
+export function setMonthlyPlanAmount(data, year, catId, amount) {
   ensureBudgetStructure(data);
   const y = String(year);
-  if (!data.budget.annual[y]) data.budget.annual[y] = {};
-  data.budget.annual[y][catId] = Math.max(0, Number(amount) || 0);
-}
-
-export function getMonthlyPlanned(annual) {
-  return Math.round((Number(annual) || 0) / 12);
+  if (!data.budget.monthlyPlan[y]) data.budget.monthlyPlan[y] = {};
+  data.budget.monthlyPlan[y][catId] = Math.max(0, Number(amount) || 0);
 }
 
 export function getActualEntry(data, year, month, catId) {
@@ -63,8 +59,7 @@ export function getRolloverIn(data, year, month, catId) {
 }
 
 export function getCategoryPeriodSummary(data, year, month, catId) {
-  const annual = getAnnualAmount(data, year, catId);
-  const monthlyPlanned = getMonthlyPlanned(annual);
+  const monthlyPlanned = getMonthlyPlanAmount(data, year, catId);
   const rolloverIn = getRolloverIn(data, year, month, catId);
   const available = monthlyPlanned + rolloverIn;
   const entry = getActualEntry(data, year, month, catId);
@@ -73,7 +68,6 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
   const remaining = available - actual;
   const usedPct = available > 0 ? actual / available : (actual > 0 ? 1.2 : 0);
   return {
-    annual,
     monthlyPlanned,
     rolloverIn,
     available,
@@ -123,29 +117,41 @@ export function isRecordDue(data, year, month, catId) {
 
 export function migrateBudgetModel(data) {
   ensureBudgetStructure(data);
-  if (data.budget.setupDone) return;
+  const b = data.budget;
   const y = new Date().getFullYear();
   const yKey = String(y);
-  if (!data.budget.annual[yKey]) data.budget.annual[yKey] = {};
-  const hasAnnual = Object.keys(data.budget.annual[yKey] || {}).some(
-    (id) => data.budget.annual[yKey][id] > 0,
-  );
-  if (!hasAnnual && data.budget.monthly) {
-    for (const [key, mb] of Object.entries(data.budget.monthly)) {
-      const { year, month } = parseYm(key);
-      if (year !== y) continue;
-      for (const [catId, amt] of Object.entries(mb)) {
-        if (amt > 0) {
-          data.budget.annual[yKey][catId] = Math.max(
-            data.budget.annual[yKey][catId] || 0,
-            amt * 12,
-          );
+
+  if (b.annual) {
+    for (const [year, cats] of Object.entries(b.annual)) {
+      if (!b.monthlyPlan[year]) b.monthlyPlan[year] = {};
+      for (const [catId, amt] of Object.entries(cats)) {
+        if (amt > 0 && !b.monthlyPlan[year][catId]) {
+          b.monthlyPlan[year][catId] = Math.round(Number(amt) / 12);
         }
       }
     }
+    delete b.annual;
   }
-  if (hasAnnual || Object.keys(data.budget.annual[yKey] || {}).length > 0) {
-    const visible = data.budget.categories.filter((c) => !c.hidden);
-    if (visible.length > 0) data.budget.setupDone = true;
+
+  if (b.monthly && typeof b.monthly === 'object') {
+    for (const [key, cats] of Object.entries(b.monthly)) {
+      if (!/^\d{4}-\d{2}$/.test(key)) continue;
+      const { year } = parseYm(key);
+      const ys = String(year);
+      if (!b.monthlyPlan[ys]) b.monthlyPlan[ys] = {};
+      for (const [catId, amt] of Object.entries(cats)) {
+        if (amt > 0) {
+          b.monthlyPlan[ys][catId] = Math.max(b.monthlyPlan[ys][catId] || 0, Number(amt));
+        }
+      }
+    }
+    delete b.monthly;
+  }
+
+  if (!b.monthlyPlan[yKey]) b.monthlyPlan[yKey] = {};
+  const hasPlan = Object.keys(b.monthlyPlan[yKey] || {}).some((id) => b.monthlyPlan[yKey][id] > 0);
+  if (hasPlan || Object.keys(b.monthlyPlan[yKey] || {}).length > 0) {
+    const visible = b.categories.filter((c) => !c.hidden);
+    if (visible.length > 0 && !b.setupDone) b.setupDone = true;
   }
 }

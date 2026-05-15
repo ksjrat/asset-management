@@ -17,7 +17,6 @@ export const ASSET_SVG = {
   invest: `<svg ${S}><path d="M5 17V12l4-3 4 4 5-6 1 1.5"/></svg>`,
   realestate: `<svg ${S}><path d="M5 11.5 12 5l7 6.5V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7.5Z"/><path d="M10 20v-5h4v5"/></svg>`,
   loan: `<svg ${S}><path d="M7 8h10M7 12h7M7 16h4"/><rect x="4" y="5" width="16" height="14" rx="2"/></svg>`,
-  card: `<svg ${S}><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16"/></svg>`,
 };
 
 export function assetIcon(typeId, group = 'asset') {
