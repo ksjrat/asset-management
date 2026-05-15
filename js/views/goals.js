@@ -1,6 +1,7 @@
 import { state, persist } from '../state.js';
 import { GOAL_TEMPLATES, computeGoalProgress, getCategorySpend, getVisibleCategories } from '../store.js';
-import { fmtMoney, fmtDate, esc } from '../format.js';
+import { fmtMoney, fmtDate } from '../format.js';
+import { esc } from '../ui.js';
 import { progressRing } from '../charts.js';
 import { openModal, toast, formField } from '../ui.js';
 import { showGoalForm, bindGoalTemplatePicker, showContributionForm } from './modals.js';

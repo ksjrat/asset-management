@@ -2,7 +2,8 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, computeNetWorth, createSnapshot,
 } from '../store.js';
-import { fmtMoney, fmtPct, fmtShort, esc } from '../format.js';
+import { fmtMoney, fmtPct, fmtShort } from '../format.js';
+import { esc } from '../ui.js';
 import { lineChart, legend } from '../charts.js';
 import { toast } from '../ui.js';
 import { showAssetForm } from './modals.js';

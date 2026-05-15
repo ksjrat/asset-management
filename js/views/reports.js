@@ -3,7 +3,8 @@ import {
   computeNetWorth, computeGoalProgress, getMonthBudget,
   getMonthTransactions, getCategorySpend, getVisibleCategories,
 } from '../store.js';
-import { fmtMoney, fmtPct, fmtMonth, esc } from '../format.js';
+import { fmtMoney, fmtPct, fmtMonth } from '../format.js';
+import { esc } from '../ui.js';
 import { barChart } from '../charts.js';
 
 export function renderReports() {

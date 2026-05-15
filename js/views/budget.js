@@ -1,6 +1,7 @@
 import { state, persist } from '../state.js';
 import { getVisibleCategories, getMonthBudget, getMonthTransactions, getCategorySpend } from '../store.js';
-import { fmtMoney, fmtDate, fmtMonth, fmtShort, esc } from '../format.js';
+import { fmtMoney, fmtDate, fmtMonth, fmtShort } from '../format.js';
+import { esc } from '../ui.js';
 import { budgetBar } from '../charts.js';
 import { openModal, toast, formField } from '../ui.js';
 import { showTxForm, showBudgetForm } from './modals.js';
