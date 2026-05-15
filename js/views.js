@@ -2,8 +2,8 @@ import { formatWon, formatPct, parseAmount, MONTHS, monthLabel, formatDateShort 
 import {
   getMonth, uid, calcSettlement, totalAssets, totalLiabilities, assetBreakdown,
   annualByCategory, annualByCard, annualBySubCategory, monthlyTrend,
-  expensesByCategoryForMonth, getBudgetVsActual, applyAutoCarryOver, setCarryOver,
-  isSavingExpense, defaultTxDate,
+  expensesByCategoryForMonth, getBudgetVsActual, getExpenseCategoryList,
+  applyAutoCarryOver, setCarryOver, isSavingExpense, defaultTxDate,
 } from './store.js';
 import { escapeHtml, openModal, closeModal } from './ui.js';
 import { barChartHtml, lineTrendSvg } from './charts.js';
@@ -225,7 +225,7 @@ export function renderBudget(ctx) {
   main.querySelector('#prev-month').onclick = () => { ctx.viewMonth = viewMonth > 1 ? viewMonth - 1 : 12; ctx.render(); };
   main.querySelector('#next-month').onclick = () => { ctx.viewMonth = viewMonth < 12 ? viewMonth + 1 : 1; ctx.render(); };
   main.querySelector('#edit-budget').onclick = () => {
-    const cats = data.settings.expenseCategories;
+    const cats = getExpenseCategoryList(data);
     openModal(
       '<h2>' + monthLabel(viewMonth) + ' \uc608\uc0b0</h2><form id="budget-form">' +
       cats.map((cat) => '<div class="form-group"><label>' + escapeHtml(cat) + '</label><input name="' + escapeHtml(cat) + '" type="number" value="' + ((data.budget[cat] || {})[viewMonth] || '') + '" /></div>').join('') +

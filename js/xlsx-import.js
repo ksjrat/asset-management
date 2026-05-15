@@ -246,39 +246,122 @@ function parseCategoriesSheet(rows) {
   const incomeCategories = [];
   const expenseCategories = [];
   const subCategories = {};
+  const header = rows[2];
+  if (!header) return { incomeCategories, expenseCategories, subCategories };
 
-  for (let r = 2; r < rows.length; r++) {
+  const colParents = [];
+  for (let c = 2; c < header.length; c++) colParents.push(cellStr(header[c]));
+
+  for (const parent of colParents) {
+    if (!parent || parent === '수입' || parent === '추가항목') continue;
+    expenseCategories.push(parent);
+    subCategories[parent] = [];
+  }
+
+  for (let r = 3; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
-    const group = cellStr(row[1]);
-    if (!group || group.includes('◀')) continue;
-
-    if (group === '지출구분') {
-      for (let c = 2; c < row.length; c++) {
-        const v = cellStr(row[c]);
-        if (v) expenseCategories.push(v);
+    for (let c = 2; c < colParents.length; c++) {
+      const parent = colParents[c];
+      const sub = cellStr(row[c]);
+      if (!parent || !sub) continue;
+      if (parent === '수입') {
+        if (!incomeCategories.includes(sub)) incomeCategories.push(sub);
+      } else if (subCategories[parent] && !subCategories[parent].includes(sub)) {
+        subCategories[parent].push(sub);
       }
-      continue;
-    }
-
-    if (['계좌이체', '현금'].includes(group) || /신용|체크/.test(group)) continue;
-
-    if (/수입|저축/.test(group) || incomeCategories.length < 8) {
-      for (let c = 2; c < row.length; c++) {
-        const v = cellStr(row[c]);
-        if (v && !incomeCategories.includes(v)) incomeCategories.push(v);
-      }
-    }
-
-    const parent = group;
-    if (!subCategories[parent]) subCategories[parent] = [];
-    for (let c = 2; c < row.length; c++) {
-      const v = cellStr(row[c]);
-      if (v && !subCategories[parent].includes(v)) subCategories[parent].push(v);
     }
   }
 
   return { incomeCategories, expenseCategories, subCategories };
+}
+
+const SETTLEMENT_SKIP = /^(소비성지출|수입\s*총|총계|합계|누계|총\s*예산)/;
+
+function monthLastDay(year, month) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+}
+
+function parseSettlementSheet(rows, year) {
+  const months = {};
+  let headerRow = -1;
+  let monthCols = [];
+
+  for (let r = 0; r < Math.min(rows.length, 8); r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      if (/^\d{1,2}월$/.test(cellStr(row[c]))) {
+        headerRow = r;
+        monthCols = [];
+        for (let c2 = 0; c2 < row.length; c2++) {
+          const m = cellStr(row[c2]).match(/^(\d{1,2})월$/);
+          if (m) monthCols.push({ col: c2, month: parseInt(m[1], 10) });
+        }
+        break;
+      }
+    }
+    if (headerRow >= 0) break;
+  }
+  if (headerRow < 0) return months;
+
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const cat = cellStr(row[1]) || cellStr(row[0]);
+    if (!cat || SETTLEMENT_SKIP.test(cat)) continue;
+
+    for (const { col, month } of monthCols) {
+      const amount = Math.abs(parseAmount(row[col]));
+      if (!amount) continue;
+
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const lastDay = monthLastDay(year, month);
+      if (!months[key]) months[key] = { carryOver: 0, income: [], expenses: [] };
+
+      if (cat === '수입' || /^수입\s*총/.test(cat)) {
+        months[key].income.push({
+          id: uid(),
+          date: lastDay,
+          owner: '공동',
+          name: '(결산 시트)',
+          category: '수입',
+          subCategory: '',
+          amount,
+          card: '',
+          payment: '',
+          type: 'consumption',
+        });
+      } else if (cat === '저축성지출' || /^저축/.test(cat)) {
+        months[key].expenses.push({
+          id: uid(),
+          date: lastDay,
+          owner: '공동',
+          name: '(결산 시트)',
+          category: '저축성지출',
+          subCategory: '',
+          amount,
+          card: '',
+          payment: '',
+          type: 'saving',
+        });
+      } else {
+        months[key].expenses.push({
+          id: uid(),
+          date: lastDay,
+          owner: '공동',
+          name: '(결산 시트)',
+          category: cat,
+          subCategory: '',
+          amount,
+          card: '',
+          payment: '',
+          type: SAVING_CATS.test(cat) ? 'saving' : 'consumption',
+        });
+      }
+    }
+  }
+  return months;
 }
 
 function findHeaderRow(rows, keys, maxRow = 30) {
@@ -408,6 +491,8 @@ export function parseXlsxBuffer(buffer, year = 2026) {
     sheets: [],
   };
 
+  let settlementMonths = {};
+
   for (const sheetName of wb.SheetNames) {
     const rows = sheetToRows(wb.Sheets[sheetName]);
     if (!rows.length) continue;
@@ -430,6 +515,13 @@ export function parseXlsxBuffer(buffer, year = 2026) {
       stats.sheets.push(`예산: ${stats.budgetCats}개 항목`);
       continue;
     }
+
+    if (sheetName.includes('결산')) {
+      settlementMonths = parseSettlementSheet(rows, year);
+      const n = Object.keys(settlementMonths).length;
+      if (n) stats.sheets.push(`결산: ${n}개월 반영`);
+      continue;
+    }
   }
 
   for (const sheetName of wb.SheetNames) {
@@ -441,27 +533,37 @@ export function parseXlsxBuffer(buffer, year = 2026) {
       const month = parseInt(monthM[1], 10);
       const key = `${year}-${String(month).padStart(2, '0')}`;
       let { income, expenses } = parseMonthTransactions(rows, year, month);
-      const { items, lastDay } = parseMonthCategorySummary(rows, year, month);
+      const hasRealTx = [...income, ...expenses].some(
+        (t) => t.name && !/^\((결산|시트|예산)/.test(t.name)
+      );
 
-      if (!expenses.length && items.some((i) => i.actual > 0)) {
-        expenses = synthesizeFromCategorySummary(items, lastDay);
-        stats.synthesized += expenses.length;
-      }
-      if (!income.length) {
-        const fromBudget = synthesizeIncomeFromBudget(data.budget, year, month);
-        if (fromBudget.length) {
-          income = fromBudget;
+      if (!hasRealTx && settlementMonths[key]) {
+        data.months[key] = structuredClone(settlementMonths[key]);
+        stats.synthesized += data.months[key].income.length + data.months[key].expenses.length;
+      } else if (!hasRealTx) {
+        const { items, lastDay } = parseMonthCategorySummary(rows, year, month);
+        if (!expenses.length && items.some((i) => i.actual > 0)) {
+          expenses = synthesizeFromCategorySummary(items, lastDay);
+          stats.synthesized += expenses.length;
+        }
+        if (!income.length) {
+          income = synthesizeIncomeFromBudget(data.budget, year, month);
           stats.synthesized += income.length;
         }
+        if (income.length || expenses.length) {
+          data.months[key] = { carryOver: 0, income, expenses };
+        }
+      } else {
+        data.months[key] = { carryOver: 0, income, expenses };
       }
 
-      if (income.length || expenses.length || items.length) {
-        data.months[key] = { carryOver: 0, income, expenses };
+      if (data.months[key]) {
         stats.months++;
-        stats.income += income.length;
-        stats.expenses += expenses.length;
-        const syn = stats.synthesized ? ' (시트합계)' : '';
-        stats.sheets.push(`${sheetName}: 수입 ${income.length}, 지출 ${expenses.length}${syn}`);
+        stats.income += data.months[key].income.length;
+        stats.expenses += data.months[key].expenses.length;
+        stats.sheets.push(
+          `${sheetName}: 수입 ${data.months[key].income.length}, 지출 ${data.months[key].expenses.length}`
+        );
       }
       continue;
     }
@@ -511,6 +613,21 @@ export function parseXlsxBuffer(buffer, year = 2026) {
       }
     }
   }
+
+  for (const [key, mo] of Object.entries(settlementMonths)) {
+    if (!data.months[key]) {
+      data.months[key] = structuredClone(mo);
+      stats.months++;
+      stats.income += mo.income.length;
+      stats.expenses += mo.expenses.length;
+    }
+  }
+
+  const expenseSet = new Set(data.settings.expenseCategories || []);
+  for (const k of Object.keys(data.budget)) {
+    if (k && !/^(급여|상여|투자수익|이자|부수익|기타\s*수입|수입)/.test(k)) expenseSet.add(k);
+  }
+  data.settings.expenseCategories = [...expenseSet];
 
   return { data, stats };
 }

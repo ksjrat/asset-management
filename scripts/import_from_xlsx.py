@@ -10,6 +10,8 @@ from pathlib import Path
 import pandas as pd
 
 YEAR = 2026
+ROOT = Path(__file__).resolve().parent.parent
+ORIGINAL_DATA_DIR = ROOT / "original data"
 MONTH_RE = re.compile(r"^(\d{1,2})\s*월$")
 SAVING_CATS = re.compile(r"저축|적금|IRP|퇴직연금|청약|투자|여행\s*적금")
 
@@ -174,6 +176,61 @@ def import_accounts(df):
     return items
 
 
+SETTLEMENT_SKIP = re.compile(r"^(소비성지출|수입\s*총|총계|합계|누계|총\s*예산)")
+
+
+def import_settlement(df):
+    months = {}
+    header_row = None
+    month_cols = []
+    for i in range(min(8, len(df))):
+        for c in range(len(df.columns)):
+            v = cell_str(df.iloc[i, c])
+            if re.match(r"^\d{1,2}월$", v):
+                header_row = i
+                for c2 in range(len(df.columns)):
+                    mv = cell_str(df.iloc[i, c2])
+                    mm = re.match(r"^(\d{1,2})월$", mv)
+                    if mm:
+                        month_cols.append((c2, int(mm.group(1))))
+                break
+        if header_row is not None:
+            break
+    if header_row is None:
+        return months
+
+    for i in range(header_row + 1, len(df)):
+        row = df.iloc[i]
+        cat = cell_str(row.iloc[1]) if len(row) > 1 else cell_str(row.iloc[0])
+        if not cat or SETTLEMENT_SKIP.search(cat):
+            continue
+        for col, month in month_cols:
+            amount = abs(parse_amount(row.iloc[col]))
+            if not amount:
+                continue
+            key = f"{YEAR}-{month:02d}"
+            last = f"{YEAR}-{month:02d}-{calendar.monthrange(YEAR, month)[1]}"
+            if key not in months:
+                months[key] = {"carryOver": 0, "income": [], "expenses": []}
+            if cat == "수입" or cat.startswith("수입"):
+                months[key]["income"].append({
+                    "id": f"st-{month}-inc", "date": last, "owner": "공동",
+                    "name": "(결산 시트)", "category": "수입", "amount": amount, "type": "consumption",
+                })
+            elif cat == "저축성지출" or cat.startswith("저축"):
+                months[key]["expenses"].append({
+                    "id": f"st-{month}-sav", "date": last, "owner": "공동",
+                    "name": "(결산 시트)", "category": "저축성지출", "amount": amount, "type": "saving",
+                })
+            else:
+                months[key]["expenses"].append({
+                    "id": f"st-{month}-{cat}", "date": last, "owner": "공동",
+                    "name": "(결산 시트)", "category": cat, "amount": amount,
+                    "type": "saving" if SAVING_CATS.search(cat) else "consumption",
+                })
+    return months
+
+
 def import_debts(df):
     items = []
     hr = None
@@ -196,11 +253,24 @@ def import_debts(df):
     return items
 
 
+def find_source_xlsx():
+    if len(sys.argv) > 1:
+        return Path(sys.argv[1])
+    if ORIGINAL_DATA_DIR.is_dir():
+        files = sorted(ORIGINAL_DATA_DIR.glob("*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if files:
+            return files[0]
+    fallback = ROOT / "import" / "source.xlsx"
+    return fallback
+
+
 def main():
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "import/source.xlsx")
+    path = find_source_xlsx()
     if not path.exists():
         print(f"파일 없음: {path}")
+        print(f"구글 시트 xlsx를 '{ORIGINAL_DATA_DIR.name}/' 폴더에 넣어 주세요.")
         sys.exit(1)
+    print(f"입력: {path}")
 
     xl = pd.ExcelFile(path)
     data = {
@@ -216,11 +286,15 @@ def main():
         },
     }
 
+    settlement = {}
     for name in xl.sheet_names:
         df = pd.read_excel(path, sheet_name=name, header=None)
         if "예산" in name:
             data["budget"].update(import_budget(df))
             print(f"예산: {len(data['budget'])} 항목")
+        if "결산" in name:
+            settlement = import_settlement(df)
+            print(f"결산: {len(settlement)}개월")
 
     def synth_income(month):
         cats = ["급여", "상여", "투자수익", "이자", "부수익", "기타 수입"]
@@ -245,13 +319,18 @@ def main():
         m = MONTH_RE.match(name.strip())
         if m:
             month = int(m.group(1))
+            key = f"{YEAR}-{month:02d}"
             inc, exp = import_month(df, month)
-            if not inc:
-                inc = synth_income(month)
-            if inc or exp:
-                key = f"{YEAR}-{month:02d}"
+            real = [t for t in inc + exp if not str(t.get("name", "")).startswith("(")]
+            if real:
                 data["months"][key] = {"carryOver": 0, "income": inc, "expenses": exp}
-                print(f"{name}: 수입 {len(inc)}, 지출 {len(exp)}")
+            elif key in settlement:
+                data["months"][key] = settlement[key]
+            elif (inc := synth_income(month)) or exp:
+                data["months"][key] = {"carryOver": 0, "income": inc, "expenses": exp}
+            if key in data["months"]:
+                mo = data["months"][key]
+                print(f"{name}: 수입 {len(mo['income'])}, 지출 {len(mo['expenses'])}")
             continue
         if name == "계좌현황":
             data["assets"]["accounts"] = import_accounts(df)
@@ -265,7 +344,11 @@ def main():
                 )
             print(f"부채: {len(debts)}건")
 
-    out = Path("import/ledger-imported.json")
+    for key, mo in settlement.items():
+        if key not in data["months"]:
+            data["months"][key] = mo
+
+    out = ROOT / "import" / "ledger-imported.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"저장: {out}")

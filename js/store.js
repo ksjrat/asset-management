@@ -86,9 +86,21 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-/** 저축성 지출: 체크박스 또는 「저축성」 카테고리 */
+/** 저축성 지출: 체크박스 또는 「저축성」·「저축성지출」 카테고리 */
 export function isSavingExpense(t) {
-  return t.type === 'saving' || t.category === '저축성';
+  return t.type === 'saving' || t.category === '저축성' || t.category === '저축성지출';
+}
+
+const INCOME_BUDGET_KEY = /^(수입|급여|상여|투자수익|이자|부수익|기타\s*수입)/;
+const SKIP_BUDGET_CAT = /^(소비성지출|수입\s*총|총계|합계|누계)/;
+
+/** 예산·항목설정·결산에 쓰이는 지출 카테고리 목록 */
+export function getExpenseCategoryList(data) {
+  const set = new Set(data.settings.expenseCategories || []);
+  for (const k of Object.keys(data.budget || {})) {
+    if (k && !INCOME_BUDGET_KEY.test(k) && !SKIP_BUDGET_CAT.test(k)) set.add(k);
+  }
+  return [...set];
 }
 
 export function calcSettlement(data, year, month) {
@@ -143,7 +155,7 @@ export function getActualExpenseByCategory(data, year, month, category) {
 }
 
 export function getBudgetVsActual(data, year, month) {
-  return data.settings.expenseCategories.map((cat) => {
+  return getExpenseCategoryList(data).map((cat) => {
     const budget = getBudgetForMonth(data, cat, month);
     const actual = getActualExpenseByCategory(data, year, month, cat);
     const pct = budget > 0 ? actual / budget : (actual > 0 ? 1 : 0);

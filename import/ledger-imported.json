@@ -4,85 +4,104 @@
   "months": {
     "2026-05": {
       "carryOver": 0,
-      "income": [],
-      "expenses": [
+      "income": [
         {
-          "id": "syn-5-식비",
+          "id": "st-5-inc",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
+          "category": "수입",
+          "amount": 6120190,
+          "type": "consumption"
+        }
+      ],
+      "expenses": [
+        {
+          "id": "st-5-sav",
+          "date": "2026-05-31",
+          "owner": "공동",
+          "name": "(결산 시트)",
+          "category": "저축성지출",
+          "amount": 3174000,
+          "type": "saving"
+        },
+        {
+          "id": "st-5-식비",
+          "date": "2026-05-31",
+          "owner": "공동",
+          "name": "(결산 시트)",
           "category": "식비",
           "amount": 350000,
           "type": "consumption"
         },
         {
-          "id": "syn-5-주거비",
+          "id": "st-5-주거비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "주거비",
           "amount": 2110000,
           "type": "consumption"
         },
         {
-          "id": "syn-5-생활용품비",
+          "id": "st-5-생활용품비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "생활용품비",
           "amount": 100000,
           "type": "consumption"
         },
         {
-          "id": "syn-5-구독료",
+          "id": "st-5-구독료",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "구독료",
           "amount": 47810,
           "type": "consumption"
         },
         {
-          "id": "syn-5-의료보험비",
+          "id": "st-5-의료보험비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "의료보험비",
           "amount": 261808,
           "type": "consumption"
         },
         {
-          "id": "syn-5-유류교통비",
+          "id": "st-5-유류교통비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "유류교통비",
           "amount": 75000,
           "type": "consumption"
         },
         {
-          "id": "syn-5-통신비",
+          "id": "st-5-통신비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "통신비",
           "amount": 124390,
           "type": "consumption"
         },
         {
-          "id": "syn-5-경조사회비",
+          "id": "st-5-경조사회비",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "경조사회비",
           "amount": 200000,
           "type": "consumption"
         },
         {
-          "id": "syn-5-용돈",
+          "id": "st-5-용돈",
           "date": "2026-05-31",
           "owner": "공동",
-          "name": "(시트 카테고리 합계)",
+          "name": "(결산 시트)",
           "category": "용돈",
           "amount": 800000,
           "type": "consumption"
@@ -241,7 +260,7 @@
         "id": "주택담보대출",
         "name": "주택담보대출",
         "institution": "새마을금고",
-        "balance": 354,
+        "balance": 300000000,
         "owner": "공동"
       }
     ],
@@ -249,7 +268,7 @@
       {
         "name": "주택담보대출",
         "lender": "새마을금고",
-        "balance": 354
+        "balance": 300000000
       },
       {
         "name": "대출2",
