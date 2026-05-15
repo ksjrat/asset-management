@@ -1,7 +1,7 @@
 import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getMonthBudget,
-  calcMonthlyContribution, monthsBetween, computeGoalProgress, uid, todayISO,
+  calcMonthlyContribution, monthsBetween, computeGoalProgress, uid,
 } from '../store.js';
 import { fmtMonth, todayISO } from '../format.js';
 import { openModal, toast, formField, esc } from '../ui.js';
