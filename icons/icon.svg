@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="?? ??">
   <rect width="512" height="512" rx="96" fill="#1e4d3a"/>
-  <text x="256" y="300" text-anchor="middle" font-size="200">=‘</text>
+  <circle cx="196" cy="260" r="72" fill="#c9a227"/>
+  <circle cx="316" cy="260" r="72" fill="#e8d48b"/>
+  <path d="M 196 332 Q 256 380 316 332" fill="none" stroke="#f4f7f5" stroke-width="12" stroke-linecap="round"/>
 </svg>

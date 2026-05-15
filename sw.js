@@ -1,10 +1,12 @@
-const CACHE = 'couple-asset-v3';
+const CACHE = 'couple-asset-v5';
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
   './manifest.json',
   './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './js/app.js',
   './js/merge.js',
   './js/format.js',
