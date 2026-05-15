@@ -1,8 +1,9 @@
-const CACHE = 'couple-asset-v11';
+const CACHE = 'couple-asset-v12';
 const ASSETS = [
   './',
   './index.html',
   './css/styles.css',
+  './css/apple.css',
   './manifest.json',
   './icons/icon.svg',
   './icons/icon-192.png',

@@ -1,0 +1,737 @@
+/* Apple Human Interface Guidelines inspired theme */
+
+:root {
+  --bg: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --primary: #007aff;
+  --primary-light: #0056b3;
+  --primary-soft: rgba(0, 122, 255, 0.14);
+  --accent: #ff9500;
+  --accent-soft: rgba(255, 149, 0, 0.14);
+  --text: #000000;
+  --muted: rgba(60, 60, 67, 0.6);
+  --border: rgba(60, 60, 67, 0.12);
+  --separator: rgba(60, 60, 67, 0.18);
+  --danger: #ff3b30;
+  --success: #34c759;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow: none;
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  --tab-h: 49px;
+}
+
+html, body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.app-shell {
+  background: var(--bg);
+}
+
+/* Large navigation bar (iOS) */
+.header {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  color: var(--text);
+  border-bottom: 0.5px solid var(--separator);
+  box-shadow: none;
+  padding: 8px 16px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+.header-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.header-titles .header-title {
+  font-size: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.header-sub {
+  opacity: 1;
+  margin-top: 4px;
+}
+
+.couple-pill {
+  background: rgba(120, 120, 128, 0.16);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 10px;
+}
+
+.couple-pill.connected {
+  background: rgba(52, 199, 89, 0.18);
+  color: #248a3d;
+}
+
+.icon-btn {
+  background: rgba(120, 120, 128, 0.16);
+  color: var(--text);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 1.25rem;
+  font-weight: 300;
+}
+
+.month-pill {
+  background: transparent;
+  color: var(--text);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  padding: 4px 0;
+}
+
+.month-pill:active {
+  opacity: 0.6;
+}
+
+.main {
+  padding: 8px 16px 24px;
+  padding-bottom: calc(var(--tab-h) + var(--safe-bottom) + 88px);
+}
+
+.main.page-enter {
+  animation: pageIn 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Tab bar — iOS translucent */
+.tab-bar {
+  width: 100%;
+  max-width: 480px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  border: none;
+  border-top: 0.5px solid var(--separator);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  padding-bottom: var(--safe-bottom);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+.tab-btn {
+  padding: 6px 2px 4px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: rgba(60, 60, 67, 0.6);
+  border-radius: 0;
+}
+
+.tab-btn.active {
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.tab-icon {
+  font-size: 1.375rem;
+  margin-bottom: 2px;
+  line-height: 1;
+  filter: grayscale(0.2);
+}
+
+.tab-btn.active .tab-icon {
+  filter: none;
+}
+
+/* Hero — Wallet / Stocks style */
+.hero-card {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: none;
+  border: none;
+}
+
+.hero-card::after {
+  display: none;
+}
+
+.hero-card.small {
+  padding: 16px 20px;
+}
+
+.hero-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 1;
+  text-transform: none;
+}
+
+.hero-value {
+  font-size: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+
+.hero-sub {
+  font-size: 0.9375rem;
+  color: var(--muted);
+  opacity: 1;
+}
+
+.hero-sub.up { color: var(--success); }
+.hero-sub.down { color: var(--danger); }
+
+.hero-row {
+  border-top: 0.5px solid var(--separator);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.hero-row > div {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.mini-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 1;
+}
+
+.mini-val { color: var(--text); }
+.mini-val.danger { color: var(--danger); }
+
+.rollover-card .hero-value {
+  font-size: 1.75rem;
+}
+
+/* Grouped sections (Settings style) */
+.section {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 22px;
+}
+
+.section-head {
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+
+.section-head h2 {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.text-btn {
+  color: var(--primary);
+  font-size: 0.9375rem;
+  font-weight: 400;
+}
+
+/* Summary chips */
+.summary-row {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.mini-card {
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 14px 10px;
+  box-shadow: none;
+}
+
+.mini-card span {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mini-card strong {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Lists */
+.list-group {
+  border-radius: var(--radius-lg);
+  border: none;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.list-item {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--separator);
+  background: var(--surface);
+}
+
+.list-item:active {
+  background: rgba(120, 120, 128, 0.12);
+  transform: none;
+}
+
+.list-title {
+  font-size: 1.0625rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.list-amount {
+  font-size: 1.0625rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:active {
+  opacity: 0.8;
+}
+
+.btn-ghost {
+  background: rgba(120, 120, 128, 0.16);
+  border: none;
+  color: var(--primary);
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+
+.btn-sm {
+  font-size: 0.9375rem;
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
+/* Segmented control — iOS */
+.seg-control {
+  background: rgba(120, 120, 128, 0.16);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 0;
+}
+
+.seg-btn {
+  border-radius: 7px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 7px 8px;
+}
+
+.seg-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+
+/* Chips */
+.chip {
+  background: var(--surface);
+  border: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  box-shadow: none;
+}
+
+.chip.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Quick actions */
+.quick-actions {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.quick-btn {
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  box-shadow: none;
+  padding: 14px 8px;
+}
+
+.quick-btn span:first-child {
+  background: var(--primary-soft);
+  color: var(--primary);
+  width: 40px;
+  height: 40px;
+  font-size: 1.125rem;
+}
+
+/* Goal cards */
+.goal-card {
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  background: var(--surface);
+  padding: 16px;
+}
+
+.goal-card h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.goal-pct {
+  color: var(--primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.goal-bar {
+  height: 4px;
+  background: rgba(120, 120, 128, 0.2);
+  border-radius: 2px;
+}
+
+.goal-bar-fill {
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+.badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.badge-proposed { background: rgba(255, 149, 0, 0.2); color: #c93400; }
+.badge-active { background: rgba(52, 199, 89, 0.2); color: #248a3d; }
+.badge-achieved { background: rgba(0, 122, 255, 0.2); color: #0040a8; }
+.badge-paused { background: rgba(120, 120, 128, 0.2); color: var(--muted); }
+
+/* Budget envelope */
+.budget-envelope {
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 8px;
+  box-shadow: none;
+}
+
+.budget-envelope--pending { border-left: 3px solid var(--accent); }
+.budget-envelope--ok { border-left: 3px solid var(--success); }
+.budget-envelope--warn { border-left: 3px solid var(--accent); }
+.budget-envelope--over { border-left: 3px solid var(--danger); }
+
+/* Settings groups */
+.settings-group {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: none;
+  background: var(--surface);
+}
+
+.settings-group-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: uppercase;
+  padding: 8px 16px 6px;
+  background: transparent;
+}
+
+.settings-group .toggle-row,
+.settings-group .settings-row {
+  border-bottom: 0.5px solid var(--separator);
+  padding: 12px 16px;
+  min-height: 44px;
+}
+
+.settings-chevron {
+  color: rgba(60, 60, 67, 0.3);
+  font-weight: 600;
+}
+
+/* Toggle — iOS green */
+.toggle-row input[type="checkbox"] {
+  background: rgba(120, 120, 128, 0.32);
+  width: 51px;
+  height: 31px;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+  background: var(--success);
+}
+
+.toggle-row input[type="checkbox"]::after {
+  width: 27px;
+  height: 27px;
+  top: 2px;
+  left: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  transform: translateX(20px);
+}
+
+/* Inputs */
+.input, .search-input {
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 1.0625rem;
+}
+
+.input:focus, .search-input:focus {
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.search-wrap .search-input {
+  background: rgba(120, 120, 128, 0.12);
+}
+
+.search-wrap .search-input:focus {
+  background: var(--surface);
+}
+
+/* Modal sheet */
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.modal-sheet {
+  border-radius: 14px 14px 0 0;
+  padding: 8px 16px 28px;
+}
+
+.modal-handle {
+  width: 36px;
+  height: 5px;
+  background: rgba(60, 60, 67, 0.3);
+  border-radius: 2.5px;
+  margin-bottom: 16px;
+}
+
+.modal-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.modal-actions .btn {
+  min-height: 50px;
+}
+
+/* FAB */
+.fab {
+  width: 56px;
+  height: 56px;
+  background: var(--primary);
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.35);
+  font-size: 1.5rem;
+  font-weight: 300;
+  right: max(20px, calc(50% - 240px + 20px));
+  bottom: calc(var(--tab-h) + var(--safe-bottom) + 20px);
+}
+
+.fab-secondary {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-lg);
+  border: 0.5px solid var(--separator);
+}
+
+/* Auth */
+.auth-screen {
+  background: var(--bg);
+}
+
+.auth-hero h1 {
+  font-size: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.auth-logo {
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-features li::before {
+  color: var(--success);
+}
+
+.invite-code {
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* Setup wizard */
+.setup-screen {
+  background: var(--bg);
+}
+
+.setup-progress h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.setup-list,
+.setup-info-card {
+  border-radius: var(--radius-lg);
+  border: none;
+  background: var(--surface);
+}
+
+.setup-info-card {
+  background: var(--primary-soft);
+}
+
+.setup-budget-row {
+  border-color: var(--separator);
+}
+
+/* Toast */
+.toast {
+  background: rgba(60, 60, 67, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.toast-success { background: rgba(52, 199, 89, 0.95); }
+.toast-error { background: rgba(255, 59, 48, 0.95); }
+
+.tip-banner {
+  background: var(--surface);
+  border: none;
+  color: var(--primary);
+  border-radius: var(--radius-lg);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.empty-state {
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-lg);
+}
+
+.alert-banner {
+  background: rgba(255, 149, 0, 0.15);
+  color: #9a5b00;
+  border-radius: var(--radius-lg);
+  border: none;
+}
+
+.month-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.insight-section {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.share-report-btn {
+  border-radius: 12px;
+  min-height: 50px;
+}
+
+.back-link {
+  font-size: 1.0625rem;
+  font-weight: 400;
+}
+
+.policy-box {
+  border-radius: var(--radius-lg);
+  border: none;
+}
+
+.card {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: none;
+}
+
+/* Chart bars */
+.budget-bar-wrap,
+.chart-bar-wrap {
+  background: rgba(120, 120, 128, 0.2);
+  border-radius: 3px;
+  height: 4px;
+}
+
+.budget-bar,
+.chart-bar,
+.goal-bar-fill {
+  border-radius: 3px;
+}
+
+.milestone.done {
+  background: var(--primary);
+}
+
+/* Reduce bouncy scale on press — iOS uses opacity */
+.goal-card:active,
+.chip:active,
+.summary-row .mini-card:active {
+  transform: none;
+  opacity: 0.7;
+}

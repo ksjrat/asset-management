@@ -12,10 +12,10 @@ import { renderSetup, bindSetup } from './setup.js';
 import { showActualForm } from './modals.js';
 
 const TABS = [
-  { id: 'dashboard', label: '대시보드', icon: '📊' },
+  { id: 'dashboard', label: '홈', icon: '🏠' },
   { id: 'goals', label: '목표', icon: '🎯' },
   { id: 'budget', label: '예산', icon: '💳' },
-  { id: 'reports', label: '보고서', icon: '📋' },
+  { id: 'reports', label: '리포트', icon: '📋' },
   { id: 'settings', label: '설정', icon: '⚙️' },
 ];
 
