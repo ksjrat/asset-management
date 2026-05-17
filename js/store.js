@@ -97,7 +97,7 @@ export function saveSafetyBackup(data) {
 }
 
 function tryRestoreSafetyBackup(data) {
-  if (hasUserFinancialData(data) || !data.auth?.loggedIn) return data;
+  if (hasUserFinancialData(data) || !data.auth?.onboardingDone) return data;
   try {
     const raw = localStorage.getItem(SAFETY_KEY);
     if (!raw) return data;

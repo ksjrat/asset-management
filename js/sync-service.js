@@ -14,6 +14,11 @@ async function applyPullResult(result) {
     return { status: 'error' };
   }
   const { data, rejectedEmptyRemote, status } = result;
+  if (!data || typeof data !== 'object' || !data.auth) {
+    console.warn('Sync: invalid pull result, keeping local data');
+    return { status: 'error' };
+  }
+  saveSafetyBackup(state.data);
   state.data = data;
   save(state.data);
   if (rejectedEmptyRemote) {
@@ -43,7 +48,7 @@ export async function setupCloudSync() {
     ensureHouseholdId(state.data);
     if (state.data.auth.householdId) {
       saveSafetyBackup(state.data);
-      await applyPullResult(await pullFromCloud(state.data));
+      // 앱을 열 때 자동 pull 하지 않음 — 빈 클라우드가 로컬을 덮는 것 방지. 받기는 「지금 동기화」에서.
       await bindHouseholdSync(state.data);
     }
   }
@@ -80,10 +85,7 @@ export async function syncManualRefresh() {
 
   ensureHouseholdId(state.data);
   if (!state.data.auth.householdId) {
-    const { generateInviteCode } = await import('./store.js');
-    state.data.auth.inviteCode = generateInviteCode();
-    state.data.auth.householdId = state.data.auth.inviteCode;
-    persist();
+    return { ok: false, reason: 'no-code' };
   }
 
   saveSafetyBackup(state.data);

@@ -158,14 +158,18 @@ export function finishOnboarding() {
   state.data.auth.policyAccepted = true;
   state.data.auth.onboardingDone = true;
   recordPolicyConsent(state.data);
-  state.data.budget.categories = [];
-  state.data.budget.monthlyPlan = {};
-  state.data.budget.actuals = {};
-  state.data.budget.setupDone = false;
-  state.data.budget.defaultRecordDay = 25;
-  state.data.budget.startYear = null;
-  state.data.budget.startMonth = null;
-  state.setupStep = 1;
+  const hasData = state.data.assets?.items?.length || state.data.goals?.length
+    || state.data.transactions?.length;
+  if (!hasData && !state.data.budget.categories?.length) {
+    state.data.budget.categories = [];
+    state.data.budget.monthlyPlan = {};
+    state.data.budget.actuals = {};
+    state.data.budget.setupDone = false;
+    state.data.budget.defaultRecordDay = 25;
+    state.data.budget.startYear = null;
+    state.data.budget.startMonth = null;
+    state.setupStep = 1;
+  }
   persist();
   state.locked = false;
   state.showWelcome = false;

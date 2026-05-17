@@ -74,12 +74,13 @@ function preserveLocalAuth(local, merged) {
   return merged;
 }
 
+/** 클라우드에 실질적인 금융 데이터가 있는지 (setupDone만으로는 빈 문서 판별 안 함) */
 function remotePayloadHasUserData(payload) {
   if (!payload) return false;
   if (payload.assets?.items?.length) return true;
   if (payload.goals?.length) return true;
   if (payload.transactions?.length) return true;
-  if (payload.budget?.setupDone) return true;
+  if (payload.budget?.categories?.length) return true;
   const plan = payload.budget?.monthlyPlan;
   if (plan && Object.keys(plan).length > 0) return true;
   return false;
