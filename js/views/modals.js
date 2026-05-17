@@ -212,7 +212,7 @@ export async function showTxForm(type, item, rerender) {
   const catOpts = cats.map((c) =>
     `<option value="${c.id}" ${item?.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
   const res = await openModal({
-    title: item ? '거래 수정' : (type === 'income' ? '수입 입력' : '지출 입력'),
+    title: item ? '거래 수정' : (type === 'income' ? '수익 입력' : '지출 입력'),
     body: `<form id="tx-form" class="form-stack">
       <input type="hidden" name="type" value="${type}" />
       ${formField('날짜', `<input class="input" name="date" type="date" value="${item?.date || todayISO()}" required />`)}

@@ -6,7 +6,7 @@ import { fmtMoney, fmtPct, fmtShort } from '../format.js';
 import { esc, emptyState } from '../ui.js';
 import { lineChart, legend } from '../charts.js';
 import { toast } from '../ui.js';
-import { showAssetForm } from './modals.js';
+import { showAssetForm, showTxForm } from './modals.js';
 import { assetIcon } from '../icons.js';
 
 function itemRow(item) {
@@ -63,7 +63,7 @@ export function renderDashboard() {
     <div class="quick-actions">
       <button type="button" class="quick-btn" data-quick="asset"><span>＋</span>자산</button>
       <button type="button" class="quick-btn" data-quick="expense"><span>＋</span>지출</button>
-      <button type="button" class="quick-btn" data-quick="goal"><span>＋</span>목표</button>
+      <button type="button" class="quick-btn" data-quick="income"><span>＋</span>수익</button>
       <button type="button" class="quick-btn" data-quick="report"><span>📋</span>보고서</button>
     </div>
 
@@ -103,13 +103,8 @@ export function bindDashboard() {
       else if (q === 'expense') {
         setTab('budget');
         rerender();
-      } else if (q === 'goal') {
-        setTab('goals');
-        const { showGoalForm, bindGoalTemplatePicker } = await import('./modals.js');
-        rerender().then(async () => {
-          await showGoalForm(rerender);
-          bindGoalTemplatePicker();
-        });
+      } else if (q === 'income') {
+        showTxForm('income', null, rerender);
       } else if (q === 'report') {
         setTab('reports');
         rerender();
