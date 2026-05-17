@@ -29,7 +29,7 @@ export async function setupCloudSync() {
   });
   if (!ok) return false;
 
-  if (state.data.auth.loggedIn && state.data.auth.onboardingDone) {
+  if (state.data.auth.onboardingDone) {
     ensureHouseholdId(state.data);
     if (state.data.auth.householdId) {
       saveSafetyBackup(state.data);

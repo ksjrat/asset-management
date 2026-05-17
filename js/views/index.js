@@ -49,7 +49,7 @@ export function renderApp() {
   const root = document.getElementById('app');
   const { data, locked } = state;
 
-  if (!data.auth.loggedIn) {
+  if (!data.auth.onboardingDone || state.showWelcome) {
     root.className = 'app-auth';
     root.innerHTML = renderAuth();
     bindAuth(finishOnboarding);

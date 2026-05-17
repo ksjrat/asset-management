@@ -90,7 +90,7 @@ export function renderSettings() {
     </div>
 
     <div class="settings-group">
-      <button type="button" class="btn btn-danger btn-block" id="btn-logout">로그아웃</button>
+      <button type="button" class="btn btn-danger btn-block" id="btn-logout">시작 화면으로</button>
     </div>`;
 }
 
@@ -197,11 +197,11 @@ export function bindSettings() {
     });
   });
   document.getElementById('btn-logout')?.addEventListener('click', async () => {
-    if (await confirmDialog('로그아웃', '로그아웃 하시겠습니까?')) {
-      state.data.auth.loggedIn = false;
-      state.locked = true;
-      persist();
+    if (await confirmDialog('시작 화면', '시작 화면으로 이동할까요? 데이터는 이 기기에 남습니다.')) {
+      state.showWelcome = true;
+      state.locked = false;
       state.authScreen = 'welcome';
+      persist();
       rerender();
     }
   });

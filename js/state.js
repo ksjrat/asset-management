@@ -17,6 +17,7 @@ export const state = {
   txSearch: '',
   txFilter: 'all',
   locked: true,
+  showWelcome: false,
   authScreen: 'welcome',
   setupStep: 1,
 };

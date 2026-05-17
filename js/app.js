@@ -6,7 +6,7 @@ import { setupCloudSync } from './sync-service.js';
 
 async function bootstrap() {
   state.data = load();
-  if (state.data.auth.loggedIn && state.data.auth.onboardingDone) {
+  if (state.data.auth.onboardingDone) {
     state.locked = state.data.auth.biometricEnabled && state.data.settings?.lockOnLaunch !== false;
   } else {
     state.locked = false;
@@ -14,7 +14,7 @@ async function bootstrap() {
   initUI();
   renderApp();
   setupCloudSync().then((ok) => {
-    if (ok && state.data.auth.loggedIn) {
+    if (ok && state.data.auth.onboardingDone) {
       import('./views/index.js').then((m) => m.renderApp());
     }
   });

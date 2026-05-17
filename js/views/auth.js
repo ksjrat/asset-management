@@ -4,7 +4,7 @@ import { joinHousehold, isSyncEnabled } from '../sync.js';
 import { syncEnsureHousehold, syncJoinHousehold } from '../sync-service.js';
 import { formField, toast, esc, copyText } from '../ui.js';
 
-const ONBOARD_STEPS = ['welcome', 'login', 'signup', 'biometric', 'invite', 'policy'];
+const ONBOARD_STEPS = ['welcome', 'biometric', 'invite', 'policy'];
 function stepBar(screen) {
   const idx = ONBOARD_STEPS.indexOf(screen);
   if (idx < 0) return '';
@@ -28,23 +28,9 @@ export function renderAuth() {
           </ul>
         </div>
         <div class="auth-actions">
-          <button type="button" class="btn btn-primary btn-block" data-auth="login">로그인</button>
-          <button type="button" class="btn btn-ghost btn-block" data-auth="signup">회원가입</button>
+          <button type="button" class="btn btn-primary btn-block" data-auth="start">시작하기</button>
         </div>
-      </div>`;
-  }
-  if (s === 'login' || s === 'signup') {
-    return `
-      <div class="auth-screen">
-        ${stepBar(s)}
-        <button type="button" class="back-link" data-auth="welcome">← 돌아가기</button>
-        <h1>${s === 'login' ? '로그인' : '회원가입'}</h1>
-        <form class="auth-form" id="auth-form">
-          ${formField('이름', '<input type="text" name="name" class="input" required placeholder="홍길동" />')}
-          ${formField('이메일', '<input type="email" name="email" class="input" required placeholder="you@email.com" />')}
-          ${formField('비밀번호', '<input type="password" name="password" class="input" required minlength="4" placeholder="4자 이상" />')}
-          <button type="submit" class="btn btn-primary btn-block">${s === 'login' ? '로그인' : '가입하기'}</button>
-        </form>
+        <p class="muted auth-footnote">PC·폰 연동은 설정에서 가족 코드와 가족 암호로 합니다.</p>
       </div>`;
   }
   if (s === 'biometric') {
@@ -100,7 +86,18 @@ export function bindAuth(onFinish) {
   document.querySelectorAll('[data-auth]').forEach((el) => {
     el.addEventListener('click', () => {
       const a = el.dataset.auth;
-      if (a === 'login' || a === 'signup') { state.authScreen = a; import('./index.js').then((m) => m.renderApp()); return; }
+      if (a === 'start') {
+        state.data.auth.loggedIn = true;
+        state.showWelcome = false;
+        persist();
+        if (state.data.auth.onboardingDone) {
+          import('./index.js').then((m) => m.renderApp());
+          return;
+        }
+        state.authScreen = 'biometric';
+        import('./index.js').then((m) => m.renderApp());
+        return;
+      }
       if (a === 'welcome') { state.authScreen = 'welcome'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'bio-yes') { state.data.auth.biometricEnabled = true; persist(); state.authScreen = 'invite'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'bio-skip') { state.authScreen = 'invite'; import('./index.js').then((m) => m.renderApp()); return; }
@@ -121,17 +118,6 @@ export function bindAuth(onFinish) {
       if (a === 'invite-skip') { state.authScreen = 'policy'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'policy-ok') onFinish();
     });
-  });
-
-  document.getElementById('auth-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    state.data.auth.userName = fd.get('name');
-    state.data.auth.userEmail = fd.get('email');
-    state.data.auth.loggedIn = true;
-    persist();
-    state.authScreen = 'biometric';
-    import('./index.js').then((m) => m.renderApp());
   });
 
   document.getElementById('accept-invite-form')?.addEventListener('submit', async (e) => {
@@ -182,6 +168,7 @@ export function finishOnboarding() {
   state.setupStep = 1;
   persist();
   state.locked = false;
+  state.showWelcome = false;
   state.authScreen = 'welcome';
   import('./index.js').then((m) => m.renderApp());
   toast('예산 항목을 설정해 주세요', 'success');
