@@ -11,6 +11,9 @@ import { renderSettings, bindSettings } from './settings.js';
 import { renderSetup, bindSetup } from './setup.js';
 import { showActualForm } from './modals.js';
 import { TAB_SVG } from '../icons.js';
+import { needsLinkAttention, openLinkWizard } from '../link-wizard.js';
+
+let linkWizardPrompted = false;
 
 const TABS = [
   { id: 'dashboard', label: '홈' },
@@ -102,6 +105,10 @@ export function renderApp() {
     </nav>
   `;
   bindShell();
+  if (!linkWizardPrompted && needsLinkAttention()) {
+    linkWizardPrompted = true;
+    setTimeout(() => openLinkWizard(), 600);
+  }
 }
 
 function renderMain() {

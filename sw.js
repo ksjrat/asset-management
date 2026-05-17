@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v36';
+const CACHE = 'couple-asset-v37';
 const ASSETS = [
   './',
   './index.html',
@@ -32,6 +32,7 @@ const ASSETS = [
   './js/sync.js',
   './js/sync-config.js',
   './js/sync-service.js',
+  './js/link-wizard.js',
   './js/sync-privacy.js',
   './js/sync-crypto.js',
 ];

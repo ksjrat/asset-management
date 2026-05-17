@@ -1,8 +1,7 @@
 import { state, persist } from '../state.js';
-import { generateInviteCode, recordPolicyConsent } from '../store.js';
-import { joinHousehold, isSyncEnabled } from '../sync.js';
-import { syncEnsureHousehold, syncJoinHousehold } from '../sync-service.js';
-import { formField, toast, esc, copyText } from '../ui.js';
+import { recordPolicyConsent } from '../store.js';
+import { openLinkWizard } from '../link-wizard.js';
+import { esc } from '../ui.js';
 
 const ONBOARD_STEPS = ['welcome', 'biometric', 'invite', 'policy'];
 function stepBar(screen) {
@@ -30,7 +29,7 @@ export function renderAuth() {
         <div class="auth-actions">
           <button type="button" class="btn btn-primary btn-block" data-auth="start">시작하기</button>
         </div>
-        <p class="muted auth-footnote">PC·폰 연동은 설정에서 가족 코드와 가족 암호로 합니다.</p>
+        <p class="muted auth-footnote">PC·폰·배우자 연동은 설정 → <strong>연동 도우미</strong>에서 한 번에 할 수 있습니다.</p>
       </div>`;
   }
   if (s === 'biometric') {
@@ -49,22 +48,10 @@ export function renderAuth() {
     return `
       <div class="auth-screen">
         ${stepBar(s)}
-        <h1>배우자 연결</h1>
-        <p class="muted">초대 코드를 발급하거나<br>배우자 코드를 입력하세요</p>
-        <div class="card">
-          <p class="card-label">내 초대 코드</p>
-          <p class="invite-code">${esc(state.data.auth.inviteCode || '—')}</p>
-          <div class="btn-row">
-            <button type="button" class="btn btn-ghost btn-sm" data-auth="gen-invite">코드 발급</button>
-            ${state.data.auth.inviteCode ? '<button type="button" class="btn btn-primary btn-sm" data-auth="copy-invite">복사</button>' : ''}
-          </div>
-          <p class="field-hint">배우자에게 코드를 공유하세요. 다른 기기에서 같은 코드를 입력하면 데이터가 연동됩니다.</p>
-        </div>
-        <form class="auth-form" id="accept-invite-form">
-          ${formField('배우자 초대 코드', '<input type="text" name="code" class="input" placeholder="ABC123" maxlength="8" style="text-transform:uppercase" />')}
-          <button type="submit" class="btn btn-primary btn-block">연결하기</button>
-        </form>
-        <button type="button" class="btn btn-ghost btn-block" data-auth="invite-skip">혼자 시작하기</button>
+        <h1>배우자 · 기기 연동</h1>
+        <p class="muted">PC·폰·배우자가 같은 데이터를 보려면<br>가족 코드와 가족 암호를 맞춥니다.</p>
+        <button type="button" class="btn btn-primary btn-block" data-auth="link-wizard">연동 도우미로 설정</button>
+        <button type="button" class="btn btn-ghost btn-block" data-auth="invite-skip">나중에 · 혼자 시작</button>
       </div>`;
   }
   if (s === 'policy') {
@@ -101,18 +88,12 @@ export function bindAuth(onFinish) {
       if (a === 'welcome') { state.authScreen = 'welcome'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'bio-yes') { state.data.auth.biometricEnabled = true; persist(); state.authScreen = 'invite'; import('./index.js').then((m) => m.renderApp()); return; }
       if (a === 'bio-skip') { state.authScreen = 'invite'; import('./index.js').then((m) => m.renderApp()); return; }
-      if (a === 'gen-invite') {
-        state.data.auth.inviteCode = generateInviteCode();
-        state.data.auth.householdId = state.data.auth.inviteCode;
-        state.data.auth.inviteExpiresAt = Date.now() + 86400000;
-        persist();
-        syncEnsureHousehold();
-        import('./index.js').then((m) => m.renderApp());
-        toast('가족 코드가 발급되었습니다');
-        return;
-      }
-      if (a === 'copy-invite' && state.data.auth.inviteCode) {
-        copyText(state.data.auth.inviteCode);
+      if (a === 'link-wizard') {
+        openLinkWizard().then(() => {
+          state.authScreen = 'policy';
+          persist();
+          import('./index.js').then((m) => m.renderApp());
+        });
         return;
       }
       if (a === 'invite-skip') { state.authScreen = 'policy'; import('./index.js').then((m) => m.renderApp()); return; }
@@ -120,38 +101,6 @@ export function bindAuth(onFinish) {
     });
   });
 
-  document.getElementById('accept-invite-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const code = new FormData(e.target).get('code')?.toString().trim().toUpperCase();
-    if (!code || code.length < 4) {
-      toast('4자 이상의 가족 코드를 입력하세요', 'error');
-      return;
-    }
-    const ownCode = state.data.auth.inviteCode;
-    if (ownCode && code === ownCode) {
-      state.data.auth.spouseConnected = true;
-      state.data.auth.spouseName = '배우자';
-      state.data.auth.householdId = code;
-      persist();
-      await syncEnsureHousehold();
-      toast('연결되었습니다', 'success');
-      state.authScreen = 'policy';
-      import('./index.js').then((m) => m.renderApp());
-      return;
-    }
-    joinHousehold(state.data, code);
-    state.data.auth.spouseConnected = true;
-    state.data.auth.spouseName = '배우자';
-    persist();
-    if (isSyncEnabled()) {
-      await syncJoinHousehold(code);
-      toast('가족 데이터와 연결되었습니다', 'success');
-    } else {
-      toast('연결되었습니다 (클라우드 동기화 설정 시 기기 간 데이터가 맞춰집니다)', 'info');
-    }
-    state.authScreen = 'policy';
-    import('./index.js').then((m) => m.renderApp());
-  });
 }
 
 export function finishOnboarding() {

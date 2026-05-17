@@ -1,11 +1,20 @@
 import { state, persist } from '../state.js';
 import { hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData } from '../store.js';
 import { getBudgetStart } from '../budget-engine.js';
-import { isSyncEnabled, getSyncStatus, hasCloudPassphraseSession, setCloudPassphraseSession } from '../sync.js';
-import { syncManualRefresh, syncEnsureHousehold } from '../sync-service.js';
+import { isSyncEnabled } from '../sync.js';
 import { fmtMonth } from '../format.js';
-import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm, copyText } from '../ui.js';
+import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm } from '../ui.js';
 import { showBudgetStartForm } from './modals.js';
+import {
+  getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
+} from '../link-wizard.js';
+
+function linkStatusLabel() {
+  if (isLinkComplete()) return '연동 완료';
+  const steps = getLinkSteps().filter((s) => s.required);
+  const done = steps.filter((s) => s.done).length;
+  return `${done}/${steps.length}단계`;
+}
 
 export function renderSettings() {
   const a = state.data.auth;
@@ -13,16 +22,31 @@ export function renderSettings() {
   const start = getBudgetStart(state.data);
   const startLabel = start ? fmtMonth(start.year, start.month) : '미설정';
   const syncOn = isSyncEnabled();
-  const syncStatus = getSyncStatus(state.data);
-  const familyCode = state.data.auth.householdId || state.data.auth.inviteCode;
-  const syncMeta = !syncOn
-    ? '로컬만 (docs/SYNC.md)'
-    : syncStatus === 'no-code'
-      ? '가족 코드 발급 필요'
-      : !hasCloudPassphraseSession()
-        ? '가족 암호 입력 필요'
-        : '암호화 연동 중';
+  const linkDone = isLinkComplete();
+
   return `
+    <div class="settings-group settings-group--highlight">
+      <p class="settings-group-title">기기·배우자 연동</p>
+      <button type="button" class="settings-row" id="btn-link-wizard">
+        <span><strong>연동 도우미</strong><span class="settings-row-meta">${linkDone ? '완료 · 다시 설정' : linkStatusLabel()}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+      <ul class="link-checklist link-checklist--compact">
+        ${getLinkSteps().filter((st) => st.required).map((st) => `
+          <li class="link-check-item ${st.done ? 'done' : ''}">
+            <span class="link-check-mark">${st.done ? '✓' : '○'}</span>
+            <span>${esc(st.label)}</span>
+          </li>`).join('')}
+      </ul>
+      ${syncOn && linkDone ? `<button type="button" class="settings-row" id="btn-sync-refresh">
+        <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기와 다시 맞추기</span></span>
+        <span class="settings-chevron">›</span>
+      </button>` : ''}
+      ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
+        <span><strong>배우자 연결 해제</strong></span><span class="settings-chevron">›</span>
+      </button>` : ''}
+    </div>
+
     <div class="settings-group">
       <p class="settings-group-title">보안</p>
       <label class="toggle-row"><span>생체 인증</span>
@@ -35,39 +59,13 @@ export function renderSettings() {
       </button>
     </div>
 
+    ${hasSafetyBackup() && !hasUserFinancialData(state.data) ? `
     <div class="settings-group">
-      <p class="settings-group-title">배우자</p>
-      <div class="settings-row" style="cursor:default">
-        <span><strong>연결 상태</strong><span class="settings-row-meta">${a.spouseConnected ? `${esc(a.spouseName)}님과 연결됨` : '연결되지 않음'}</span></span>
-      </div>
-      ${!a.spouseConnected ? `<button type="button" class="settings-row" id="btn-connect"><span><strong>배우자 연결</strong><span class="settings-row-meta">초대 코드 발급</span></span><span class="settings-chevron">›</span></button>` : ''}
-      ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
-        <span><strong>연결 해제</strong></span><span class="settings-chevron">›</span>
-      </button>` : ''}
-    </div>
-
-    <div class="settings-group">
-      <p class="settings-group-title">동기화</p>
-      <div class="settings-row" style="cursor:default">
-        <span><strong>상태</strong><span class="settings-row-meta">${syncMeta}</span></span>
-      </div>
-      ${familyCode ? `<button type="button" class="settings-row" id="btn-copy-family-code">
-        <span><strong>가족 코드</strong><span class="settings-row-meta">${esc(familyCode)}</span></span>
-        <span class="settings-chevron">복사</span>
-      </button>` : ''}
-      ${syncOn ? `<button type="button" class="settings-row" id="btn-cloud-pass">
-        <span><strong>가족 암호</strong><span class="settings-row-meta">${hasCloudPassphraseSession() ? '입력됨 (이 기기)' : '미입력'}</span></span>
-        <span class="settings-chevron">›</span>
-      </button>` : ''}
-      ${syncOn ? `<button type="button" class="settings-row" id="btn-sync-refresh">
-        <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기에서 받아오기</span></span>
-        <span class="settings-chevron">›</span>
-      </button>` : ''}
-      ${hasSafetyBackup() && !hasUserFinancialData(state.data) ? `<button type="button" class="settings-row" id="btn-restore-backup">
+      <button type="button" class="settings-row" id="btn-restore-backup">
         <span><strong>백업에서 복구</strong><span class="settings-row-meta">이 기기에 저장된 최근 백업</span></span>
         <span class="settings-chevron">›</span>
-      </button>` : ''}
-    </div>
+      </button>
+    </div>` : ''}
 
     <div class="settings-group">
       <p class="settings-group-title">예산</p>
@@ -97,6 +95,12 @@ export function renderSettings() {
 export function bindSettings() {
   const rerender = () => import('./index.js').then((m) => m.renderApp());
 
+  document.getElementById('btn-link-wizard')?.addEventListener('click', () => openLinkWizard());
+  document.getElementById('btn-sync-refresh')?.addEventListener('click', async () => {
+    const result = await runSyncWithFeedback();
+    if (result.ok) rerender();
+  });
+
   document.getElementById('toggle-bio')?.addEventListener('change', (e) => {
     state.data.auth.biometricEnabled = e.target.checked; persist();
   });
@@ -111,75 +115,11 @@ export function bindSettings() {
     });
     if (modalValue(res) === 'save') { state.data.auth.appPasswordSet = true; persist(); toast('설정되었습니다'); }
   });
-  document.getElementById('btn-connect')?.addEventListener('click', async () => {
-    const { generateInviteCode } = await import('../store.js');
-    if (!state.data.auth.inviteCode) {
-      state.data.auth.inviteCode = generateInviteCode();
-      state.data.auth.householdId = state.data.auth.inviteCode;
-      persist();
-      syncEnsureHousehold();
-    }
-    await openModal({
-      title: '배우자 초대',
-      body: `<p class="modal-text">가족 코드: <strong class="invite-code">${esc(state.data.auth.inviteCode)}</strong></p>
-        <p class="muted">배우자·다른 기기에서 같은 코드를 입력하면 데이터가 연동됩니다.</p>`,
-      actions: [{ label: '닫기', primary: true }],
-    });
-  });
   document.getElementById('btn-disconnect')?.addEventListener('click', async () => {
     if (await confirmDialog('연결 해제', '배우자 연결을 해제할까요?')) {
       state.data.auth.spouseConnected = false;
       state.data.auth.spouseName = '';
       persist(); toast('연결이 해제되었습니다'); rerender();
-    }
-  });
-  document.getElementById('btn-copy-family-code')?.addEventListener('click', () => {
-    const code = state.data.auth.householdId || state.data.auth.inviteCode;
-    if (code) copyText(code);
-  });
-  document.getElementById('btn-cloud-pass')?.addEventListener('click', async () => {
-    const res = await openModal({
-      title: '가족 암호',
-      body: `<form id="cloud-pass-form" class="form-stack" autocomplete="off">
-        <p class="field-hint">클라우드에 올리는 데이터를 암호화합니다. 배우자·다른 기기에도 <strong>같은 암호</strong>를 입력하세요.</p>
-        ${formField('가족 암호', '<input class="input" name="pass" type="password" minlength="6" autocomplete="new-password" required />')}
-      </form>`,
-      actions: [{ label: '취소', value: null }, { label: '확인', value: 'save', primary: true }],
-    });
-    if (modalValue(res) !== 'save') return;
-    const pass = modalForm(res)?.get('pass')?.toString();
-    if (!pass || pass.length < 6) {
-      toast('6자 이상 입력하세요', 'error');
-      return;
-    }
-    setCloudPassphraseSession(pass);
-    toast('이 기기에서 암호가 적용되었습니다', 'success');
-    syncEnsureHousehold();
-    rerender();
-  });
-  document.getElementById('btn-sync-refresh')?.addEventListener('click', async () => {
-    if (!hasCloudPassphraseSession()) {
-      toast('먼저 가족 암호를 입력하세요', 'error');
-      return;
-    }
-    try {
-      const result = await syncManualRefresh();
-      const msg = {
-        ok: '다른 기기 데이터를 받아왔습니다',
-        uploaded: '클라우드에 이 기기 데이터를 올렸습니다',
-        'local-only': '동기화했습니다',
-        off: '클라우드 연동이 꺼져 있습니다',
-        'no-code': '설정 → 배우자 연결에서 가족 코드를 먼저 발급하세요',
-        'no-pass': '가족 암호를 입력하세요',
-        'bad-pass': '가족 암호가 맞지 않습니다. PC와 같은 암호인지 확인하세요',
-        error: '네트워크 오류로 동기화하지 못했습니다',
-      };
-      const key = result.ok ? (result.reason || 'ok') : (result.reason || 'error');
-      toast(msg[key] || '동기화할 수 없습니다', result.ok ? 'success' : 'error');
-      if (result.ok) rerender();
-    } catch (e) {
-      console.error(e);
-      toast('동기화 중 오류가 났습니다', 'error');
     }
   });
   document.getElementById('btn-restore-backup')?.addEventListener('click', async () => {
@@ -209,7 +149,7 @@ export function bindSettings() {
   document.getElementById('btn-policy')?.addEventListener('click', () => {
     openModal({
       title: '개인정보 처리방침',
-      body: '<div class="policy-box"><p>기기 내 저장만 사용합니다. 외부 전송 없음.</p></div>',
+      body: '<div class="policy-box"><p>기기 내 저장됩니다. 클라우드 연동 시 가족 코드·암호로 암호화해 공유합니다.</p></div>',
       actions: [{ label: '닫기', primary: true }],
     });
   });

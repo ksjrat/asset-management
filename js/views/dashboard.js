@@ -8,6 +8,7 @@ import { lineChart, legend } from '../charts.js';
 import { toast } from '../ui.js';
 import { showAssetForm, showTxForm } from './modals.js';
 import { assetIcon } from '../icons.js';
+import { needsLinkAttention, openLinkWizard } from '../link-wizard.js';
 
 function itemRow(item) {
   const type = ASSET_TYPES.find((t) => t.id === item.type);
@@ -46,6 +47,7 @@ export function renderDashboard() {
   const proposedGoals = data.goals.filter((g) => g.status === 'proposed').length;
 
   return `
+    ${needsLinkAttention() ? '<button type="button" class="tip-banner" id="btn-link-setup">📱 PC·폰·배우자 연동 마무리 · 연동 도우미</button>' : ''}
     ${proposedGoals ? `<button type="button" class="tip-banner" data-goto="goals">🎯 배우자 목표 제안 ${proposedGoals}건 · 확인하기</button>` : ''}
 
     <section class="hero-card">
@@ -92,6 +94,7 @@ export function bindDashboard() {
   document.querySelectorAll('[data-owner]').forEach((b) => {
     b.addEventListener('click', () => { state.ownerFilter = b.dataset.owner; rerender(); });
   });
+  document.getElementById('btn-link-setup')?.addEventListener('click', () => openLinkWizard());
   document.querySelector('[data-goto="goals"]')?.addEventListener('click', () => {
     setTab('goals');
     rerender();

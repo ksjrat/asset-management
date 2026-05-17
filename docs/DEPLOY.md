@@ -62,7 +62,7 @@ Private GitHub 저장소도 연동 가능합니다.
 
 1. 배포된 **https 주소**를 브라우저에서 엽니다.
 2. **홈 화면에 추가** (모바일) 또는 즐겐찾기 (PC).
-3. **데이터 연동**은 Firebase + 가족 암호 → [SYNC.md](./SYNC.md) · [SECURITY.md](./SECURITY.md)
+3. **데이터 연동**: 앱 **설정 → 연동 도우미**. Firebase는 [SYNC.md](./SYNC.md)의 `FIREBASE_CONFIG` 시크릿으로 배포 시 자동 설정.
 
 ---
 

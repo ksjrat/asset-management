@@ -1,37 +1,31 @@
-# PC · 폰 · 배우자 데이터 연동 (Firebase)
+# PC · 폰 · 배우자 연동
 
-같은 **가족 코드**를 쓰는 기기끼리 자산·예산·목표 데이터가 클라우드에 맞춰집니다.
+앱 안 **설정 → 연동 도우미** 한 곳에서 진행합니다.
 
-## 1. Firebase 프로젝트 만들기 (최초 1회)
+## 사용자 (가족) — 3단계
 
-1. [Firebase Console](https://console.firebase.google.com/) → 프로젝트 추가
-2. **Firestore Database** 생성 (테스트 모드로 시작 가능)
-3. 프로젝트 설정 → 일반 → **웹 앱 추가** → `firebaseConfig` 값 복사
+1. **같은 주소**로 접속  
+   예: `https://<사용자>.github.io/<저장소>/` (PC·폰 북마크 동일)
+2. **연동 도우미**  
+   - 데이터 있는 쪽: **코드 발급** → 카톡 등으로 코드·주소 공유  
+   - 다른 기기·배우자: **코드 입력**
+3. **가족 암호** (6자 이상, 모든 기기 동일) → **지금 맞추기**
 
-## 2. 앱에 설정 넣기
+데이터가 있는 기기에서 먼저 입력한 뒤, 다른 기기에서 도우미 마지막 단계(동기화)를 실행하세요.
 
-```bash
-copy js\sync-config.example.js js\sync-config.js
-```
+---
 
-`js/sync-config.js` 를 열고:
+## 저장소 관리자 — Firebase (최초 1회)
 
-- `SYNC_ENABLED = true`
-- `firebaseConfig` 에 복사한 값 붙여넣기
+GitHub Pages만 쓰면 배포본에 Firebase가 없어 **클라우드가 꺼진 상태**입니다. 아래를 하면 배포할 때마다 자동으로 켜집니다.
 
-## 3. 가족 암호 (필수)
+### 1. Firebase 프로젝트
 
-클라우드 동기화를 켜면 **암호화 후** 업로드됩니다.
+1. [Firebase Console](https://console.firebase.google.com/) → 프로젝트 추가  
+2. **Firestore Database** 생성  
+3. 프로젝트 설정 → 일반 → **웹 앱 추가** → `firebaseConfig` JSON 전체 복사  
 
-1. 앱 **설정 → 가족 암호** 에서 6자 이상 입력
-2. 배우자·다른 기기에서도 **같은 암호** 입력
-3. 코드만 공개(GitHub)되어도, **암호 없이는** 금융 데이터를 읽기 어렵습니다
-
-자세히: [SECURITY.md](./SECURITY.md)
-
-## 4. Firestore 보안 규칙 (예시)
-
-Firebase Console → Firestore → 규칙:
+Firestore 규칙 (가족 코드 아는 사람 읽기/쓰기 — 나중에 Auth로 강화 가능):
 
 ```
 rules_version = '2';
@@ -44,33 +38,56 @@ service cloud.firestore {
 }
 ```
 
-> 가족 코드를 아는 사람이 읽고 쓸 수 있습니다. 코드를 가족에게만 공유하세요.  
-> 나중에 Firebase Authentication 을 붙이면 규칙을 강화할 수 있습니다.
+### 2. GitHub 시크릿 (Pages 배포)
 
-## 5. 사용 방법
+1. 저장소 **Settings → Secrets and variables → Actions**  
+2. **New repository secret**  
+   - 이름: `FIREBASE_CONFIG`  
+   - 값: Firebase에서 복사한 **객체 전체** (한 줄 JSON 가능)
 
-1. GitHub Pages 등 **https** 로 배포된 주소에서 앱 실행
-2. 회원가입 → **배우자 연결**에서 **코드 발급**
-3. 다른 기기(폰·PC)에서 같은 주소 접속 → 로그인 → **같은 가족 코드 입력**
-4. 설정 → **동기화**에서 상태가 「클라우드 연동 중」인지 확인
+```json
+{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}
+```
 
-저장할 때마다 자동 업로드되며, 다른 기기는 실시간에 가깝게 반영됩니다.
+3. `main`에 push → Actions가 `js/sync-config.js`를 만들어 Pages에 포함  
 
-## 동기화되는 항목
+로컬 개발만 할 때는 예전처럼:
 
-- 자산·부채(🔒 비공개 제외), 목표, 예산, 거래, 실적
-- 배우자 연결 상태, 가족 코드
+```bash
+cp js/sync-config.example.js js/sync-config.js
+```
 
-## 기기마다 따로 두는 항목
+`SYNC_ENABLED = true` 와 `firebaseConfig` 를 채웁니다.
 
-- 로그인 이름·이메일
-- 🔒 비공개 자산
-- 생체 인증·앱 잠금·가족 암호(서버에 저장 안 함)
+### 3. 가족 암호
+
+클라우드 데이터는 **암호화 후** 업로드됩니다. 자세한 내용은 [SECURITY.md](./SECURITY.md).
+
+---
 
 ## 문제 해결
 
 | 증상 | 확인 |
 |------|------|
-| 로컬만 표시 | `sync-config.js` 에 `SYNC_ENABLED: true` 인지 |
-| 동기화 안 됨 | https 로 열었는지, 가족 코드가 같은지 |
-| 빈 데이터 | 코드 발급한 쪽에서 먼저 데이터 입력 후 다른 기기에서 「지금 동기화」 |
+| 설정에 클라우드 미설정 | `FIREBASE_CONFIG` 시크릿 후 재배포 |
+| 연동 도우미만 되고 데이터 안 맞음 | 같은 주소·같은 코드·같은 가족 암호 |
+| 빈 화면 | 데이터 있는 기기에서 먼저 쓰기 → 다른 기기에서 **지금 동기화** |
+| 암호 오류 | 모든 기기에서 가족 암호 재입력 (연동 도우미 2단계) |
+
+---
+
+## 동기화 항목
+
+- 자산·부채(🔒 비공개 제외), 목표, 예산, 거래, 실적  
+- 배우자 연결, 가족 코드  
+
+## 기기마다 따로
+
+- 로그인 이름·이메일, 🔒 비공개 자산, 생체·앱 잠금·가족 암호(서버 미저장)

@@ -1,4 +1,5 @@
-/** 이 파일을 sync-config.js 로 복사한 뒤 Firebase 값을 채우고 SYNC_ENABLED 를 true 로 바꾸세요. */
+/** 로컬: sync-config.js 로 복사 후 값 입력.
+ *  GitHub Pages: 저장소 시크릿 FIREBASE_CONFIG (firebaseConfig JSON) — docs/SYNC.md */
 export const SYNC_ENABLED = true;
 
 export const firebaseConfig = {

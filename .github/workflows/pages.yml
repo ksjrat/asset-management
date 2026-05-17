@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Firebase sync-config (선택)
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: node scripts/build-sync-config.mjs
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
