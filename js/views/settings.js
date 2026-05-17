@@ -159,11 +159,27 @@ export function bindSettings() {
   });
   document.getElementById('btn-sync-refresh')?.addEventListener('click', async () => {
     if (!hasCloudPassphraseSession()) {
-      toast('먼저 설정에서 가족 암호를 입력하세요', 'error');
+      toast('먼저 가족 암호를 입력하세요', 'error');
       return;
     }
-    const ok = await syncManualRefresh();
-    toast(ok ? '동기화되었습니다' : '동기화할 수 없습니다', ok ? 'success' : 'error');
+    try {
+      const result = await syncManualRefresh();
+      const msg = {
+        ok: '다른 기기 데이터를 받아왔습니다',
+        uploaded: '클라우드에 이 기기 데이터를 올렸습니다',
+        'local-only': '동기화했습니다',
+        off: '클라우드 연동이 꺼져 있습니다',
+        'no-pass': '가족 암호를 입력하세요',
+        'bad-pass': '가족 암호가 맞지 않습니다. PC와 같은 암호인지 확인하세요',
+        error: '네트워크 오류로 동기화하지 못했습니다',
+      };
+      const key = result.ok ? (result.reason || 'ok') : (result.reason || 'error');
+      toast(msg[key] || '동기화할 수 없습니다', result.ok ? 'success' : 'error');
+      if (result.ok) rerender();
+    } catch (e) {
+      console.error(e);
+      toast('동기화 중 오류가 났습니다', 'error');
+    }
   });
   document.getElementById('btn-restore-backup')?.addEventListener('click', async () => {
     if (!(await confirmDialog('백업 복구', '이 기기에 저장된 최근 백업으로 되돌릴까요?'))) return;

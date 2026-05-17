@@ -1,5 +1,5 @@
 import { state, persist } from './state.js';
-import { save, saveSafetyBackup } from './store.js';
+import { save, saveSafetyBackup, hasUserFinancialData } from './store.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload, hasCloudPassphraseSession,
@@ -7,16 +7,26 @@ import {
 import { toast } from './ui.js';
 
 let bootstrapped = false;
+let initPromise = null;
 
 async function applyPullResult(result) {
-  const { data, rejectedEmptyRemote } = result;
+  if (!result || typeof result !== 'object' || !('data' in result)) {
+    return { status: 'error' };
+  }
+  const { data, rejectedEmptyRemote, status } = result;
   state.data = data;
   save(state.data);
   if (rejectedEmptyRemote) {
     toast('빈 클라우드 데이터는 덮어쓰지 않았습니다', 'info');
     if (hasCloudPassphraseSession()) await pushToCloud(state.data);
   }
-  return state.data;
+  return { status: status || 'ok' };
+}
+
+export async function ensureSyncReady() {
+  if (bootstrapped) return isSyncEnabled();
+  if (!initPromise) initPromise = setupCloudSync();
+  return initPromise;
 }
 
 export async function setupCloudSync() {
@@ -64,9 +74,36 @@ export async function syncEnsureHousehold() {
 }
 
 export async function syncManualRefresh() {
-  if (!isSyncEnabled() || !state.data.auth.householdId) return false;
+  const ready = await ensureSyncReady();
+  if (!ready) return { ok: false, reason: 'off' };
+  if (!hasCloudPassphraseSession()) return { ok: false, reason: 'no-pass' };
+
+  ensureHouseholdId(state.data);
+  if (!state.data.auth.householdId) {
+    const { generateInviteCode } = await import('./store.js');
+    state.data.auth.inviteCode = generateInviteCode();
+    state.data.auth.householdId = state.data.auth.inviteCode;
+    persist();
+  }
+
   saveSafetyBackup(state.data);
-  await applyPullResult(await pullFromCloud(state.data));
+  const pull = await pullFromCloud(state.data);
+  const { status } = await applyPullResult(pull);
+
+  if (status === 'bad-pass') return { ok: false, reason: 'bad-pass' };
+  if (status === 'error') return { ok: false, reason: 'error' };
+
+  if (status === 'no-doc' || pull.status === 'no-doc') {
+    await pushToCloud(state.data);
+    await bindHouseholdSync(state.data);
+    import('./views/index.js').then((m) => m.renderApp());
+    return { ok: true, reason: 'uploaded' };
+  }
+
+  await bindHouseholdSync(state.data);
+  if (hasCloudPassphraseSession() && hasUserFinancialData(state.data)) {
+    await pushToCloud(state.data);
+  }
   import('./views/index.js').then((m) => m.renderApp());
-  return true;
+  return { ok: true, reason: status === 'ok' ? 'ok' : 'local-only' };
 }

@@ -186,22 +186,30 @@ export async function bindHouseholdSync(data) {
   });
 }
 
+function pullResult(data, status, extra = {}) {
+  return { data, rejectedEmptyRemote: false, status, ...extra };
+}
+
 export async function pullFromCloud(data) {
-  if (!enabled || !db) return data;
+  if (!enabled || !db) return pullResult(data, 'off');
   const hid = ensureHouseholdId(data);
-  if (!hid) return data;
+  if (!hid) return pullResult(data, 'no-code');
 
   try {
     const { doc, getDoc } = firestoreApi;
     const snap = await getDoc(doc(db, 'households', hid));
-    if (!snap.exists()) return data;
+    if (!snap.exists()) return pullResult(data, 'no-doc');
     const docData = snap.data();
     const payload = await unpackCloudDoc(docData, hid);
-    if (!payload) return { data, rejectedEmptyRemote: false };
-    return applyRemotePayload(data, payload, docData.updatedAt);
+    if (!payload) {
+      const encrypted = !!(docData.encrypted && docData.envelope);
+      return pullResult(data, encrypted ? 'bad-pass' : 'empty-doc');
+    }
+    const merged = applyRemotePayload(data, payload, docData.updatedAt);
+    return { ...merged, status: 'ok' };
   } catch (e) {
     console.warn('Pull failed', e);
-    return { data, rejectedEmptyRemote: false };
+    return pullResult(data, 'error');
   }
 }
 
