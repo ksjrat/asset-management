@@ -1,4 +1,4 @@
-import { DATA_VERSION } from './store.js';
+import { DATA_VERSION, hasUserFinancialData } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
 import {
   encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
@@ -74,15 +74,32 @@ function preserveLocalAuth(local, merged) {
   return merged;
 }
 
+function remotePayloadHasUserData(payload) {
+  if (!payload) return false;
+  if (payload.assets?.items?.length) return true;
+  if (payload.goals?.length) return true;
+  if (payload.transactions?.length) return true;
+  if (payload.budget?.setupDone) return true;
+  const plan = payload.budget?.monthlyPlan;
+  if (plan && Object.keys(plan).length > 0) return true;
+  return false;
+}
+
 export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
-  if (!remotePayload) return local;
+  if (!remotePayload) return { data: local, rejectedEmptyRemote: false };
   const localMerged = local._syncMeta?.lastMergedAt || 0;
-  if (remoteUpdatedAt && remoteUpdatedAt <= localMerged) return local;
+  if (remoteUpdatedAt && remoteUpdatedAt <= localMerged) {
+    return { data: local, rejectedEmptyRemote: false };
+  }
+
+  if (hasUserFinancialData(local) && !remotePayloadHasUserData(remotePayload)) {
+    return { data: local, rejectedEmptyRemote: true };
+  }
 
   const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
   merged._syncMeta = { ...(local._syncMeta || {}), lastMergedAt: remoteUpdatedAt || Date.now() };
-  return merged;
+  return { data: merged, rejectedEmptyRemote: false };
 }
 
 export function ensureHouseholdId(data) {
@@ -180,11 +197,11 @@ export async function pullFromCloud(data) {
     if (!snap.exists()) return data;
     const docData = snap.data();
     const payload = await unpackCloudDoc(docData, hid);
-    if (!payload) return data;
+    if (!payload) return { data, rejectedEmptyRemote: false };
     return applyRemotePayload(data, payload, docData.updatedAt);
   } catch (e) {
     console.warn('Pull failed', e);
-    return data;
+    return { data, rejectedEmptyRemote: false };
   }
 }
 

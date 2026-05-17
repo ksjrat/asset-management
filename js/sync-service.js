@@ -1,17 +1,29 @@
 import { state, persist } from './state.js';
-import { save } from './store.js';
+import { save, saveSafetyBackup } from './store.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
-  ensureHouseholdId, isSyncEnabled, applyRemotePayload,
+  ensureHouseholdId, isSyncEnabled, applyRemotePayload, hasCloudPassphraseSession,
 } from './sync.js';
+import { toast } from './ui.js';
 
 let bootstrapped = false;
 
+async function applyPullResult(result) {
+  const { data, rejectedEmptyRemote } = result;
+  state.data = data;
+  save(state.data);
+  if (rejectedEmptyRemote) {
+    toast('빈 클라우드 데이터는 덮어쓰지 않았습니다', 'info');
+    if (hasCloudPassphraseSession()) await pushToCloud(state.data);
+  }
+  return state.data;
+}
+
 export async function setupCloudSync() {
   const ok = await initSync({
-    onRemoteChange: (payload, updatedAt) => {
-      state.data = applyRemotePayload(state.data, payload, updatedAt);
-      save(state.data);
+    onRemoteChange: async (payload, updatedAt) => {
+      const result = applyRemotePayload(state.data, payload, updatedAt);
+      await applyPullResult(result);
       import('./views/index.js').then((m) => m.renderApp());
     },
   });
@@ -20,8 +32,8 @@ export async function setupCloudSync() {
   if (state.data.auth.loggedIn && state.data.auth.onboardingDone) {
     ensureHouseholdId(state.data);
     if (state.data.auth.householdId) {
-      state.data = await pullFromCloud(state.data);
-      save(state.data);
+      saveSafetyBackup(state.data);
+      await applyPullResult(await pullFromCloud(state.data));
       await bindHouseholdSync(state.data);
     }
   }
@@ -37,8 +49,8 @@ export function syncAfterPersist() {
 
 export async function syncJoinHousehold(code) {
   if (!isSyncEnabled()) return;
-  state.data = await pullFromCloud(state.data);
-  save(state.data);
+  saveSafetyBackup(state.data);
+  await applyPullResult(await pullFromCloud(state.data));
   await bindHouseholdSync(state.data);
   await pushToCloud(state.data);
 }
@@ -53,8 +65,8 @@ export async function syncEnsureHousehold() {
 
 export async function syncManualRefresh() {
   if (!isSyncEnabled() || !state.data.auth.householdId) return false;
-  state.data = await pullFromCloud(state.data);
-  save(state.data);
+  saveSafetyBackup(state.data);
+  await applyPullResult(await pullFromCloud(state.data));
   import('./views/index.js').then((m) => m.renderApp());
   return true;
 }

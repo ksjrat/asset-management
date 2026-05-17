@@ -4,6 +4,7 @@ import { ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount } from 
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
+export const SAFETY_KEY = 'couple-asset-app-v1-safety';
 
 export const GOAL_TEMPLATES = [
   { id: 'house', label: '주택 마련', icon: '🏠', defaultAmount: 100000000, defaultMonths: 60 },
@@ -76,14 +77,76 @@ function now() {
   return new Date().toISOString();
 }
 
+/** 자산·목표·거래·예산 설정 등 사용자가 입력한 금융 데이터가 있는지 */
+export function hasUserFinancialData(data) {
+  if (!data) return false;
+  if (data.assets?.items?.length) return true;
+  if (data.goals?.length) return true;
+  if (data.transactions?.length) return true;
+  if (data.budget?.setupDone) return true;
+  const plan = data.budget?.monthlyPlan;
+  if (plan && Object.keys(plan).length > 0) return true;
+  return false;
+}
+
+export function saveSafetyBackup(data) {
+  if (!hasUserFinancialData(data)) return;
+  try {
+    localStorage.setItem(SAFETY_KEY, JSON.stringify(data));
+  } catch { /* quota */ }
+}
+
+function tryRestoreSafetyBackup(data) {
+  if (hasUserFinancialData(data) || !data.auth?.loggedIn) return data;
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY);
+    if (!raw) return data;
+    const backup = JSON.parse(raw);
+    if (!hasUserFinancialData(backup)) return data;
+    const email = data.auth.userEmail?.trim();
+    const backupEmail = backup.auth?.userEmail?.trim();
+    if (email && backupEmail && email !== backupEmail) return data;
+    ensureBudgetStructure(backup);
+    migrateBudgetModel(backup);
+    backup.auth.loggedIn = data.auth.loggedIn;
+    backup.auth.userName = data.auth.userName || backup.auth.userName;
+    backup.auth.userEmail = data.auth.userEmail || backup.auth.userEmail;
+    backup.auth.onboardingDone = data.auth.onboardingDone ?? backup.auth.onboardingDone;
+    return backup;
+  } catch {
+    return data;
+  }
+}
+
+export function restoreFromSafetyBackup() {
+  const raw = localStorage.getItem(SAFETY_KEY);
+  if (!raw) return null;
+  const backup = JSON.parse(raw);
+  if (!hasUserFinancialData(backup)) return null;
+  ensureBudgetStructure(backup);
+  migrateBudgetModel(backup);
+  return backup;
+}
+
+export function hasSafetyBackup() {
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY);
+    if (!raw) return false;
+    return hasUserFinancialData(JSON.parse(raw));
+  } catch {
+    return false;
+  }
+}
+
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    const data = raw
+    let data = raw
       ? deepMerge(structuredClone(DEFAULT), JSON.parse(raw))
       : structuredClone(DEFAULT);
     ensureBudgetStructure(data);
     migrateBudgetModel(data);
+    data = tryRestoreSafetyBackup(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -93,10 +156,16 @@ export function load() {
 export function save(data) {
   data.version = DATA_VERSION;
   localStorage.setItem(KEY, JSON.stringify(data));
+  saveSafetyBackup(data);
 }
 
 export function getVisibleCategories(data) {
   return data.budget.categories.filter((c) => !c.hidden && !data.settings.hiddenCategories.includes(c.id));
+}
+
+export function getHiddenCategories(data) {
+  const visibleIds = new Set(getVisibleCategories(data).map((c) => c.id));
+  return data.budget.categories.filter((c) => !visibleIds.has(c.id));
 }
 
 export function computeNetWorth(data, ownerFilter = 'all') {

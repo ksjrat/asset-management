@@ -1,4 +1,5 @@
 import { state, persist } from '../state.js';
+import { hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData } from '../store.js';
 import { getBudgetStart } from '../budget-engine.js';
 import { isSyncEnabled, getSyncStatus, hasCloudPassphraseSession, setCloudPassphraseSession } from '../sync.js';
 import { syncManualRefresh, syncEnsureHousehold } from '../sync-service.js';
@@ -60,6 +61,10 @@ export function renderSettings() {
       </button>` : ''}
       ${syncOn ? `<button type="button" class="settings-row" id="btn-sync-refresh">
         <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기에서 받아오기</span></span>
+        <span class="settings-chevron">›</span>
+      </button>` : ''}
+      ${hasSafetyBackup() && !hasUserFinancialData(state.data) ? `<button type="button" class="settings-row" id="btn-restore-backup">
+        <span><strong>백업에서 복구</strong><span class="settings-row-meta">이 기기에 저장된 최근 백업</span></span>
         <span class="settings-chevron">›</span>
       </button>` : ''}
     </div>
@@ -135,8 +140,10 @@ export function bindSettings() {
   document.getElementById('btn-cloud-pass')?.addEventListener('click', async () => {
     const res = await openModal({
       title: '가족 암호',
-      body: `<p class="field-hint">클라우드에 올리는 데이터를 암호화합니다. 배우자·다른 기기에도 <strong>같은 암호</strong>를 입력하세요. 앱 소스는 공개되어도 암호 없이는 읽을 수 없습니다.</p>
-        ${formField('가족 암호', '<input class="input" name="pass" type="password" minlength="6" autocomplete="off" required />')}`,
+      body: `<form id="cloud-pass-form" class="form-stack" autocomplete="off">
+        <p class="field-hint">클라우드에 올리는 데이터를 암호화합니다. 배우자·다른 기기에도 <strong>같은 암호</strong>를 입력하세요.</p>
+        ${formField('가족 암호', '<input class="input" name="pass" type="password" minlength="6" autocomplete="new-password" required />')}
+      </form>`,
       actions: [{ label: '취소', value: null }, { label: '확인', value: 'save', primary: true }],
     });
     if (modalValue(res) !== 'save') return;
@@ -157,6 +164,22 @@ export function bindSettings() {
     }
     const ok = await syncManualRefresh();
     toast(ok ? '동기화되었습니다' : '동기화할 수 없습니다', ok ? 'success' : 'error');
+  });
+  document.getElementById('btn-restore-backup')?.addEventListener('click', async () => {
+    if (!(await confirmDialog('백업 복구', '이 기기에 저장된 최근 백업으로 되돌릴까요?'))) return;
+    const backup = restoreFromSafetyBackup();
+    if (!backup) {
+      toast('복구할 백업이 없습니다', 'error');
+      return;
+    }
+    backup.auth.loggedIn = state.data.auth.loggedIn;
+    backup.auth.userName = state.data.auth.userName || backup.auth.userName;
+    backup.auth.userEmail = state.data.auth.userEmail || backup.auth.userEmail;
+    backup.auth.onboardingDone = true;
+    state.data = backup;
+    persist();
+    toast('백업에서 복구했습니다', 'success');
+    rerender();
   });
   document.getElementById('btn-budget-start')?.addEventListener('click', () => {
     showBudgetStartForm(rerender);

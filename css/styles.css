@@ -1015,7 +1015,21 @@ body.modal-open { overflow: hidden; }
 .goal-impact.warn { color: var(--danger); }
 .timeline-item { font-size: 0.85rem; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .cat-manage-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.cat-manage-row.hidden-cat { opacity: 0.55; }
+.cat-manage-panel .list-group:last-child .cat-manage-row:last-child { border-bottom: none; }
+.cat-manage-toggle-hidden {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+}
+.cat-manage-section-label {
+  font-size: 0.75rem;
+  margin: 10px 0 4px;
+  letter-spacing: 0.02em;
+}
+.cat-manage-hidden-section { margin-top: 4px; }
+.cat-manage-hidden-section .cat-manage-row { opacity: 0.65; }
+.cat-manage-empty { padding: 8px 0; margin: 0; }
 .btn-row-inline { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ── UI/UX refresh (fintech-style) ── */

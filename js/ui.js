@@ -22,8 +22,22 @@ export function openModal({ title, body, actions = [], onOpen }) {
     const actionsEl = overlay.querySelector('.modal-actions');
     const snapshotForm = () => {
       const form = sheet.querySelector('form');
-      if (!form) return null;
-      return Object.fromEntries(new FormData(form).entries());
+      if (form) return Object.fromEntries(new FormData(form).entries());
+      const body = sheet.querySelector('.modal-body');
+      if (!body) return null;
+      const fields = body.querySelectorAll('input[name], select[name], textarea[name]');
+      if (!fields.length) return null;
+      const entries = [];
+      for (const el of fields) {
+        if (el.type === 'checkbox') {
+          if (el.checked) entries.push([el.name, el.value || 'on']);
+        } else if (el.type === 'radio') {
+          if (el.checked) entries.push([el.name, el.value]);
+        } else {
+          entries.push([el.name, el.value]);
+        }
+      }
+      return Object.fromEntries(entries);
     };
     const finish = (value) => {
       if (overlay.dataset.closing) return;

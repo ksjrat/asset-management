@@ -1,6 +1,6 @@
 import { state, persist } from '../state.js';
 import {
-  ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories,
+  ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getHiddenCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
   addCategory,
 } from '../store.js';
@@ -356,52 +356,101 @@ export async function showBudgetForm(y, m, rerender) {
   persist(); toast('월간 예산이 저장되었습니다', 'success'); rerender();
 }
 
-export async function showCategoryManage(rerender) {
-  const cats = state.data.budget.categories;
-    const rows = cats.map((c) =>
-      `<div class="cat-manage-row ${c.hidden ? 'hidden-cat' : ''}">
-        <span>${esc(c.name)}${c.hidden ? ' (숨김)' : ''}</span>
-        <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
-      </div>`).join('');
-  const res = await openModal({
-      title: '카테고리 관리',
-      body: `<div class="list-group">${rows}</div>`,
-      actions: [
-        { label: '카테고리 추가', value: 'add' },
-        { label: '닫기', value: null, primary: true },
-      ],
-      onOpen: (sheet) => {
-        sheet.querySelectorAll('[data-cat-edit]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const cat = cats.find((c) => c.id === btn.dataset.catEdit);
-            if (!cat) return;
-            const editRes = await openModal({
-              title: '카테고리 편집',
-              body: `<form id="cat-form" class="form-stack">
-                ${formField('이름', `<input class="input" name="name" value="${esc(cat.name)}" required />`)}
-                <label class="toggle-row"><span>숨김</span>
-                  <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
-                ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
-              </form>`,
-              actions: [
-                { label: '숨김', value: 'delete', danger: true },
-                { label: '저장', value: 'save', primary: true },
-              ],
-            });
-            const ea = modalValue(editRes);
-            if (ea === 'delete') { cat.hidden = true; persist(); toast('숨김 처리'); rerender(); showCategoryManage(rerender); return; }
-            if (ea !== 'save') return;
-            const efd = modalForm(editRes);
-            if (!efd) return;
-            cat.name = efd.get('name');
-            cat.hidden = !!efd.get('hidden');
-            const rd = efd.get('recordDay');
-            cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
-            persist(); toast('저장됨', 'success'); rerender(); showCategoryManage(rerender);
-          });
-        });
-      },
+function categoryManageRows(cats) {
+  return cats.map((c) =>
+    `<div class="cat-manage-row">
+      <span>${esc(c.name)}</span>
+      <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
+    </div>`).join('');
+}
+
+function setCategoryHidden(data, cat, hidden) {
+  cat.hidden = hidden;
+  if (!hidden) {
+    const ids = data.settings.hiddenCategories;
+    const i = ids.indexOf(cat.id);
+    if (i >= 0) ids.splice(i, 1);
+  }
+}
+
+async function openCategoryEdit(cat, rerender) {
+  const editRes = await openModal({
+    title: '카테고리 편집',
+    body: `<form id="cat-form" class="form-stack">
+      ${formField('이름', `<input class="input" name="name" value="${esc(cat.name)}" required />`)}
+      <label class="toggle-row"><span>숨김</span>
+        <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
+      ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
+    </form>`,
+    actions: [
+      { label: '숨기기', value: 'delete', danger: true },
+      { label: '저장', value: 'save', primary: true },
+    ],
+  });
+  const ea = modalValue(editRes);
+  if (ea === 'delete') {
+    setCategoryHidden(state.data, cat, true);
+    persist();
+    toast('숨김 처리');
+    rerender();
+    showCategoryManage(rerender);
+    return;
+  }
+  if (ea !== 'save') return;
+  const efd = modalForm(editRes);
+  if (!efd) return;
+  cat.name = efd.get('name');
+  setCategoryHidden(state.data, cat, !!efd.get('hidden'));
+  const rd = efd.get('recordDay');
+  cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
+  persist();
+  toast('저장됨', 'success');
+  rerender();
+  showCategoryManage(rerender);
+}
+
+function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
+  sheet.querySelectorAll('[data-cat-edit]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const cat = allCats.find((c) => c.id === btn.dataset.catEdit);
+      if (cat) await openCategoryEdit(cat, rerender);
     });
+  });
+  const toggle = sheet.querySelector('#btn-toggle-hidden-cats');
+  const section = sheet.querySelector('.cat-manage-hidden-section');
+  if (!toggle || !section) return;
+  toggle.addEventListener('click', () => {
+    section.classList.toggle('hidden');
+    toggle.textContent = section.classList.contains('hidden')
+      ? `숨긴 항목 ${hiddenCount}개 보기`
+      : '숨긴 항목 접기';
+  });
+}
+
+export async function showCategoryManage(rerender) {
+  const allCats = state.data.budget.categories;
+  const visibleCats = getVisibleCategories(state.data);
+  const hiddenCats = getHiddenCategories(state.data);
+  const visibleRows = categoryManageRows(visibleCats);
+  const hiddenBlock = hiddenCats.length
+    ? `<button type="button" class="text-btn cat-manage-toggle-hidden" id="btn-toggle-hidden-cats">숨긴 항목 ${hiddenCats.length}개 보기</button>
+       <div class="cat-manage-hidden-section hidden">
+         <p class="cat-manage-section-label muted">숨긴 항목</p>
+         <div class="list-group">${categoryManageRows(hiddenCats)}</div>
+       </div>`
+    : '';
+  const res = await openModal({
+    title: '카테고리 관리',
+    body: `<div class="cat-manage-panel">
+      <div class="list-group">${visibleRows || '<p class="muted cat-manage-empty">사용 중인 카테고리가 없습니다.</p>'}</div>
+      ${hiddenBlock}
+    </div>`,
+    actions: [
+      { label: '카테고리 추가', value: 'add' },
+      { label: '닫기', value: null, primary: true },
+    ],
+    onOpen: (sheet) => bindCategoryManageSheet(sheet, allCats, hiddenCats.length, rerender),
+  });
   if (modalValue(res) === 'add') {
     const addRes = await openModal({
       title: '카테고리 추가',
