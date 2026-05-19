@@ -20,10 +20,22 @@ async function bootstrap() {
   });
 }
 
+function isLocalDevHost() {
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1'
+    || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h);
+}
+
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  });
+  if (isLocalDevHost()) {
+    navigator.serviceWorker.getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .catch(() => {});
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
 }
 
 window.addEventListener('error', (e) => {

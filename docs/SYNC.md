@@ -58,13 +58,16 @@ service cloud.firestore {
 
 3. `main`에 push → Actions가 `js/sync-config.js`를 만들어 Pages에 포함  
 
-로컬 개발만 할 때는 예전처럼:
+### 로컬 개발 (`localhost:8080`)
 
-```bash
-cp js/sync-config.example.js js/sync-config.js
-```
+로컬에는 GitHub 시크릿이 적용되지 않습니다. **`js/sync-config.js`** 가 있어야 클라우드가 켜집니다.
 
-`SYNC_ENABLED = true` 와 `firebaseConfig` 를 채웁니다.
+1. 프로젝트 폴더에서 **`setup-sync-local.bat`** 실행 (또는 `js\sync-config.example.js` → `js\sync-config.js` 복사)
+2. `js/sync-config.js` 에 Firebase `firebaseConfig` 붙여넣기, `SYNC_ENABLED = true`
+3. `start-server.bat` 다시 실행 → http://localhost:8080
+4. **설정 → 연동 도우미** 에서 **클라우드: 연결됨** 확인
+
+배포 사이트(`github.io`)와 데이터를 맞추려면 **같은 Firebase 프로젝트** 설정을 쓰면 됩니다.
 
 ### 3. 가족 암호
 

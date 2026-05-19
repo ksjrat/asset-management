@@ -8,6 +8,34 @@ import { openModal, toast, esc, copyText, formField, modalValue, modalForm } fro
 
 const DISMISS_KEY = 'link-wizard-dismissed';
 
+function isLocalDevHost() {
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h);
+}
+
+function cloudOffHint() {
+  if (isSyncEnabled()) return '연결됨';
+  return isLocalDevHost()
+    ? '미설정 (js/sync-config.js)'
+    : '미설정 (FIREBASE_CONFIG 시크릿)';
+}
+
+function cloudOffCalloutHtml() {
+  if (isLocalDevHost()) {
+    return `<div class="link-callout">
+          <p><strong>로컬에서는 Firebase 설정 파일이 필요합니다.</strong></p>
+          <p class="muted">프로젝트 폴더에서 <code>setup-sync-local.bat</code> 실행 후, <code>js/sync-config.js</code>에 Firebase 값을 넣고 서버를 다시 시작하세요. 자세한 내용은 docs/SYNC.md 「로컬 개발」을 참고하세요.</p>
+          <p class="muted">배포 사이트(<code>github.io</code>)와 동기화하려면 <strong>같은 Firebase 프로젝트</strong> 설정을 쓰면 됩니다.</p>
+          <p class="muted">설정 전까지는 가족 코드만 발급·공유할 수 있고, 기기 간 자동 동기화는 되지 않습니다.</p>
+        </div>`;
+  }
+  return `<div class="link-callout">
+          <p><strong>클라우드가 아직 이 주소에 없습니다.</strong></p>
+          <p class="muted">GitHub Pages를 쓰는 경우, 저장소 시크릿 <code>FIREBASE_CONFIG</code>가 필요합니다. docs/SYNC.md 참고.</p>
+          <p class="muted">그 전까지는 가족 코드만 발급·공유할 수 있고, 기기 간 자동 동기화는 되지 않습니다.</p>
+        </div>`;
+}
+
 export function getLinkSteps() {
   const syncOn = isSyncEnabled();
   const code = state.data.auth.householdId || state.data.auth.inviteCode;
@@ -16,7 +44,7 @@ export function getLinkSteps() {
     {
       id: 'cloud',
       label: '클라우드',
-      hint: syncOn ? '연결됨' : '미설정 (GitHub FIREBASE_CONFIG)',
+      hint: cloudOffHint(),
       done: syncOn,
       required: syncOn,
     },
@@ -154,11 +182,7 @@ export async function openLinkWizard() {
       body: `
         <p class="modal-text">PC·폰·배우자가 <strong>같은 데이터</strong>를 보려면 아래를 순서대로 맞춥니다.</p>
         ${checklistHtml()}
-        ${!syncOn ? `<div class="link-callout">
-          <p><strong>클라우드가 아직 이 주소에 없습니다.</strong></p>
-          <p class="muted">GitHub Pages를 쓰는 경우, 저장소에 Firebase 설정(<code>FIREBASE_CONFIG</code> 시크릿)이 필요합니다. docs/SYNC.md 참고.</p>
-          <p class="muted">그 전까지는 가족 코드만 발급·공유할 수 있고, 기기 간 자동 동기화는 되지 않습니다.</p>
-        </div>` : ''}
+        ${!syncOn ? cloudOffCalloutHtml() : ''}
       `,
       actions: [
         { label: '나중에', value: 'later' },
