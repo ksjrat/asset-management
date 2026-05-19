@@ -1,5 +1,5 @@
 import { state, persist } from './state.js';
-import { generateInviteCode } from './store.js';
+import { generateInviteCode, HOUSEHOLD_CODE_LENGTH } from './store.js';
 import {
   isSyncEnabled, hasCloudPassphraseSession, setCloudPassphraseSession, joinHousehold,
 } from './sync.js';
@@ -109,8 +109,8 @@ async function ensureCode() {
 
 async function applyJoinCode(code) {
   const upper = code.trim().toUpperCase();
-  if (!upper || upper.length < 4) {
-    toast('4자 이상의 가족 코드를 입력하세요', 'error');
+  if (!upper || upper.length < HOUSEHOLD_CODE_LENGTH) {
+    toast(`${HOUSEHOLD_CODE_LENGTH}자리 가족 코드를 입력하세요`, 'error');
     return false;
   }
   const own = state.data.auth.inviteCode;
@@ -217,7 +217,7 @@ export async function openLinkWizard() {
         title: '1. 가족 코드 입력',
         body: `<form id="link-join-form" class="form-stack">
           <p class="field-hint">코드를 보낸 쪽(폰·PC)과 <strong>같은 앱 주소</strong>로 접속했는지 확인하세요.</p>
-          ${formField('가족 코드', '<input class="input" name="code" type="text" placeholder="ABC123" maxlength="8" style="text-transform:uppercase" required />')}
+          ${formField('가족 코드', `<input class="input" name="code" type="text" placeholder="ABC123" maxlength="12" minlength="${HOUSEHOLD_CODE_LENGTH}" style="text-transform:uppercase" required />`)}
         </form>`,
         actions: [{ label: '뒤로', value: 'back' }, { label: '다음', value: 'next', primary: true }],
       });

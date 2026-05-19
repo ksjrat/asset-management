@@ -246,10 +246,14 @@ export function createSnapshot(data, year, month) {
   return snap;
 }
 
+/** Firestore household 문서 ID · 가족 코드 길이 (신규 발급) */
+export const HOUSEHOLD_CODE_LENGTH = 6;
+
+const HOUSEHOLD_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
 export function generateInviteCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+  const bytes = crypto.getRandomValues(new Uint8Array(HOUSEHOLD_CODE_LENGTH));
+  return Array.from(bytes, (b) => HOUSEHOLD_CODE_ALPHABET[b % HOUSEHOLD_CODE_ALPHABET.length]).join('');
 }
 
 export function addCategory(data, name, recordDay = null) {
