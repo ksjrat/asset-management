@@ -15,7 +15,24 @@ export function initUI() {
   modalEl = document.getElementById('modal-root');
 }
 
-export function openModal({ title, body, actions = [], onOpen }) {
+function setModalFormError(sheet, message) {
+  const body = sheet.querySelector('.modal-body');
+  if (!body) return;
+  let el = body.querySelector('.modal-form-error');
+  if (!message) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('p');
+    el.className = 'modal-form-error';
+    el.setAttribute('role', 'alert');
+    body.prepend(el);
+  }
+  el.textContent = message;
+}
+
+export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -55,13 +72,35 @@ export function openModal({ title, body, actions = [], onOpen }) {
       closeModal(overlay);
       resolve(form ? { value, form } : value);
     };
+    const tryFinish = (value) => {
+      const form = snapshotForm();
+      if (beforeFinish) {
+        const err = beforeFinish(value, form);
+        if (err) {
+          setModalFormError(sheet, err);
+          (sheet.querySelector('input[name="pass"]') || sheet.querySelector('input'))?.focus();
+          return;
+        }
+      }
+      setModalFormError(sheet, '');
+      finish(value);
+    };
     for (const act of actions) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = `btn ${act.primary ? 'btn-primary' : act.danger ? 'btn-danger' : 'btn-ghost'}`;
       btn.textContent = act.label;
-      btn.addEventListener('click', () => finish(act.value ?? act.label));
+      btn.addEventListener('click', () => tryFinish(act.value ?? act.label));
       actionsEl.appendChild(btn);
+    }
+    const formEl = sheet.querySelector('form');
+    if (formEl) {
+      formEl.setAttribute('novalidate', '');
+      formEl.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const primary = actions.find((a) => a.primary);
+        if (primary) tryFinish(primary.value ?? primary.label);
+      });
     }
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) finish(null);

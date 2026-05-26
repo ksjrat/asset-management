@@ -7,6 +7,18 @@ import { syncEnsureHousehold, syncJoinHousehold, syncManualRefresh, ensureSyncRe
 import { openModal, toast, esc, copyText, formField, modalValue, modalForm } from './ui.js';
 
 const DISMISS_KEY = 'link-wizard-dismissed';
+const HOUSEHOLD_PASS_MIN = 4;
+
+function validateHouseholdPassForm(form) {
+  if (!form) return '입력 내용을 확인해 주세요.';
+  const p1 = (form.pass ?? '').toString();
+  const p2 = (form.pass2 ?? '').toString();
+  if (!p1 || p1.length < HOUSEHOLD_PASS_MIN) {
+    return `가족 암호는 ${HOUSEHOLD_PASS_MIN}자 이상이어야 합니다.`;
+  }
+  if (p1 !== p2) return '암호가 서로 다릅니다. 다시 입력해 주세요.';
+  return null;
+}
 
 function isLocalDevHost() {
   const h = location.hostname;
@@ -58,7 +70,7 @@ export function getLinkSteps() {
     {
       id: 'pass',
       label: '가족 암호',
-      hint: hasPass ? '이 기기에 입력됨' : '6자 이상, 모든 기기 동일',
+      hint: hasPass ? '이 기기에 입력됨' : `${HOUSEHOLD_PASS_MIN}자 이상, 모든 기기 동일`,
       done: hasPass,
       required: syncOn,
     },
@@ -159,10 +171,7 @@ async function applyJoinCode(code) {
 }
 
 async function savePassphrase(pass) {
-  if (!pass || pass.length < 6) {
-    toast('6자 이상 입력하세요', 'error');
-    return false;
-  }
+  if (!pass || pass.length < HOUSEHOLD_PASS_MIN) return false;
   setCloudPassphraseSession(pass);
   await syncEnsureHousehold();
   return true;
@@ -254,21 +263,17 @@ export async function openLinkWizard() {
       const passStep = await openModal({
         title: '2. 가족 암호',
         body: `<form id="link-pass-form" class="form-stack" autocomplete="off">
-          <p class="field-hint">클라우드 데이터를 암호화합니다. <strong>모든 기기에 같은 암호</strong>를 씁니다.</p>
-          ${formField('가족 암호', '<input class="input" name="pass" type="password" minlength="6" autocomplete="new-password" required />')}
-          ${formField('한 번 더', '<input class="input" name="pass2" type="password" minlength="6" autocomplete="new-password" required />')}
+          <p class="field-hint">클라우드 데이터를 암호화합니다. <strong>모든 기기에 같은 암호</strong>를 씁니다. (${HOUSEHOLD_PASS_MIN}자 이상)</p>
+          ${formField('가족 암호', '<input class="input" name="pass" type="password" autocomplete="new-password" />')}
+          ${formField('한 번 더', '<input class="input" name="pass2" type="password" autocomplete="new-password" />')}
         </form>`,
         actions: [{ label: '뒤로', value: 'back' }, { label: '다음', value: 'next', primary: true }],
+        beforeFinish: (value, form) => (value === 'next' ? validateHouseholdPassForm(form) : null),
       });
       if (modalValue(passStep) === 'back') { role = null; continue; }
-      const fd = modalForm(passStep);
-      const p1 = fd?.get('pass')?.toString();
-      const p2 = fd?.get('pass2')?.toString();
-      if (p1 !== p2) {
-        toast('암호가 서로 다릅니다', 'error');
-        continue;
-      }
-      if (!(await savePassphrase(p1 || ''))) continue;
+      if (modalValue(passStep) !== 'next') continue;
+      const p1 = modalForm(passStep)?.get('pass')?.toString() || '';
+      if (!(await savePassphrase(p1))) continue;
     } else if (!syncOn) {
       state.data.auth.spouseConnected = true;
       persist();
