@@ -7,6 +7,8 @@ import {
 
 export {
   setCloudPassphraseSession, hasCloudPassphraseSession, clearCloudPassphraseSession,
+  persistCloudPassphrase, restoreCloudPassphrase, clearStoredCloudPassphrase,
+  hasStoredCloudPassphrase,
 } from './sync-crypto.js';
 
 const FIREBASE_VER = '10.14.1';

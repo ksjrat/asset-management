@@ -1,6 +1,7 @@
 /** 클라우드 저장 전 AES-GCM 암호화 (가족 암호) */
 
 const ENC_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const PASS_STORE_KEY = 'couple-asset-cloud-pass';
 
 let sessionPassphrase = null;
 
@@ -18,6 +19,49 @@ export function setCloudPassphraseSession(passphrase) {
 
 export function clearCloudPassphraseSession() {
   sessionPassphrase = null;
+}
+
+/** 이 기기에 가족 암호 기억 (새로고침 후에도 자동 동기화) */
+export function persistCloudPassphrase(passphrase, householdId) {
+  if (!passphrase || !householdId) return;
+  setCloudPassphraseSession(passphrase);
+  try {
+    localStorage.setItem(PASS_STORE_KEY, JSON.stringify({
+      hid: householdId,
+      pass: passphrase,
+    }));
+  } catch { /* quota */ }
+}
+
+export function restoreCloudPassphrase(householdId) {
+  if (!householdId) return false;
+  try {
+    const raw = localStorage.getItem(PASS_STORE_KEY);
+    if (!raw) return false;
+    const stored = JSON.parse(raw);
+    if (stored?.hid !== householdId || !stored?.pass) return false;
+    setCloudPassphraseSession(stored.pass);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearStoredCloudPassphrase() {
+  try { localStorage.removeItem(PASS_STORE_KEY); } catch { /* ignore */ }
+  clearCloudPassphraseSession();
+}
+
+export function hasStoredCloudPassphrase(householdId) {
+  if (!householdId) return false;
+  try {
+    const raw = localStorage.getItem(PASS_STORE_KEY);
+    if (!raw) return false;
+    const stored = JSON.parse(raw);
+    return stored?.hid === householdId && !!stored?.pass;
+  } catch {
+    return false;
+  }
 }
 
 function b64(bytes) {

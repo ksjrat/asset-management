@@ -13,6 +13,7 @@ import { showBudgetStartForm } from './modals.js';
 import {
   getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
 } from '../link-wizard.js';
+import { isCloudSyncActive } from '../sync-service.js';
 import { applyAppUpdate, checkAppUpdateAvailable } from '../app-update.js';
 import {
   canPromptInstall, getPwaInstallHint, pwaInstallInstructionsHtml, tryPwaInstall,
@@ -32,6 +33,7 @@ function homeFilterSummary(filterIds) {
 }
 
 function linkSectionSummary(linkDone) {
+  if (isCloudSyncActive()) return '자동 동기화 켜짐';
   return linkDone ? '연동 완료' : linkStatusLabel();
 }
 
@@ -80,7 +82,7 @@ export function renderSettings() {
             </li>`).join('')}
         </ul>
         ${syncOn && linkDone ? `<button type="button" class="settings-row" id="btn-sync-refresh">
-          <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기와 다시 맞추기</span></span>
+          <span><strong>지금 맞추기</strong><span class="settings-row-meta">${isCloudSyncActive() ? '수동으로 다시 맞춤' : '동기화 시작'}</span></span>
           <span class="settings-chevron">›</span>
         </button>` : ''}
         ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
