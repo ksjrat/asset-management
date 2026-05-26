@@ -21,6 +21,28 @@ function linkStatusLabel() {
   return `${done}/${steps.length}단계`;
 }
 
+function homeFilterSummary(filterIds) {
+  const set = new Set(filterIds || []);
+  const labels = HOME_OWNER_FILTERS.filter((o) => set.has(o.id)).map((o) => o.label);
+  return labels.length ? labels.join(', ') : '선택 없음';
+}
+
+function linkSectionSummary(linkDone) {
+  return linkDone ? '연동 완료' : linkStatusLabel();
+}
+
+function bindSettingsDisclosure(toggleId, panelId) {
+  const toggle = document.getElementById(toggleId);
+  const panel = document.getElementById(panelId);
+  if (!toggle || !panel) return;
+  toggle.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+    toggle.classList.toggle('is-open', !open);
+    panel.hidden = open;
+  });
+}
+
 export function renderSettings() {
   const a = state.data.auth;
   ensureAppSettings(state.data);
@@ -32,26 +54,35 @@ export function renderSettings() {
   const linkDone = isLinkComplete();
 
   return `
-    <div class="settings-group settings-group--highlight">
-      <p class="settings-group-title">기기·배우자 연동</p>
-      <button type="button" class="settings-row" id="btn-link-wizard">
-        <span><strong>연동 도우미</strong><span class="settings-row-meta">${linkDone ? '완료 · 다시 설정' : linkStatusLabel()}</span></span>
-        <span class="settings-chevron">›</span>
+    <div class="settings-group settings-group--highlight settings-group--disclosure">
+      <button type="button" class="settings-row settings-disclosure" id="btn-link-section-toggle"
+        aria-expanded="false" aria-controls="link-section-panel">
+        <span>
+          <strong>기기·배우자 연동</strong>
+          <span class="settings-row-meta">${esc(linkSectionSummary(linkDone))}</span>
+        </span>
+        <span class="settings-chevron settings-disclosure-chevron" aria-hidden="true">›</span>
       </button>
-      <ul class="link-checklist link-checklist--compact">
-        ${getLinkSteps().filter((st) => st.required).map((st) => `
-          <li class="link-check-item ${st.done ? 'done' : ''}">
-            <span class="link-check-mark">${st.done ? '✓' : '○'}</span>
-            <span>${esc(st.label)}</span>
-          </li>`).join('')}
-      </ul>
-      ${syncOn && linkDone ? `<button type="button" class="settings-row" id="btn-sync-refresh">
-        <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기와 다시 맞추기</span></span>
-        <span class="settings-chevron">›</span>
-      </button>` : ''}
-      ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
-        <span><strong>배우자 연결 해제</strong></span><span class="settings-chevron">›</span>
-      </button>` : ''}
+      <div id="link-section-panel" class="settings-disclosure-panel" hidden>
+        <button type="button" class="settings-row" id="btn-link-wizard">
+          <span><strong>연동 도우미</strong><span class="settings-row-meta">${linkDone ? '다시 설정' : '단계별 안내'}</span></span>
+          <span class="settings-chevron">›</span>
+        </button>
+        <ul class="link-checklist link-checklist--compact">
+          ${getLinkSteps().filter((st) => st.required).map((st) => `
+            <li class="link-check-item ${st.done ? 'done' : ''}">
+              <span class="link-check-mark">${st.done ? '✓' : '○'}</span>
+              <span>${esc(st.label)}</span>
+            </li>`).join('')}
+        </ul>
+        ${syncOn && linkDone ? `<button type="button" class="settings-row" id="btn-sync-refresh">
+          <span><strong>지금 동기화</strong><span class="settings-row-meta">다른 기기와 다시 맞추기</span></span>
+          <span class="settings-chevron">›</span>
+        </button>` : ''}
+        ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
+          <span><strong>배우자 연결 해제</strong></span><span class="settings-chevron">›</span>
+        </button>` : ''}
+      </div>
     </div>
 
     <div class="settings-group">
@@ -74,13 +105,22 @@ export function renderSettings() {
       </button>
     </div>` : ''}
 
-    <div class="settings-group">
-      <p class="settings-group-title">홈 화면</p>
-      <p class="muted settings-hint">순자산·추이 위에 표시할 소유자 필터를 고릅니다. 하나만 켜두면 필터 버튼이 숨겨집니다.</p>
-      ${HOME_OWNER_FILTERS.map((o) => `
-        <label class="toggle-row"><span>${esc(o.label)}</span>
-          <input type="checkbox" class="home-owner-filter" data-owner-filter="${o.id}"
-            ${homeFilters.has(o.id) ? 'checked' : ''} /></label>`).join('')}
+    <div class="settings-group settings-group--disclosure">
+      <button type="button" class="settings-row settings-disclosure" id="btn-home-filter-toggle"
+        aria-expanded="false" aria-controls="home-filter-panel">
+        <span>
+          <strong>홈 화면 필터</strong>
+          <span class="settings-row-meta" id="home-filter-summary">${esc(homeFilterSummary(s.homeOwnerFilters))}</span>
+        </span>
+        <span class="settings-chevron settings-disclosure-chevron" aria-hidden="true">›</span>
+      </button>
+      <div id="home-filter-panel" class="settings-disclosure-panel" hidden>
+        <p class="muted settings-hint">순자산·추이 위에 표시할 소유자 필터를 고릅니다. 하나만 켜두면 홈에서 필터 버튼이 숨겨집니다.</p>
+        ${HOME_OWNER_FILTERS.map((o) => `
+          <label class="toggle-row"><span>${esc(o.label)}</span>
+            <input type="checkbox" class="home-owner-filter" data-owner-filter="${o.id}"
+              ${homeFilters.has(o.id) ? 'checked' : ''} /></label>`).join('')}
+      </div>
     </div>
 
     <div class="settings-group">
@@ -140,6 +180,9 @@ export function bindSettings() {
     state.data.settings.lockOnLaunch = e.target.checked; persist();
   });
 
+  bindSettingsDisclosure('btn-link-section-toggle', 'link-section-panel');
+  bindSettingsDisclosure('btn-home-filter-toggle', 'home-filter-panel');
+
   document.querySelectorAll('.home-owner-filter').forEach((el) => {
     el.addEventListener('change', () => {
       const checked = [...document.querySelectorAll('.home-owner-filter:checked')]
@@ -153,6 +196,8 @@ export function bindSettings() {
       if (!checked.includes(state.ownerFilter)) {
         state.ownerFilter = checked[0];
       }
+      const summaryEl = document.getElementById('home-filter-summary');
+      if (summaryEl) summaryEl.textContent = homeFilterSummary(checked);
       persist();
       toast('홈 화면 필터가 저장되었습니다', 'success');
     });

@@ -1318,6 +1318,27 @@ body.modal-open { overflow: hidden; }
   background: var(--primary-soft);
   border: 1px solid rgba(26, 92, 68, 0.12);
 }
+
+.settings-disclosure { width: 100%; }
+.settings-disclosure-chevron {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.settings-disclosure.is-open .settings-disclosure-chevron {
+  transform: rotate(90deg);
+}
+.settings-disclosure-panel .settings-hint {
+  padding-top: 0;
+}
+.settings-disclosure-panel .toggle-row:last-child {
+  border-bottom: none;
+}
+.settings-disclosure-panel .link-checklist--compact {
+  margin: 0 16px 12px;
+}
+.settings-disclosure-panel .settings-row:last-child {
+  border-bottom: none;
+}
 .link-checklist {
   list-style: none;
   margin: 0 16px 12px;
