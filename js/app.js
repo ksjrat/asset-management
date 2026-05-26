@@ -16,9 +16,7 @@ async function bootstrap() {
   initPwaInstall();
   renderApp();
   setupCloudSync().then((ok) => {
-    if (ok && state.data.auth.onboardingDone) {
-      import('./views/index.js').then((m) => m.renderApp());
-    }
+    if (ok) import('./views/index.js').then((m) => m.renderApp());
   });
 }
 

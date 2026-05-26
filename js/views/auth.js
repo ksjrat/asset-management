@@ -1,7 +1,6 @@
 import { state, persist } from '../state.js';
 import { recordPolicyConsent, HOUSEHOLD_CODE_LENGTH } from '../store.js';
 import { connectJoinHousehold } from '../link-wizard.js';
-import { isSyncEnabled } from '../sync.js';
 import { esc, formField, toast } from '../ui.js';
 
 function policySummaryHtml() {
@@ -17,55 +16,56 @@ function policySummaryHtml() {
 }
 
 function welcomeLinkFieldsHtml() {
-  const syncOn = isSyncEnabled();
-  const passFields = syncOn ? `
-      ${formField('가족 암호', '<input class="input" name="pass" type="password" autocomplete="current-password" />')}
-      <p class="field-hint muted">배우자·다른 기기와 <strong>같은 암호</strong>를 씁니다.</p>`
-    : '<p class="field-hint muted">클라우드가 꺼져 있으면 코드만 맞춥니다.</p>';
   return `
     <form id="auth-welcome-form" class="auth-form auth-link-block">
       <p class="auth-link-label">이미 가족 코드가 있어요</p>
       ${formField('가족 코드', `<input class="input" name="code" type="text" inputmode="text" autocomplete="off"
         placeholder="${HOUSEHOLD_CODE_LENGTH}자리" maxlength="12" style="text-transform:uppercase" required />`)}
-      ${passFields}
+      ${formField('가족 암호', '<input class="input" name="pass" type="password" autocomplete="current-password" required />')}
+      <p class="field-hint muted">배우자·다른 기기와 <strong>같은 암호</strong>를 씁니다.</p>
     </form>`;
+}
+
+function welcomeActionsHtml({ returning }) {
+  if (returning) {
+    return `
+        <div class="auth-actions">
+          <button type="button" class="btn btn-primary btn-block" data-auth="link-start">연동하기</button>
+          <button type="button" class="btn btn-ghost btn-block" data-auth="resume">앱으로 들어가기</button>
+        </div>`;
+  }
+  return `
+        <div class="auth-actions">
+          <button type="button" class="btn btn-primary btn-block" data-auth="link-start">연동하고 시작</button>
+          <div class="auth-divider"><span>또는</span></div>
+          <button type="button" class="btn btn-ghost btn-block" data-auth="solo-start">혼자 시작 · 나중에 연동</button>
+        </div>`;
+}
+
+function welcomePolicyHtml({ returning }) {
+  if (returning && state.data.auth.policyAccepted) return '';
+  return `
+        ${policySummaryHtml()}
+        <label class="policy-agree">
+          <input type="checkbox" id="auth-policy-agree" ${returning && state.data.auth.policyAccepted ? 'checked' : ''} />
+          <span>위 방침에 동의합니다</span>
+        </label>`;
 }
 
 export function renderAuth() {
   const s = state.authScreen;
   if (s === 'welcome') {
-    const done = state.data.auth.onboardingDone;
-    if (done) {
-      return `
-        <div class="auth-screen">
-          <div class="auth-hero auth-hero--compact">
-            <div class="auth-logo">💑</div>
-            <h1>우리 자산</h1>
-            <p class="muted">다시 오신 것을 환영해요</p>
-          </div>
-          <div class="auth-actions">
-            <button type="button" class="btn btn-primary btn-block" data-auth="resume">앱으로 들어가기</button>
-          </div>
-        </div>`;
-    }
+    const returning = state.data.auth.onboardingDone;
     return `
       <div class="auth-screen">
         <div class="auth-hero auth-hero--compact">
           <div class="auth-logo">💑</div>
           <h1>우리 자산</h1>
-          <p class="muted">순자산·예산·목표를 함께 관리해요</p>
+          <p class="muted">${returning ? '다시 오신 것을 환영해요' : '순자산·예산·목표를 함께 관리해요'}</p>
         </div>
         ${welcomeLinkFieldsHtml()}
-        <div class="auth-actions">
-          <button type="button" class="btn btn-primary btn-block" data-auth="link-start">연동하고 시작</button>
-          <div class="auth-divider"><span>또는</span></div>
-          <button type="button" class="btn btn-ghost btn-block" data-auth="solo-start">혼자 시작 · 나중에 연동</button>
-        </div>
-        ${policySummaryHtml()}
-        <label class="policy-agree">
-          <input type="checkbox" id="auth-policy-agree" />
-          <span>위 방침에 동의합니다</span>
-        </label>
+        ${welcomeActionsHtml({ returning })}
+        ${welcomePolicyHtml({ returning })}
       </div>`;
   }
   return '';
@@ -82,6 +82,7 @@ function readWelcomeForm() {
 }
 
 function requirePolicyAgree() {
+  if (state.data.auth.policyAccepted) return true;
   if (document.getElementById('auth-policy-agree')?.checked) return true;
   toast('개인정보 처리방침에 동의해 주세요', 'info');
   return false;
@@ -114,6 +115,11 @@ export function bindAuth(onFinish) {
           document.querySelector('#auth-welcome-form [name="code"]')?.focus();
           return;
         }
+        if (!pass.trim()) {
+          toast('가족 암호를 입력해 주세요', 'error');
+          document.querySelector('#auth-welcome-form [name="pass"]')?.focus();
+          return;
+        }
         state.data.auth.loggedIn = true;
         state.showWelcome = false;
         persist();
@@ -123,7 +129,11 @@ export function bindAuth(onFinish) {
           return;
         }
         toast('연동되었습니다', 'success');
-        onFinish();
+        if (state.data.auth.onboardingDone) {
+          import('./index.js').then((m) => m.renderApp());
+        } else {
+          onFinish();
+        }
       }
     });
   });
