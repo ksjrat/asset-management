@@ -12,27 +12,26 @@ export function fmtShort(n) {
   return won.format(Math.round(n));
 }
 
-/** 금액 입력 중 크기 파악용 — "3,500,000원 · 350만원" */
+/** 금액 입력 중 크기 파악용 — "350만원", "1.2억원" (1만 미만은 5,000원) */
 export function fmtAmountHint(raw) {
   const num = Number(raw);
   if (raw === '' || raw == null || Number.isNaN(num) || num <= 0) return '';
   const n = Math.round(num);
-  const full = `${won.format(n)}원`;
   if (n >= 100_000_000) {
     const eok = n / 100_000_000;
     const label = eok >= 10 || eok % 1 === 0
       ? `${Math.round(eok)}억`
       : `${eok.toFixed(1).replace(/\.0$/, '')}억`;
-    return `${full} · ${label}원`;
+    return `${label}원`;
   }
   if (n >= 10_000) {
     const man = n / 10_000;
     const label = man >= 1000 || man % 1 === 0
       ? `${Math.round(man)}만`
       : `${man.toFixed(1).replace(/\.0$/, '')}만`;
-    return `${full} · ${label}원`;
+    return `${label}원`;
   }
-  return full;
+  return `${won.format(n)}원`;
 }
 
 export function fmtPct(n, digits = 1) {
