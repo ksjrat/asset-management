@@ -707,6 +707,7 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .month-label { text-align: center; font-weight: 600; color: var(--muted); margin-bottom: 10px; font-size: 0.9rem; }
 
 .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.summary-row--quad { grid-template-columns: repeat(2, 1fr); }
 .mini-card { background: var(--surface); border-radius: var(--radius); padding: 12px; text-align: center; box-shadow: var(--shadow); }
 .mini-card span { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; }
 .mini-card strong { font-size: 0.95rem; }
@@ -1011,7 +1012,14 @@ body.modal-open { overflow: hidden; }
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(30, 77, 58, 0.12);
 }
-.amount-preview { color: var(--primary); font-weight: 600; }
+.amount-preview {
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin: 4px 0 6px;
+  min-height: 1.25em;
+  line-height: 1.35;
+}
 .goal-impact { color: var(--primary); font-weight: 600; }
 .goal-impact.warn { color: var(--danger); }
 .timeline-item { font-size: 0.85rem; padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -1255,6 +1263,16 @@ body.modal-open { overflow: hidden; }
   letter-spacing: 0.06em;
   padding: 14px 16px 6px;
 }
+.settings-hint {
+  padding: 0 16px 12px;
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.settings-group-title + .settings-hint {
+  padding-top: 0;
+}
 .settings-group .toggle-row,
 .settings-group .settings-row {
   padding: 14px 16px;
@@ -1266,6 +1284,7 @@ body.modal-open { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   width: 100%;
   background: none;
   border: none;
@@ -1273,6 +1292,11 @@ body.modal-open { overflow: hidden; }
   color: inherit;
   cursor: pointer;
   text-align: left;
+}
+.settings-row > span:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
 }
 .settings-row:active { background: var(--surface-2); }
 .settings-row-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }

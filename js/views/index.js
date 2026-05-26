@@ -4,10 +4,11 @@ import { fmtMonth } from '../format.js';
 import { renderAuth, bindAuth, finishOnboarding } from './auth.js';
 import { renderLock, bindLock } from './lock.js';
 import { renderDashboard, bindDashboard } from './dashboard.js';
-import { renderGoals, bindGoals } from './goals.js';
+import { renderAssets, bindAssets } from './assets.js';
 import { renderBudget, bindBudget } from './budget.js';
 import { renderReports, bindReports } from './reports.js';
 import { renderSettings, bindSettings } from './settings.js';
+import { renderGoals, bindGoals } from './goals.js';
 import { renderSetup, bindSetup } from './setup.js';
 import { showActualForm } from './modals.js';
 import { TAB_SVG } from '../icons.js';
@@ -17,13 +18,13 @@ let linkWizardPrompted = false;
 
 const TABS = [
   { id: 'dashboard', label: '홈' },
-  { id: 'goals', label: '목표' },
-  { id: 'budget', label: '예산' },
+  { id: 'assets', label: '자산·수익' },
+  { id: 'expense', label: '지출' },
   { id: 'reports', label: '리포트' },
   { id: 'settings', label: '설정' },
 ];
 
-const MONTH_TABS = new Set(['budget', 'reports']);
+const MONTH_TABS = new Set(['expense', 'reports']);
 
 function monthHeader() {
   const { selectedYear: y, selectedMonth: m } = state;
@@ -39,11 +40,8 @@ function monthHeader() {
 }
 
 function fabHtml() {
-  if (state.tab === 'budget') {
+  if (state.tab === 'expense') {
     return `<button type="button" class="fab" id="fab-record-actual" aria-label="실적 입력">✓</button>`;
-  }
-  if (state.tab === 'dashboard') {
-    return `<button type="button" class="fab fab-secondary" id="fab-add-asset" aria-label="자산 추가">💰</button>`;
   }
   return '';
 }
@@ -114,10 +112,11 @@ export function renderApp() {
 function renderMain() {
   switch (state.tab) {
     case 'dashboard': return renderDashboard();
-    case 'goals': return renderGoals();
-    case 'budget': return renderBudget();
+    case 'assets': return renderAssets();
+    case 'expense': return renderBudget();
     case 'reports': return renderReports();
-    case 'settings': return renderSettings();
+    case 'settings':
+      return state.settingsSubView === 'goals' ? renderGoals() : renderSettings();
     default: return '';
   }
 }
@@ -158,13 +157,13 @@ function bindShell() {
       toast('입력 대기 항목이 없거나 정산일 이전입니다', 'info');
     }
   });
-  document.getElementById('fab-add-asset')?.addEventListener('click', () => {
-    import('./modals.js').then((m) => m.showAssetForm(null, rerender));
-  });
 
   if (state.tab === 'dashboard') bindDashboard();
-  if (state.tab === 'goals') bindGoals();
-  if (state.tab === 'budget') bindBudget();
+  if (state.tab === 'assets') bindAssets();
+  if (state.tab === 'expense') bindBudget();
   if (state.tab === 'reports') bindReports();
-  if (state.tab === 'settings') bindSettings();
+  if (state.tab === 'settings') {
+    if (state.settingsSubView === 'goals') bindGoals();
+    else bindSettings();
+  }
 }

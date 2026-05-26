@@ -1,6 +1,15 @@
+import { fmtAmountHint } from './format.js';
+
 let modalEl;
 let toastTimer;
 let activeOverlay = null;
+
+const AMOUNT_INPUT_SELECTOR = [
+  'input.input-amount',
+  'input[name="amount"]',
+  'input[name="targetAmount"]',
+  'input[name="monthlyContribution"]',
+].join(', ');
 
 export function initUI() {
   modalEl = document.getElementById('modal-root');
@@ -72,11 +81,12 @@ export function openModal({ title, body, actions = [], onOpen }) {
     activeOverlay = overlay;
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => overlay.classList.add('open'));
-    if (onOpen) onOpen(sheet);
     const firstInput = sheet.querySelector('input, select, textarea');
     if (firstInput) setTimeout(() => firstInput.focus(), 120);
-    const form = sheet.querySelector('form');
-    if (form?.querySelector('[name="amount"]')) bindAmountPreview(form);
+    requestAnimationFrame(() => {
+      if (onOpen) onOpen(sheet);
+      bindAmountPreviewsIn(sheet);
+    });
   });
 }
 
@@ -159,18 +169,30 @@ export function esc(s) {
   return d.innerHTML;
 }
 
+export function bindAmountPreviewsIn(root) {
+  if (!root) return;
+  root.querySelectorAll(AMOUNT_INPUT_SELECTOR).forEach(bindAmountPreviewInput);
+}
+
 export function bindAmountPreview(form, inputName = 'amount') {
   const input = form?.querySelector(`[name="${inputName}"]`);
-  if (!input) return;
-  let hint = form.querySelector('.amount-preview');
+  if (input) bindAmountPreviewInput(input);
+}
+
+function bindAmountPreviewInput(input) {
+  if (!input || input.dataset.amountPreviewBound) return;
+  input.dataset.amountPreviewBound = '1';
+  let hint = input.nextElementSibling?.classList?.contains('amount-preview')
+    ? input.nextElementSibling
+    : null;
   if (!hint) {
     hint = document.createElement('p');
-    hint.className = 'amount-preview field-hint';
+    hint.className = 'amount-preview';
+    hint.setAttribute('aria-live', 'polite');
     input.after(hint);
   }
   const update = () => {
-    const n = Number(input.value);
-    hint.textContent = n > 0 ? `₩${new Intl.NumberFormat('ko-KR').format(n)}원` : '';
+    hint.textContent = fmtAmountHint(input.value);
   };
   input.addEventListener('input', update);
   update();

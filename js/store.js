@@ -30,9 +30,139 @@ export const OWNERS = [
   { id: 'joint', label: '공동' },
 ];
 
+/** 홈 탭 순자산·추이 소유자 필터 옵션 */
+export const HOME_OWNER_FILTERS = [
+  { id: 'all', label: '전체' },
+  ...OWNERS,
+];
+
+const DEFAULT_HOME_OWNER_FILTERS = ['all', 'self', 'spouse', 'joint'];
+
+export function ensureAppSettings(data) {
+  if (!data.settings) data.settings = structuredClone(DEFAULT.settings);
+  const valid = new Set(HOME_OWNER_FILTERS.map((o) => o.id));
+  let filters = data.settings.homeOwnerFilters;
+  if (!Array.isArray(filters) || !filters.length) {
+    filters = [...DEFAULT_HOME_OWNER_FILTERS];
+  } else {
+    filters = filters.filter((id) => valid.has(id));
+    if (!filters.length) filters = ['all'];
+  }
+  data.settings.homeOwnerFilters = filters;
+}
+
+export function getVisibleHomeOwnerFilters(data) {
+  ensureAppSettings(data);
+  const set = new Set(data.settings.homeOwnerFilters);
+  return HOME_OWNER_FILTERS.filter((o) => set.has(o.id));
+}
+
 export const DEFAULT_CATEGORIES = [
   '식비', '주거', '교통', '통신', '보험', '의료', '교육', '문화', '쇼핑', '저축', '기타',
 ];
+
+export const INCOME_CATEGORIES = [
+  { id: 'inc-salary', name: '근로소득' },
+  { id: 'inc-business', name: '사업/부업' },
+  { id: 'inc-interest', name: '이자' },
+  { id: 'inc-dividend', name: '배당' },
+  { id: 'inc-invest', name: '투자수익' },
+  { id: 'inc-gift', name: '용돈/선물' },
+  { id: 'inc-other', name: '기타' },
+];
+
+export function getIncomeCategories() {
+  return INCOME_CATEGORIES;
+}
+
+/** 저축 실행으로 돈을 넣을 수 있는 자산 (예금·적금) */
+export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings']);
+
+export function getSavingsEligibleAssets(data) {
+  return (data.assets?.items || []).filter(
+    (i) => SAVINGS_ASSET_TYPES.has(i.type)
+      && ASSET_TYPES.find((t) => t.id === i.type)?.group === 'asset',
+  );
+}
+
+export function listSavingsContributions(data) {
+  const rows = [];
+  for (const asset of data.assets?.items || []) {
+    for (const entry of asset.savingsLog || []) {
+      rows.push({ asset, entry });
+    }
+  }
+  return rows.sort((a, b) => String(b.entry.date).localeCompare(String(a.entry.date)));
+}
+
+export function findSavingsContribution(data, entryId) {
+  for (const asset of data.assets?.items || []) {
+    const entry = (asset.savingsLog || []).find((e) => e.id === entryId);
+    if (entry) return { asset, entry };
+  }
+  return null;
+}
+
+function ymStr(year, month) {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function prevYm(year, month) {
+  let y = year;
+  let m = month - 1;
+  if (m < 1) { m = 12; y -= 1; }
+  return { year: y, month: m, ym: ymStr(y, m) };
+}
+
+export function getMonthCashflowSummary(data, year, month) {
+  const txs = getMonthTransactions(data, year, month);
+  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const savings = getMonthSavingsTotal(data, year, month);
+  const investPnL = getInvestmentPnLForMonth(data, year, month).pnl;
+  return { income, expense, savings, investPnL };
+}
+
+export function getMonthSavingsTotal(data, year, month) {
+  let total = 0;
+  for (const asset of data.assets?.items || []) {
+    for (const entry of asset.savingsLog || []) {
+      const d = new Date(entry.date);
+      if (d.getFullYear() === year && d.getMonth() + 1 === month) {
+        total += Number(entry.amount) || 0;
+      }
+    }
+  }
+  return total;
+}
+
+export function getInvestmentPnLForMonth(data, year, month) {
+  const curYm = ymStr(year, month);
+  const prev = prevYm(year, month);
+  const items = (data.assets?.items || []).filter((i) => i.type === 'invest');
+  const perAsset = [];
+  let pnl = 0;
+
+  for (const it of items) {
+    const vals = it.valuations || [];
+    const curVal = vals.find((v) => v.ym === curYm);
+    const prevVal = vals.find((v) => v.ym === prev.ym);
+    if (!curVal || !prevVal) continue;
+    const delta = Number(curVal.amount) - Number(prevVal.amount);
+    if (!Number.isFinite(delta)) continue;
+    pnl += delta;
+    perAsset.push({
+      assetId: it.id,
+      name: it.name,
+      ym: curYm,
+      prevYm: prev.ym,
+      current: Number(curVal.amount),
+      previous: Number(prevVal.amount),
+      delta,
+    });
+  }
+  return { pnl, perAsset, ym: curYm, prevYm: prev.ym };
+}
 
 export const DEFAULT = {
   version: DATA_VERSION,
@@ -55,6 +185,8 @@ export const DEFAULT = {
     lockOnLaunch: true,
     snapshotDay: 28,
     hiddenCategories: [],
+    /** 홈 탭에 표시할 소유자 필터: all | self | spouse | joint */
+    homeOwnerFilters: ['all', 'self', 'spouse', 'joint'],
   },
   policyConsents: [],
   assets: { items: [], snapshots: [] },
@@ -146,7 +278,9 @@ export function load() {
       : structuredClone(DEFAULT);
     ensureBudgetStructure(data);
     migrateBudgetModel(data);
+    ensureAppSettings(data);
     data = tryRestoreSafetyBackup(data);
+    ensureAppSettings(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -273,11 +407,13 @@ export function buildReportShareText(data, year, month) {
   const txs = getMonthTransactions(data, year, month);
   const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const investPnL = getInvestmentPnLForMonth(data, year, month).pnl;
   const nw = computeNetWorth(data);
   const lines = [
     `[우리 자산] ${year}년 ${month}월 보고서`,
     `순자산: ${nw.net.toLocaleString('ko-KR')}원`,
     `수입: ${income.toLocaleString('ko-KR')}원 / 지출: ${expense.toLocaleString('ko-KR')}원`,
+    ...(investPnL ? [`투자 손익(평가): ${(investPnL >= 0 ? '+' : '') + investPnL.toLocaleString('ko-KR')}원`] : []),
     `목표 ${data.goals.length}개 · 배우자 ${data.auth.spouseConnected ? '연결됨' : '미연결'}`,
   ];
   return lines.join('\n');

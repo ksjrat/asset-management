@@ -801,6 +801,24 @@ html, body {
   background: transparent;
 }
 
+.settings-hint {
+  padding: 0 var(--space-md) 12px;
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.settings-group-title + .settings-hint {
+  padding-top: 0;
+}
+
+.settings-row > span:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
 .settings-group .toggle-row,
 .settings-group .settings-row {
   padding: 13px var(--space-md);

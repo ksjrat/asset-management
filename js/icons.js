@@ -4,8 +4,13 @@ const S = 'class="sf-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
 
 export const TAB_SVG = {
   dashboard: `<svg ${S}><path d="M5 11.5 12 5.5l7 6V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7.5Z"/><path d="M10 20v-6h4v6"/></svg>`,
-  goals: `<svg ${S}><circle cx="12" cy="12" r="7.25"/><circle cx="12" cy="12" r="2.25"/></svg>`,
-  budget: `<svg ${S}><rect x="4" y="7" width="16" height="12" rx="2.25"/><path d="M4 11h16"/><path d="M8.5 15.5h3"/></svg>`,
+  assets: `<svg ${S}>
+    <path d="M5 8.25h14a2.25 2.25 0 0 1 2.25 2.25v7a2.25 2.25 0 0 1-2.25 2.25H5A2.25 2.25 0 0 1 2.75 17.5v-7A2.25 2.25 0 0 1 5 8.25Z"/>
+    <path d="M2.75 12h18.5"/>
+    <path d="M16.25 15.25h.01"/>
+    <path d="M7.25 16.25l2.25-2.25 2 2 3.75-3.75"/>
+  </svg>`,
+  expense: `<svg ${S}><rect x="4" y="7" width="16" height="12" rx="2.25"/><path d="M4 11h16"/><path d="M8.5 15.5h3"/></svg>`,
   reports: `<svg ${S}><path d="M7 19V11M12 19V5M17 19v-5"/></svg>`,
   settings: `<svg ${S}><circle cx="12" cy="12" r="2.25"/><path d="M12 4.5v1.75M12 17.75V19.5M5.56 5.56l1.24 1.24M17.2 17.2l1.24 1.24M4.5 12h1.75M17.75 12H19.5M5.56 18.44l1.24-1.24M17.2 6.8l1.24-1.24"/></svg>`,
 };

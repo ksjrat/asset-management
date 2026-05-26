@@ -1,5 +1,10 @@
 import { state, persist } from '../state.js';
-import { hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData } from '../store.js';
+import {
+  hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData,
+  HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress,
+} from '../store.js';
+import { showGoalForm } from './modals.js';
+import { fmtMoney } from '../format.js';
 import { getBudgetStart } from '../budget-engine.js';
 import { isSyncEnabled } from '../sync.js';
 import { fmtMonth } from '../format.js';
@@ -18,7 +23,9 @@ function linkStatusLabel() {
 
 export function renderSettings() {
   const a = state.data.auth;
+  ensureAppSettings(state.data);
   const s = state.data.settings;
+  const homeFilters = new Set(s.homeOwnerFilters || []);
   const start = getBudgetStart(state.data);
   const startLabel = start ? fmtMonth(start.year, start.month) : '미설정';
   const syncOn = isSyncEnabled();
@@ -68,6 +75,31 @@ export function renderSettings() {
     </div>` : ''}
 
     <div class="settings-group">
+      <p class="settings-group-title">홈 화면</p>
+      <p class="muted settings-hint">순자산·추이 위에 표시할 소유자 필터를 고릅니다. 하나만 켜두면 필터 버튼이 숨겨집니다.</p>
+      ${HOME_OWNER_FILTERS.map((o) => `
+        <label class="toggle-row"><span>${esc(o.label)}</span>
+          <input type="checkbox" class="home-owner-filter" data-owner-filter="${o.id}"
+            ${homeFilters.has(o.id) ? 'checked' : ''} /></label>`).join('')}
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-group-title">재정 목표</p>
+      ${state.data.goals.length ? state.data.goals.slice(0, 3).map((g) => {
+        const { current, rate } = computeGoalProgress(g);
+        return `<button type="button" class="settings-row settings-row--goal" data-goal-preview="${g.id}">
+          <span><strong>${esc(g.title)}</strong><span class="settings-row-meta">${Math.round(rate * 100)}% · ${fmtMoney(current)}</span></span>
+          <span class="settings-chevron">›</span>
+        </button>`;
+      }).join('') : '<p class="muted settings-hint">아직 목표가 없습니다.</p>'}
+      <button type="button" class="settings-row" id="btn-goals-manage">
+        <span><strong>목표 관리</strong><span class="settings-row-meta">${state.data.goals.length}개</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-block" id="btn-add-goal-settings">+ 목표 추가</button>
+    </div>
+
+    <div class="settings-group">
       <p class="settings-group-title">예산</p>
       <button type="button" class="settings-row" id="btn-budget-start">
         <span><strong>가계부 시작 월</strong><span class="settings-row-meta">${startLabel}</span></span>
@@ -107,6 +139,24 @@ export function bindSettings() {
   document.getElementById('toggle-lock')?.addEventListener('change', (e) => {
     state.data.settings.lockOnLaunch = e.target.checked; persist();
   });
+
+  document.querySelectorAll('.home-owner-filter').forEach((el) => {
+    el.addEventListener('change', () => {
+      const checked = [...document.querySelectorAll('.home-owner-filter:checked')]
+        .map((x) => x.dataset.ownerFilter);
+      if (!checked.length) {
+        el.checked = true;
+        toast('최소 1개는 선택해야 합니다', 'info');
+        return;
+      }
+      state.data.settings.homeOwnerFilters = checked;
+      if (!checked.includes(state.ownerFilter)) {
+        state.ownerFilter = checked[0];
+      }
+      persist();
+      toast('홈 화면 필터가 저장되었습니다', 'success');
+    });
+  });
   document.getElementById('btn-password')?.addEventListener('click', async () => {
     const res = await openModal({
       title: '앱 비밀번호',
@@ -137,6 +187,23 @@ export function bindSettings() {
     persist();
     toast('백업에서 복구했습니다', 'success');
     rerender();
+  });
+  document.getElementById('btn-goals-manage')?.addEventListener('click', () => {
+    state.settingsSubView = 'goals';
+    state.subView = null;
+    state.selectedGoalId = null;
+    rerender();
+  });
+  document.getElementById('btn-add-goal-settings')?.addEventListener('click', () => {
+    showGoalForm(rerender);
+  });
+  document.querySelectorAll('[data-goal-preview]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.settingsSubView = 'goals';
+      state.selectedGoalId = btn.dataset.goalPreview;
+      state.subView = 'detail';
+      rerender();
+    });
   });
   document.getElementById('btn-budget-start')?.addEventListener('click', () => {
     showBudgetStartForm(rerender);

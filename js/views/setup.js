@@ -3,7 +3,7 @@ import { addCategory, getVisibleCategories } from '../store.js';
 import {
   setMonthlyPlanAmount, getMonthlyPlanAmount, setBudgetStart, getBudgetStart,
 } from '../budget-engine.js';
-import { esc, toast } from '../ui.js';
+import { esc, toast, bindAmountPreviewsIn } from '../ui.js';
 import { fmtMoney, fmtMonth } from '../format.js';
 
 const STEPS = [
@@ -51,7 +51,7 @@ function renderStep2() {
       <label class="setup-budget-row">
         <span class="setup-budget-name">${esc(c.name)}</span>
         <div class="setup-budget-inputs">
-          <input class="input" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+          <input class="input input-amount" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
           <span class="setup-budget-monthly">연 ${fmtMoney(monthly * 12)}</span>
         </div>
       </label>`;
@@ -153,7 +153,9 @@ export function bindSetup() {
     });
   });
 
-  document.querySelectorAll('#setup-monthly-form input').forEach((input) => {
+  const monthlyForm = document.getElementById('setup-monthly-form');
+  bindAmountPreviewsIn(monthlyForm);
+  monthlyForm?.querySelectorAll('.input-amount').forEach((input) => {
     input.addEventListener('input', () => {
       const row = input.closest('.setup-budget-row');
       const hint = row?.querySelector('.setup-budget-monthly');
@@ -223,7 +225,7 @@ export function bindSetup() {
       state.setupStep = 1;
       persist();
       toast('예산 설정이 완료되었습니다', 'success');
-      state.tab = 'budget';
+      state.tab = 'expense';
       setMonth(state.data.budget.startYear, state.data.budget.startMonth);
       rerender();
     }

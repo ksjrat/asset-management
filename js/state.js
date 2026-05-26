@@ -5,9 +5,16 @@ const savedTab = (() => {
   try { return localStorage.getItem('couple-asset-tab'); } catch { return null; }
 })();
 
+function normalizeSavedTab(tab) {
+  if (!tab) return null;
+  if (tab === 'budget') return 'expense';
+  if (tab === 'goals') return 'dashboard';
+  return tab;
+}
+
 export const state = {
   data: load(),
-  tab: savedTab || 'dashboard',
+  tab: normalizeSavedTab(savedTab) || 'dashboard',
   subView: null,
   ownerFilter: 'all',
   selectedYear: new Date().getFullYear(),
@@ -20,6 +27,8 @@ export const state = {
   showWelcome: false,
   authScreen: 'welcome',
   setupStep: 1,
+  /** 설정 탭 내 화면: null | 'goals' */
+  settingsSubView: null,
 };
 
 export function persist() {
@@ -30,6 +39,7 @@ export function persist() {
 export function setTab(tab) {
   state.tab = tab;
   state.subView = null;
+  state.settingsSubView = null;
   state.txSearch = '';
   try { localStorage.setItem('couple-asset-tab', tab); } catch { /* ignore */ }
 }

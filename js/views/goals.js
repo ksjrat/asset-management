@@ -102,7 +102,11 @@ export function renderGoals() {
     return g ? renderDetail(g) : '<p class="empty">목표를 찾을 수 없습니다</p>';
   }
   const proposed = state.data.goals.filter((g) => g.status === 'proposed');
+  const backToSettings = state.settingsSubView === 'goals'
+    ? '<button type="button" class="back-link" id="btn-back-settings">← 설정</button>'
+    : '';
   return `
+    ${backToSettings}
     ${proposed.length ? `<section class="alert-banner">배우자 제안 ${proposed.length}건 대기 중</section>` : ''}
     <section class="section">
       <div class="section-head"><h2>재정 목표</h2>
@@ -113,6 +117,12 @@ export function renderGoals() {
 
 export function bindGoals() {
   const rerender = () => import('./index.js').then((m) => m.renderApp());
+  document.getElementById('btn-back-settings')?.addEventListener('click', () => {
+    state.settingsSubView = null;
+    state.subView = null;
+    state.selectedGoalId = null;
+    rerender();
+  });
   document.getElementById('btn-back-goals')?.addEventListener('click', () => {
     state.subView = null; state.selectedGoalId = null; rerender();
   });

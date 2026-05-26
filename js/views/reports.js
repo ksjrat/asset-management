@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import {
   computeNetWorth, computeGoalProgress, getMonthBudget,
   getMonthTransactions, getCategorySpend, getVisibleCategories,
+  getInvestmentPnLForMonth,
   buildReportShareText,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtMonth } from '../format.js';
@@ -17,6 +18,7 @@ export function renderReports() {
   const txs = getMonthTransactions(data, y, m);
   const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const invest = getInvestmentPnLForMonth(data, y, m);
   const spend = getCategorySpend(data, y, m);
   const cats = getVisibleCategories(data);
   const barItems = cats.map((c) => ({ label: c.name, value: spend[c.id] || 0 }))
@@ -56,6 +58,7 @@ export function renderReports() {
       <div class="summary-row">
         <div class="mini-card"><span>수입</span><strong class="income">${fmtMoney(income)}</strong></div>
         <div class="mini-card"><span>지출</span><strong class="danger">${fmtMoney(expense)}</strong></div>
+        <div class="mini-card"><span>투자 손익(평가)</span><strong class="${invest.pnl >= 0 ? 'income' : 'danger'}">${invest.pnl >= 0 ? '+' : ''}${fmtMoney(invest.pnl)}</strong></div>
       </div>
     </section>
     <section class="section">

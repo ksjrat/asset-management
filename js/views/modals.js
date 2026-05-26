@@ -3,6 +3,8 @@ import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getHiddenCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
   addCategory,
+  getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
+  SAVINGS_ASSET_TYPES,
 } from '../store.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
@@ -11,7 +13,7 @@ import {
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
-import { validateGoalInput, projectGoalImpact, parseTags } from '../validators.js';
+import { validateGoalInput, projectGoalImpact } from '../validators.js';
 
 function bindGoalImpactPreview(form, current = 0) {
   const impactEl = form.querySelector('#goal-impact');
@@ -86,6 +88,182 @@ export async function showAssetForm(item, rerender) {
     });
   }
   persist(); toast('저장되었습니다', 'success'); rerender();
+}
+
+export async function showAssetValuationForm(assetId, rerender) {
+  const item = state.data.assets.items.find((x) => x.id === assetId);
+  if (!item) return;
+
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const ym = `${y}-${String(m).padStart(2, '0')}`;
+  const existing = (item.valuations || []).find((v) => v.ym === ym);
+
+  const res = await openModal({
+    title: '투자 평가금액 기록',
+    body: `<form id="asset-val-form" class="form-stack">
+      <p class="field-hint">투자 자산의 <strong>${esc(ym)}</strong> 평가금액을 기록합니다. (월별 1회)</p>
+      ${formField('평가금액', `<input class="input" name="amount" type="number" required min="0" value="${existing?.amount ?? ''}" />`)}
+    </form>`,
+    actions: [
+      ...(existing ? [{ label: '삭제', value: 'delete', danger: true }] : []),
+      { label: '취소', value: null },
+      { label: '저장', value: 'save', primary: true },
+    ],
+  });
+  const action = modalValue(res);
+  if (!action) return;
+
+  item.valuations = item.valuations || [];
+  if (action === 'delete') {
+    item.valuations = item.valuations.filter((v) => v.ym !== ym);
+    persist();
+    toast('삭제되었습니다', 'success');
+    rerender();
+    return;
+  }
+  if (action !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const amount = Number(fd.get('amount'));
+  if (!Number.isFinite(amount) || amount < 0) {
+    toast('평가금액을 올바르게 입력하세요', 'error');
+    return;
+  }
+
+  const entry = { ym, amount, at: new Date().toISOString() };
+  const idx = item.valuations.findIndex((v) => v.ym === ym);
+  if (idx >= 0) item.valuations[idx] = entry;
+  else item.valuations.push(entry);
+  item.valuations.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+  persist();
+  toast('기록되었습니다', 'success');
+  rerender();
+}
+
+function savingsBudgetCategory(data) {
+  return getVisibleCategories(data).find((c) => c.name === '저축') || null;
+}
+
+function addSavingsBudgetActual(data, dateStr, amount) {
+  const cat = savingsBudgetCategory(data);
+  if (!cat || !data.budget?.setupDone) return;
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const prev = getActualAmount(data, y, m, cat.id) || 0;
+  setActualAmount(data, y, m, cat.id, prev + amount);
+}
+
+function subtractSavingsBudgetActual(data, dateStr, amount) {
+  const cat = savingsBudgetCategory(data);
+  if (!cat || !data.budget?.setupDone) return;
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const prev = getActualAmount(data, y, m, cat.id) || 0;
+  setActualAmount(data, y, m, cat.id, Math.max(0, prev - amount));
+}
+
+export async function showSavingsForm(rerender, entryId = null) {
+  const existing = entryId ? findSavingsContribution(state.data, entryId) : null;
+  const eligible = getSavingsEligibleAssets(state.data);
+
+  if (!eligible.length) {
+    toast('예금·적금 자산을 먼저 등록해 주세요', 'info');
+    return;
+  }
+
+  const assetOpts = eligible.map((a) => {
+    const type = ASSET_TYPES.find((t) => t.id === a.type);
+    const selected = existing ? existing.asset.id === a.id : false;
+    return `<option value="${a.id}" ${selected ? 'selected' : ''}>${esc(a.name)} (${type?.label || ''} · ${fmtMoney(a.amount)})</option>`;
+  }).join('');
+
+  const res = await openModal({
+    title: existing ? '저축 실행 수정' : '저축 실행',
+    body: `<form id="savings-form" class="form-stack">
+      <p class="field-hint">이체한 예·적금 계좌와 금액을 입력하면 <strong>자산 잔액이 올라갑니다</strong>. (지출 카테고리와 별도)</p>
+      ${formField('넣을 계좌', `<select name="assetId" class="input" required>${assetOpts}</select>`)}
+      ${formField('날짜', `<input class="input" name="date" type="date" value="${existing?.entry.date || todayISO()}" required />`)}
+      ${formField('금액', `<input class="input" name="amount" type="number" required min="1" value="${existing?.entry.amount ?? ''}" />`)}
+      ${formField('메모', `<input class="input" name="memo" value="${esc(existing?.entry.memo || '')}" placeholder="급여일 저축 등" />`)}
+    </form>`,
+    actions: [
+      ...(existing ? [{ label: '삭제', value: 'delete', danger: true }] : []),
+      { label: '취소', value: null },
+      { label: '저장', value: 'save', primary: true },
+    ],
+  });
+  const action = modalValue(res);
+  if (!action) return;
+
+  if (action === 'delete' && existing) {
+    const { asset, entry } = existing;
+    asset.amount = Math.max(0, (asset.amount || 0) - entry.amount);
+    asset.savingsLog = (asset.savingsLog || []).filter((e) => e.id !== entry.id);
+    subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
+    persist();
+    toast('삭제되었습니다', 'success');
+    rerender();
+    return;
+  }
+  if (action !== 'save') return;
+
+  const fd = modalForm(res);
+  if (!fd) return;
+  const assetId = fd.get('assetId');
+  const asset = state.data.assets.items.find((x) => x.id === assetId);
+  if (!asset || !SAVINGS_ASSET_TYPES.has(asset.type)) {
+    toast('예금·적금 계좌를 선택해 주세요', 'error');
+    return;
+  }
+  const amount = Number(fd.get('amount'));
+  const date = fd.get('date');
+  const memo = fd.get('memo')?.toString().trim() || '';
+  if (!Number.isFinite(amount) || amount < 1 || !date) {
+    toast('금액과 날짜를 확인해 주세요', 'error');
+    return;
+  }
+
+  if (existing) {
+    const { asset: oldAsset, entry } = existing;
+    const delta = amount - entry.amount;
+    if (oldAsset.id !== asset.id) {
+      oldAsset.amount = Math.max(0, (oldAsset.amount || 0) - entry.amount);
+      subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
+      asset.amount = (asset.amount || 0) + amount;
+      addSavingsBudgetActual(state.data, date, amount);
+      oldAsset.savingsLog = (oldAsset.savingsLog || []).filter((e) => e.id !== entry.id);
+      asset.savingsLog = asset.savingsLog || [];
+      Object.assign(entry, { date, amount, memo, at: new Date().toISOString() });
+      asset.savingsLog.push(entry);
+    } else {
+      oldAsset.amount = Math.max(0, (oldAsset.amount || 0) + delta);
+      if (entry.date !== date) {
+        subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
+        addSavingsBudgetActual(state.data, date, amount);
+      } else if (delta !== 0) {
+        if (delta > 0) addSavingsBudgetActual(state.data, date, delta);
+        else subtractSavingsBudgetActual(state.data, date, -delta);
+      }
+      Object.assign(entry, { date, amount, memo, at: new Date().toISOString() });
+    }
+  } else {
+    asset.amount = (asset.amount || 0) + amount;
+    asset.savingsLog = asset.savingsLog || [];
+    asset.savingsLog.push({
+      id: uid(), date, amount, memo, at: new Date().toISOString(),
+    });
+    addSavingsBudgetActual(state.data, date, amount);
+  }
+
+  asset.history = asset.history || [];
+  asset.history.push({ amount: asset.amount, at: new Date().toISOString() });
+  persist();
+  toast('저축이 반영되었습니다', 'success');
+  rerender();
 }
 
 export async function showGoalForm(rerender) {
@@ -207,10 +385,20 @@ export async function showGoalEditForm(goal, rerender) {
   rerender();
 }
 
-export async function showTxForm(type, item, rerender) {
-  const cats = getVisibleCategories(state.data);
+function txMemoDisplay(item) {
+  const memo = item?.memo?.toString().trim() || '';
+  if (memo) return memo;
+  const tags = item?.tags;
+  if (Array.isArray(tags) && tags.length) return tags.join(', ');
+  return '';
+}
+
+export async function showTxForm(type, item, rerender, opts = {}) {
+  const cats = type === 'income' ? getIncomeCategories(state.data) : getVisibleCategories(state.data);
+  const presetCatId = opts?.presetCategoryId;
   const catOpts = cats.map((c) =>
-    `<option value="${c.id}" ${item?.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    `<option value="${c.id}" ${(item?.categoryId === c.id || (!item && presetCatId === c.id)) ? 'selected' : ''}>${c.name}</option>`).join('');
+  const memoPlaceholder = type === 'income' ? '예: 5월 급여, 배당' : '예: 외식, 데이트';
   const res = await openModal({
     title: item ? '거래 수정' : (type === 'income' ? '수익 입력' : '지출 입력'),
     body: `<form id="tx-form" class="form-stack">
@@ -222,8 +410,7 @@ export async function showTxForm(type, item, rerender) {
         <option value="현금" ${item?.paymentMethod === '현금' ? 'selected' : ''}>현금</option>
         <option value="카드" ${item?.paymentMethod === '카드' ? 'selected' : ''}>카드</option>
         <option value="이체" ${item?.paymentMethod === '이체' ? 'selected' : ''}>이체</option></select>`)}
-      ${formField('메모', `<input class="input" name="memo" value="${esc(item?.memo || '')}" />`)}
-      ${formField('태그', `<input class="input" name="tags" placeholder="외식, 데이트" value="${esc((item?.tags || []).join(', '))}" />`)}
+      ${formField('메모', `<input class="input" name="memo" placeholder="${esc(memoPlaceholder)}" value="${esc(txMemoDisplay(item))}" />`)}
       <label class="toggle-row"><span>공동 지출로 표시</span>
         <input type="checkbox" name="shared" ${item?.shared !== false ? 'checked' : ''} /></label>
     </form>`,
@@ -244,11 +431,13 @@ export async function showTxForm(type, item, rerender) {
   const payload = {
     date: fd.get('date'), amount: Number(fd.get('amount')), type: fd.get('type'),
     categoryId: fd.get('categoryId'), paymentMethod: fd.get('paymentMethod'),
-    memo: fd.get('memo'), tags: parseTags(fd.get('tags')),
+    memo: fd.get('memo')?.toString().trim() || '',
     shared: !!fd.get('shared'), createdBy: item?.createdBy || 'self',
   };
-  if (item) Object.assign(item, payload);
-  else state.data.transactions.push({ id: uid(), ...payload });
+  if (item) {
+    Object.assign(item, payload);
+    delete item.tags;
+  } else state.data.transactions.push({ id: uid(), ...payload });
   persist(); toast('저장되었습니다', 'success'); rerender();
 }
 
@@ -294,7 +483,7 @@ export async function showMonthlyBudgetForm(year, rerender) {
     const monthly = getMonthlyPlanAmount(state.data, year, c.id);
     return formField(
       `${c.name} (월)`,
-      `<input class="input" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+      `<input class="input input-amount" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
        <span class="field-hint">연 ${fmtMoney(monthly * 12)}</span>`,
     );
   }).join('');
@@ -342,7 +531,7 @@ export async function showBudgetForm(y, m, rerender) {
   const cats = getVisibleCategories(state.data);
   const fields = cats.map((c) => {
     const monthly = getMonthlyPlanAmount(state.data, y, c.id);
-    return formField(c.name, `<input class="input" name="${c.id}" type="number" min="0" value="${monthly || 0}" />`);
+    return formField(c.name, `<input class="input input-amount" name="${c.id}" type="number" min="0" value="${monthly || 0}" />`);
   }).join('');
   const res = await openModal({
     title: `${fmtMonth(y, m)} 월간 예산`,
