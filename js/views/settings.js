@@ -1,4 +1,4 @@
-import { state, persist } from '../state.js';
+import { state, persist, enterStartScreen } from '../state.js';
 import {
   hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData, dataFootprint,
   HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress,
@@ -329,9 +329,7 @@ export function bindSettings() {
   });
   document.getElementById('btn-logout')?.addEventListener('click', async () => {
     if (await confirmDialog('시작 화면', '시작 화면으로 이동할까요? 데이터는 이 기기에 남습니다.')) {
-      state.showWelcome = true;
-      state.locked = false;
-      state.authScreen = 'welcome';
+      enterStartScreen();
       persist();
       rerender();
     }

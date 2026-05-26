@@ -50,7 +50,7 @@ export function renderApp() {
   const root = document.getElementById('app');
   const { data, locked } = state;
 
-  if (!data.auth.onboardingDone || state.showWelcome) {
+  if (!data.auth.onboardingDone || state.showWelcome || data.auth.atStartScreen) {
     root.className = 'app-auth';
     root.innerHTML = renderAuth();
     bindAuth(finishOnboarding);

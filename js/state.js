@@ -36,6 +36,21 @@ export function persist() {
   syncAfterPersist();
 }
 
+/** 설정 등에서 「시작 화면」(가족 코드·암호 입력)으로 이동 */
+export function enterStartScreen() {
+  state.showWelcome = true;
+  state.authScreen = 'welcome';
+  state.locked = false;
+  state.settingsSubView = null;
+  if (state.data?.auth) state.data.auth.atStartScreen = true;
+}
+
+/** 시작 화면에서 앱으로 복귀 */
+export function leaveStartScreen() {
+  state.showWelcome = false;
+  if (state.data?.auth) state.data.auth.atStartScreen = false;
+}
+
 export function setTab(tab) {
   state.tab = tab;
   state.subView = null;

@@ -70,6 +70,7 @@ function preserveLocalAuth(local, merged) {
   merged.auth.policyAccepted = local.auth.policyAccepted;
   merged.auth.policyVersion = local.auth.policyVersion;
   merged.auth.onboardingDone = local.auth.onboardingDone;
+  merged.auth.atStartScreen = local.auth.atStartScreen;
   if (local.settings) merged.settings.lockOnLaunch = local.settings.lockOnLaunch;
   merged.policyConsents = local.policyConsents;
   return merged;

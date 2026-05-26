@@ -179,6 +179,8 @@ export const DEFAULT = {
     policyAccepted: false,
     policyVersion: '1.0',
     onboardingDone: false,
+    /** 설정 → 시작 화면으로 일 때 가족 코드·암호 입력 화면 유지 */
+    atStartScreen: false,
   },
   settings: {
     lockOnLaunch: true,
