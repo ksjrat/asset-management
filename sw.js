@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v38';
+const CACHE = 'couple-asset-v39';
 const ASSETS = [
   './',
   './index.html',
@@ -20,7 +20,9 @@ const ASSETS = [
   './js/views/auth.js',
   './js/views/lock.js',
   './js/views/dashboard.js',
+  './js/views/assets.js',
   './js/views/goals.js',
+  './js/app-update.js',
   './js/views/budget.js',
   './js/views/reports.js',
   './js/views/settings.js',
@@ -47,6 +49,10 @@ self.addEventListener('activate', (e) => {
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (e) => {

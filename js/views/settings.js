@@ -13,6 +13,7 @@ import { showBudgetStartForm } from './modals.js';
 import {
   getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
 } from '../link-wizard.js';
+import { applyAppUpdate, checkAppUpdateAvailable } from '../app-update.js';
 
 function linkStatusLabel() {
   if (isLinkComplete()) return '연동 완료';
@@ -152,6 +153,18 @@ export function renderSettings() {
     </div>
 
     <div class="settings-group">
+      <p class="settings-group-title">앱</p>
+      <button type="button" class="settings-row" id="btn-app-update">
+        <span>
+          <strong>업데이트 적용</strong>
+          <span class="settings-row-meta" id="app-update-meta">최신 화면·기능 불러오기</span>
+        </span>
+        <span class="settings-chevron" aria-hidden="true">↻</span>
+      </button>
+      <p class="muted settings-hint">배포 후 화면이 안 바뀔 때 눌러 주세요. 데이터는 그대로입니다.</p>
+    </div>
+
+    <div class="settings-group">
       <p class="settings-group-title">정책</p>
       <button type="button" class="settings-row" id="btn-policy">
         <span><strong>개인정보 처리방침</strong><span class="settings-row-meta">동의 ${a.policyAccepted ? '완료' : '미완료'} · v${esc(state.data.auth.policyVersion)}</span></span>
@@ -182,6 +195,16 @@ export function bindSettings() {
 
   bindSettingsDisclosure('btn-link-section-toggle', 'link-section-panel');
   bindSettingsDisclosure('btn-home-filter-toggle', 'home-filter-panel');
+
+  checkAppUpdateAvailable().then((available) => {
+    const meta = document.getElementById('app-update-meta');
+    if (meta && available) meta.textContent = '새 버전 있음 · 눌러 적용';
+  });
+
+  document.getElementById('btn-app-update')?.addEventListener('click', async () => {
+    toast('업데이트를 적용합니다…', 'info');
+    await applyAppUpdate();
+  });
 
   document.querySelectorAll('.home-owner-filter').forEach((el) => {
     el.addEventListener('change', () => {
