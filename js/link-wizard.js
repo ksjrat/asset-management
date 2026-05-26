@@ -48,12 +48,10 @@ function validateLinkForm(form, syncOn) {
     }
   }
   if (syncOn) {
-    const p1 = form.pass?.toString() || '';
-    const p2 = form.pass2?.toString() || '';
-    if (p1.length < HOUSEHOLD_PASS_MIN) {
+    const pass = form.pass?.toString() || '';
+    if (pass.length < HOUSEHOLD_PASS_MIN) {
       return `가족 암호는 ${HOUSEHOLD_PASS_MIN}자 이상이어야 합니다.`;
     }
-    if (p1 !== p2) return '암호가 서로 다릅니다.';
   }
   return null;
 }
@@ -164,6 +162,44 @@ function applyJoinCodeOnly(code) {
   persist();
 }
 
+const LINK_CONNECT_ERRORS = {
+  off: '클라우드 설정을 확인해 주세요',
+  'no-code': '가족 코드를 입력해 주세요',
+  'no-pass': '가족 암호를 입력해 주세요',
+  'bad-pass': '가족 암호가 맞지 않습니다. 모든 기기에서 같아야 합니다',
+  error: '연동에 실패했습니다. 네트워크를 확인해 주세요',
+};
+
+/** 온보딩·첫 화면 등에서 받은 코드로 가족에 참여하고(필요 시) 클라우드 연동 */
+export async function connectJoinHousehold({ code, pass }) {
+  await ensureSyncReady();
+  const syncOn = isSyncEnabled();
+  const upper = (code || '').trim().toUpperCase();
+  if (upper.length < HOUSEHOLD_CODE_LENGTH) {
+    return { ok: false, reason: 'bad-code', message: `${HOUSEHOLD_CODE_LENGTH}자리 가족 코드를 입력해 주세요.` };
+  }
+  if (syncOn) {
+    const validation = validateLinkForm({ role: 'join', code: upper, pass }, true);
+    if (validation) return { ok: false, reason: 'validation', message: validation };
+  }
+  applyJoinCodeOnly(upper);
+  if (!syncOn) {
+    dismissLinkAttention();
+    return { ok: true, reason: 'local-only' };
+  }
+  toast('연동 중…', 'info');
+  const result = await connectCloudSync({ pass, remember: true });
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.reason,
+      message: LINK_CONNECT_ERRORS[result.reason] || '연동하지 못했습니다',
+    };
+  }
+  dismissLinkAttention();
+  return { ok: true, reason: result.reason || 'ok' };
+}
+
 export async function openLinkWizard() {
   await ensureSyncReady();
   const syncOn = isSyncEnabled();
@@ -222,7 +258,6 @@ export async function openLinkWizard() {
       ${formField('가족 코드', `<input class="input" name="code" type="text" value="${esc(existingCode)}" placeholder="6자리 코드" maxlength="12" style="text-transform:uppercase" />`)}
       <p class="field-hint muted">처음이면 비워 두고 연동하면 코드가 만들어집니다.</p>
       ${formField('가족 암호', '<input class="input" name="pass" type="password" autocomplete="new-password" />')}
-      ${formField('한 번 더', '<input class="input" name="pass2" type="password" autocomplete="new-password" />')}
       <p class="field-hint">모든 기기·배우자가 <strong>같은 암호</strong>를 씁니다. 이 기기에 저장되어 새로고침 후에도 자동 동기화됩니다.</p>
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '연동 시작', value: 'save', primary: true }],

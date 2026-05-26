@@ -175,7 +175,6 @@ export const DEFAULT = {
     inviteCode: null,
     inviteExpiresAt: null,
     householdId: null,
-    biometricEnabled: false,
     appPasswordSet: false,
     policyAccepted: false,
     policyVersion: '1.0',

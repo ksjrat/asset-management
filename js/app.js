@@ -8,7 +8,7 @@ import { initPwaInstall } from './pwa-install.js';
 async function bootstrap() {
   state.data = load();
   if (state.data.auth.onboardingDone) {
-    state.locked = state.data.auth.biometricEnabled && state.data.settings?.lockOnLaunch !== false;
+    state.locked = state.data.auth.appPasswordSet && state.data.settings?.lockOnLaunch !== false;
   } else {
     state.locked = false;
   }

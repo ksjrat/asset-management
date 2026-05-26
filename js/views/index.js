@@ -57,7 +57,7 @@ export function renderApp() {
     return;
   }
 
-  if (locked && (data.auth.biometricEnabled || data.auth.appPasswordSet)) {
+  if (locked && data.auth.appPasswordSet) {
     root.className = 'app-lock';
     root.innerHTML = renderLock();
     bindLock();

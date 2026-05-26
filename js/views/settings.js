@@ -93,8 +93,6 @@ export function renderSettings() {
 
     <div class="settings-group">
       <p class="settings-group-title">보안</p>
-      <label class="toggle-row"><span>생체 인증</span>
-        <input type="checkbox" id="toggle-bio" ${a.biometricEnabled ? 'checked' : ''} /></label>
       <label class="toggle-row"><span>앱 시작 시 잠금</span>
         <input type="checkbox" id="toggle-lock" ${s.lockOnLaunch !== false ? 'checked' : ''} /></label>
       <button type="button" class="settings-row" id="btn-password">
@@ -206,9 +204,6 @@ export function bindSettings() {
     if (result.ok) rerender();
   });
 
-  document.getElementById('toggle-bio')?.addEventListener('change', (e) => {
-    state.data.auth.biometricEnabled = e.target.checked; persist();
-  });
   document.getElementById('toggle-lock')?.addEventListener('change', (e) => {
     state.data.settings.lockOnLaunch = e.target.checked; persist();
   });
