@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v39';
+const CACHE = 'couple-asset-v41';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,7 @@ const ASSETS = [
   './js/views/assets.js',
   './js/views/goals.js',
   './js/app-update.js',
+  './js/pwa-install.js',
   './js/views/budget.js',
   './js/views/reports.js',
   './js/views/settings.js',

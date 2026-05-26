@@ -221,6 +221,15 @@ export function hasUserFinancialData(data) {
   return false;
 }
 
+/** 동기화·복구 판단용 대략적 입력량 */
+export function dataFootprint(data) {
+  if (!data) return 0;
+  return (data.assets?.items?.length || 0)
+    + (data.goals?.length || 0)
+    + (data.transactions?.length || 0)
+    + (data.assets?.items || []).reduce((s, a) => s + (a.savingsLog?.length || 0), 0);
+}
+
 export function saveSafetyBackup(data) {
   if (!hasUserFinancialData(data)) return;
   try {

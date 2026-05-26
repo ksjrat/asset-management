@@ -1,6 +1,6 @@
 import { state, persist } from '../state.js';
 import {
-  hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData,
+  hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData, dataFootprint,
   HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress,
 } from '../store.js';
 import { showGoalForm } from './modals.js';
@@ -14,6 +14,9 @@ import {
   getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
 } from '../link-wizard.js';
 import { applyAppUpdate, checkAppUpdateAvailable } from '../app-update.js';
+import {
+  canPromptInstall, getPwaInstallHint, pwaInstallInstructionsHtml, tryPwaInstall,
+} from '../pwa-install.js';
 
 function linkStatusLabel() {
   if (isLinkComplete()) return '연동 완료';
@@ -98,13 +101,21 @@ export function renderSettings() {
       </button>
     </div>
 
-    ${hasSafetyBackup() && !hasUserFinancialData(state.data) ? `
-    <div class="settings-group">
+    ${(() => {
+      const backup = hasSafetyBackup() ? restoreFromSafetyBackup() : null;
+      const showRestore = backup && (
+        !hasUserFinancialData(state.data)
+        || dataFootprint(backup) > dataFootprint(state.data)
+      );
+      return showRestore ? `
+    <div class="settings-group settings-group--highlight">
       <button type="button" class="settings-row" id="btn-restore-backup">
-        <span><strong>백업에서 복구</strong><span class="settings-row-meta">이 기기에 저장된 최근 백업</span></span>
+        <span><strong>백업에서 복구</strong><span class="settings-row-meta">동기화 전 이 기기에 저장된 데이터</span></span>
         <span class="settings-chevron">›</span>
       </button>
-    </div>` : ''}
+      <p class="muted settings-hint">데이터가 비었거나 줄었다면 먼저 눌러 보세요.</p>
+    </div>` : '';
+    })()}
 
     <div class="settings-group settings-group--disclosure">
       <button type="button" class="settings-row settings-disclosure" id="btn-home-filter-toggle"
@@ -154,6 +165,13 @@ export function renderSettings() {
 
     <div class="settings-group">
       <p class="settings-group-title">앱</p>
+      <button type="button" class="settings-row" id="btn-pwa-install">
+        <span>
+          <strong>홈 화면에 추가</strong>
+          <span class="settings-row-meta" id="pwa-install-meta">${esc(getPwaInstallHint())}</span>
+        </span>
+        <span class="settings-chevron" aria-hidden="true">+</span>
+      </button>
       <button type="button" class="settings-row" id="btn-app-update">
         <span>
           <strong>업데이트 적용</strong>
@@ -195,6 +213,30 @@ export function bindSettings() {
 
   bindSettingsDisclosure('btn-link-section-toggle', 'link-section-panel');
   bindSettingsDisclosure('btn-home-filter-toggle', 'home-filter-panel');
+
+  const refreshPwaInstallMeta = () => {
+    const meta = document.getElementById('pwa-install-meta');
+    if (meta) meta.textContent = getPwaInstallHint();
+  };
+  refreshPwaInstallMeta();
+  window.addEventListener('pwa-install-available', refreshPwaInstallMeta);
+
+  document.getElementById('btn-pwa-install')?.addEventListener('click', async () => {
+    const actions = canPromptInstall()
+      ? [{ label: '닫기', value: null }, { label: '지금 설치', value: 'install', primary: true }]
+      : [{ label: '닫기', value: 'ok', primary: true }];
+    const res = await openModal({
+      title: '홈 화면에 추가',
+      body: pwaInstallInstructionsHtml(),
+      actions,
+    });
+    const v = modalValue(res);
+    if (v === 'install') {
+      const r = await tryPwaInstall();
+      if (r.ok) toast('홈 화면에 추가되었습니다', 'success');
+      else if (r.reason === 'dismissed') toast('설치를 취소했습니다', 'info');
+    }
+  });
 
   checkAppUpdateAvailable().then((available) => {
     const meta = document.getElementById('app-update-meta');

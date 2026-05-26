@@ -32,6 +32,17 @@ export function stripSensitiveFromPayload(payload) {
   return next;
 }
 
+function mergeRecordsById(localArr = [], remoteArr = []) {
+  const map = new Map();
+  for (const row of localArr) {
+    if (row?.id) map.set(row.id, row);
+  }
+  for (const row of remoteArr) {
+    if (row?.id) map.set(row.id, row);
+  }
+  return [...map.values()];
+}
+
 export function mergePayloadPreservingPrivate(local, remotePayload) {
   if (!remotePayload) return local;
   const merged = { ...local, ...remotePayload };
@@ -45,5 +56,8 @@ export function mergePayloadPreservingPrivate(local, remotePayload) {
       ),
     };
   }
+  merged.transactions = mergeRecordsById(local.transactions, remotePayload.transactions);
+  merged.goals = mergeRecordsById(local.goals, remotePayload.goals);
+  merged.recurring = mergeRecordsById(local.recurring, remotePayload.recurring);
   return merged;
 }

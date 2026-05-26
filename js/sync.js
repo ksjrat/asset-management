@@ -1,4 +1,4 @@
-import { DATA_VERSION, hasUserFinancialData } from './store.js';
+import { DATA_VERSION, dataFootprint, hasUserFinancialData } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
 import {
   encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
@@ -99,6 +99,9 @@ export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
 
   const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
+  if (hasUserFinancialData(local) && dataFootprint(merged) < dataFootprint(local)) {
+    return { data: local, rejectedEmptyRemote: true };
+  }
   merged._syncMeta = { ...(local._syncMeta || {}), lastMergedAt: remoteUpdatedAt || Date.now() };
   return { data: merged, rejectedEmptyRemote: false };
 }
@@ -220,6 +223,7 @@ export async function pushToCloud(data) {
   if (!hid) return;
 
   if (!hasCloudPassphraseSession()) return;
+  if (!hasUserFinancialData(data)) return;
 
   try {
     const { doc, setDoc } = firestoreApi;

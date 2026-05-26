@@ -1,5 +1,5 @@
 import { state, persist } from './state.js';
-import { save, saveSafetyBackup, hasUserFinancialData } from './store.js';
+import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint } from './store.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload, hasCloudPassphraseSession,
@@ -18,13 +18,28 @@ async function applyPullResult(result) {
     console.warn('Sync: invalid pull result, keeping local data');
     return { status: 'error' };
   }
-  saveSafetyBackup(state.data);
+
+  const before = state.data;
+  saveSafetyBackup(before);
+
+  const wouldShrink = hasUserFinancialData(before)
+    && dataFootprint(data) < dataFootprint(before);
+
+  if (rejectedEmptyRemote || wouldShrink) {
+    if (hasCloudPassphraseSession() && hasUserFinancialData(before)) {
+      await pushToCloud(before);
+    }
+    toast(
+      rejectedEmptyRemote
+        ? '빈 클라우드 데이터는 덮어쓰지 않았습니다'
+        : '이 기기 데이터가 더 많아 클라우드 덮어쓰기를 막았습니다',
+      'info',
+    );
+    return { status: 'local-kept' };
+  }
+
   state.data = data;
   save(state.data);
-  if (rejectedEmptyRemote) {
-    toast('빈 클라우드 데이터는 덮어쓰지 않았습니다', 'info');
-    if (hasCloudPassphraseSession()) await pushToCloud(state.data);
-  }
   return { status: status || 'ok' };
 }
 
@@ -37,9 +52,19 @@ export async function ensureSyncReady() {
 export async function setupCloudSync() {
   const ok = await initSync({
     onRemoteChange: async (payload, updatedAt) => {
+      // 이 기기에 이미 데이터가 있으면 자동 덮어쓰지 않음 (새로고침·업데이트 후 유실 방지)
+      if (hasUserFinancialData(state.data)) {
+        state.data._syncMeta = {
+          ...(state.data._syncMeta || {}),
+          remoteChangedAt: updatedAt || Date.now(),
+        };
+        return;
+      }
       const result = applyRemotePayload(state.data, payload, updatedAt);
-      await applyPullResult(result);
-      import('./views/index.js').then((m) => m.renderApp());
+      const { status } = await applyPullResult(result);
+      if (status !== 'local-kept') {
+        import('./views/index.js').then((m) => m.renderApp());
+      }
     },
   });
   if (!ok) return false;
@@ -64,8 +89,19 @@ export function syncAfterPersist() {
 
 export async function syncJoinHousehold(code) {
   if (!isSyncEnabled()) return;
-  saveSafetyBackup(state.data);
-  await applyPullResult(await pullFromCloud(state.data));
+  const before = structuredClone(state.data);
+  saveSafetyBackup(before);
+  const pull = await pullFromCloud(before);
+  if (hasUserFinancialData(before) && dataFootprint(pull.data) < dataFootprint(before)) {
+    state.data = before;
+    save(state.data);
+    await pushToCloud(state.data);
+    await bindHouseholdSync(state.data);
+    toast('이 기기 데이터를 유지하고 클라우드에 올렸습니다', 'success');
+    import('./views/index.js').then((m) => m.renderApp());
+    return;
+  }
+  await applyPullResult(pull);
   await bindHouseholdSync(state.data);
   await pushToCloud(state.data);
 }

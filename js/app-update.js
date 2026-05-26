@@ -1,5 +1,7 @@
 /** 앱 최신 버전 불러오기 (캐시·서비스 워커 정리 후 새로고침) */
 
+import { KEY, SAFETY_KEY } from './store.js';
+
 function isLocalDevHost() {
   const h = location.hostname;
   return h === 'localhost' || h === '127.0.0.1'
@@ -25,8 +27,17 @@ export async function checkAppUpdateAvailable() {
   }
 }
 
+/** localStorage는 건드리지 않고, 새로고침 전 안전 백업만 갱신 */
+function backupLocalDataBeforeReload() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) localStorage.setItem(SAFETY_KEY, raw);
+  } catch { /* quota */ }
+}
+
 /** 캐시 삭제 → SW 갱신 → 페이지 새로고침 */
 export async function applyAppUpdate() {
+  backupLocalDataBeforeReload();
   await clearAppCaches();
 
   if ('serviceWorker' in navigator && !isLocalDevHost()) {

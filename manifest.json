@@ -1,8 +1,10 @@
 {
+  "id": "couple-asset",
   "name": "우리 자산 - 신혼부부 공동 자산 관리",
   "short_name": "우리 자산",
   "description": "신혼부부 공동 자산·목표·예산 관리",
-  "start_url": "./index.html",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f5f5f7",
   "theme_color": "#f5f5f7",

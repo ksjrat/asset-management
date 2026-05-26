@@ -3,6 +3,7 @@ import { renderApp } from './views/index.js';
 import { state } from './state.js';
 import { load } from './store.js';
 import { setupCloudSync } from './sync-service.js';
+import { initPwaInstall } from './pwa-install.js';
 
 async function bootstrap() {
   state.data = load();
@@ -12,6 +13,7 @@ async function bootstrap() {
     state.locked = false;
   }
   initUI();
+  initPwaInstall();
   renderApp();
   setupCloudSync().then((ok) => {
     if (ok && state.data.auth.onboardingDone) {
