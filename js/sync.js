@@ -67,6 +67,8 @@ function preserveLocalAuth(local, merged) {
   merged.auth.userEmail = local.auth.userEmail;
   merged.auth.loggedIn = local.auth.loggedIn;
   merged.auth.appPasswordSet = local.auth.appPasswordSet;
+  merged.auth.appPasswordSalt = local.auth.appPasswordSalt;
+  merged.auth.appPasswordHash = local.auth.appPasswordHash;
   merged.auth.policyAccepted = local.auth.policyAccepted;
   merged.auth.policyVersion = local.auth.policyVersion;
   merged.auth.onboardingDone = local.auth.onboardingDone;

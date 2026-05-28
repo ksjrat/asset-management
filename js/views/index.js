@@ -57,7 +57,7 @@ export function renderApp() {
     return;
   }
 
-  if (locked && data.auth.appPasswordSet) {
+  if (locked) {
     root.className = 'app-lock';
     root.innerHTML = renderLock();
     bindLock();

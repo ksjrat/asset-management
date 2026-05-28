@@ -18,6 +18,7 @@ import { applyAppUpdate, checkAppUpdateAvailable } from '../app-update.js';
 import {
   canPromptInstall, getPwaInstallHint, pwaInstallInstructionsHtml, tryPwaInstall,
 } from '../pwa-install.js';
+import { isAppPinConfigured, setAppPin, verifyAppPin, clearAppPin } from '../app-lock.js';
 
 function linkStatusLabel() {
   if (isLinkComplete()) return '연동 완료';
@@ -35,6 +36,93 @@ function homeFilterSummary(filterIds) {
 function linkSectionSummary(linkDone) {
   if (isCloudSyncActive()) return '자동 동기화 켜짐';
   return linkDone ? '연동 완료' : linkStatusLabel();
+}
+
+const pinFieldsHtml = (fields) => fields.map(([label, name, opts = '']) =>
+  formField(label, `<input class="input" name="${name}" type="password" minlength="4" required ${opts} />`),
+).join('');
+
+async function createAppPin(rerender) {
+  const res = await openModal({
+    title: '앱 비밀번호 설정',
+    body: `<form id="pin-setup-form" class="form-stack">${pinFieldsHtml([
+      ['새 비밀번호', 'pin', 'autocomplete="new-password" inputmode="numeric"'],
+      ['비밀번호 확인', 'pinConfirm', 'autocomplete="new-password" inputmode="numeric"'],
+    ])}</form><p class="muted">4자 이상 · 이 기기에만 저장됩니다.</p>`,
+    actions: [{ label: '취소', value: null }, { label: '설정', value: 'save', primary: true }],
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const pin = fd.get('pin')?.toString() ?? '';
+  const confirm = fd.get('pinConfirm')?.toString() ?? '';
+  if (pin !== confirm) {
+    toast('비밀번호 확인이 일치하지 않습니다', 'error');
+    return;
+  }
+  const result = await setAppPin(state.data, pin);
+  if (!result.ok) {
+    toast(result.error, 'error');
+    return;
+  }
+  persist();
+  toast('앱 비밀번호가 설정되었습니다', 'success');
+  rerender();
+}
+
+async function changeAppPin(rerender) {
+  const res = await openModal({
+    title: '앱 비밀번호 변경',
+    body: `<form id="pin-change-form" class="form-stack">${pinFieldsHtml([
+      ['현재 비밀번호', 'current', 'autocomplete="current-password" inputmode="numeric"'],
+      ['새 비밀번호', 'pin', 'autocomplete="new-password" inputmode="numeric"'],
+      ['새 비밀번호 확인', 'pinConfirm', 'autocomplete="new-password" inputmode="numeric"'],
+    ])}</form>`,
+    actions: [{ label: '취소', value: null }, { label: '변경', value: 'save', primary: true }],
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const current = fd.get('current')?.toString() ?? '';
+  if (!(await verifyAppPin(state.data, current))) {
+    toast('현재 비밀번호가 올바르지 않습니다', 'error');
+    return;
+  }
+  const pin = fd.get('pin')?.toString() ?? '';
+  const confirm = fd.get('pinConfirm')?.toString() ?? '';
+  if (pin !== confirm) {
+    toast('새 비밀번호 확인이 일치하지 않습니다', 'error');
+    return;
+  }
+  const result = await setAppPin(state.data, pin);
+  if (!result.ok) {
+    toast(result.error, 'error');
+    return;
+  }
+  persist();
+  toast('비밀번호가 변경되었습니다', 'success');
+  rerender();
+}
+
+async function clearAppPinWithVerify(rerender) {
+  if (!(await confirmDialog('앱 비밀번호 해제', '앱 잠금을 끌까요? 시작 시 잠금 화면이 나오지 않습니다.'))) return;
+  const res = await openModal({
+    title: '비밀번호 확인',
+    body: pinFieldsHtml([['현재 비밀번호', 'current', 'autocomplete="current-password" inputmode="numeric"']]),
+    actions: [{ label: '취소', value: null }, { label: '해제', value: 'clear', danger: true }],
+  });
+  if (modalValue(res) !== 'clear') return;
+  const fd = modalForm(res);
+  const current = fd?.get('current')?.toString() ?? '';
+  if (!(await verifyAppPin(state.data, current))) {
+    toast('비밀번호가 올바르지 않습니다', 'error');
+    return;
+  }
+  clearAppPin(state.data);
+  state.locked = false;
+  persist();
+  toast('앱 비밀번호가 해제되었습니다', 'success');
+  rerender();
 }
 
 function bindSettingsDisclosure(toggleId, panelId) {
@@ -96,7 +184,7 @@ export function renderSettings() {
       <label class="toggle-row"><span>앱 시작 시 잠금</span>
         <input type="checkbox" id="toggle-lock" ${s.lockOnLaunch !== false ? 'checked' : ''} /></label>
       <button type="button" class="settings-row" id="btn-password">
-        <span><strong>앱 비밀번호</strong><span class="settings-row-meta">${a.appPasswordSet ? '설정됨' : '미설정'}</span></span>
+        <span><strong>앱 비밀번호</strong><span class="settings-row-meta">${isAppPinConfigured(state.data) ? '설정됨' : '미설정'}</span></span>
         <span class="settings-chevron">›</span>
       </button>
     </div>
@@ -265,12 +353,22 @@ export function bindSettings() {
     });
   });
   document.getElementById('btn-password')?.addEventListener('click', async () => {
-    const res = await openModal({
-      title: '앱 비밀번호',
-      body: formField('비밀번호', '<input class="input" name="pin" type="password" minlength="4" />'),
-      actions: [{ label: '취소', value: null }, { label: '설정', value: 'save', primary: true }],
-    });
-    if (modalValue(res) === 'save') { state.data.auth.appPasswordSet = true; persist(); toast('설정되었습니다'); }
+    if (isAppPinConfigured(state.data)) {
+      const menu = await openModal({
+        title: '앱 비밀번호',
+        body: '<p class="muted">이 기기에만 저장됩니다. 클라우드로 전송되지 않습니다.</p>',
+        actions: [
+          { label: '취소', value: null },
+          { label: '해제', value: 'clear', danger: true },
+          { label: '변경', value: 'change', primary: true },
+        ],
+      });
+      const action = modalValue(menu);
+      if (action === 'clear') await clearAppPinWithVerify(rerender);
+      else if (action === 'change') await changeAppPin(rerender);
+      return;
+    }
+    await createAppPin(rerender);
   });
   document.getElementById('btn-disconnect')?.addEventListener('click', async () => {
     if (await confirmDialog('연결 해제', '배우자 연결을 해제할까요?')) {

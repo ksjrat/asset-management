@@ -1,6 +1,9 @@
 import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
-import { ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount } from './budget-engine.js';
+import {
+  ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
+} from './budget-engine.js';
+import { ensureAppLockAuth } from './app-lock.js';
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -114,10 +117,18 @@ function prevYm(year, month) {
   return { year: y, month: m, ym: ymStr(y, m) };
 }
 
+/** 지출 탭에 입력한 카테고리별 실적 합계 (봉투 예산 기준) */
+export function getMonthBudgetActualTotal(data, year, month) {
+  ensureBudgetStructure(data);
+  if (!data.budget?.setupDone) return 0;
+  const cats = getVisibleCategories(data);
+  return getPeriodTotals(data, year, month, cats).actual;
+}
+
 export function getMonthCashflowSummary(data, year, month) {
   const txs = getMonthTransactions(data, year, month);
   const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const expense = getMonthBudgetActualTotal(data, year, month);
   const savings = getMonthSavingsTotal(data, year, month);
   const investPnL = getInvestmentPnLForMonth(data, year, month).pnl;
   return { income, expense, savings, investPnL };
@@ -289,8 +300,10 @@ export function load() {
     ensureBudgetStructure(data);
     migrateBudgetModel(data);
     ensureAppSettings(data);
+    ensureAppLockAuth(data);
     data = tryRestoreSafetyBackup(data);
     ensureAppSettings(data);
+    ensureAppLockAuth(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -414,15 +427,12 @@ export function guideExecutionRate(data) {
 }
 
 export function buildReportShareText(data, year, month) {
-  const txs = getMonthTransactions(data, year, month);
-  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const investPnL = getInvestmentPnLForMonth(data, year, month).pnl;
+  const { income, expense, investPnL } = getMonthCashflowSummary(data, year, month);
   const nw = computeNetWorth(data);
   const lines = [
     `[우리 자산] ${year}년 ${month}월 보고서`,
     `순자산: ${nw.net.toLocaleString('ko-KR')}원`,
-    `수입: ${income.toLocaleString('ko-KR')}원 / 지출: ${expense.toLocaleString('ko-KR')}원`,
+    `수입: ${income.toLocaleString('ko-KR')}원 / 예산 실적: ${expense.toLocaleString('ko-KR')}원`,
     ...(investPnL ? [`투자 손익(평가): ${(investPnL >= 0 ? '+' : '') + investPnL.toLocaleString('ko-KR')}원`] : []),
     `목표 ${data.goals.length}개 · 배우자 ${data.auth.spouseConnected ? '연결됨' : '미연결'}`,
   ];

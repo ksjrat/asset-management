@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import {
   computeNetWorth, computeGoalProgress, getMonthBudget,
-  getMonthTransactions, getCategorySpend, getVisibleCategories,
+  getMonthCashflowSummary, getCategorySpend, getVisibleCategories,
   getInvestmentPnLForMonth,
   buildReportShareText,
 } from '../store.js';
@@ -15,9 +15,7 @@ export function renderReports() {
   const snaps = [...data.assets.snapshots].sort((a, b) => a.year - b.year || a.month - b.month);
   const cur = snaps.find((s) => s.year === y && s.month === m);
   const prev = snaps.filter((s) => s.year < y || (s.year === y && s.month < m)).pop();
-  const txs = getMonthTransactions(data, y, m);
-  const income = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const { income, expense } = getMonthCashflowSummary(data, y, m);
   const invest = getInvestmentPnLForMonth(data, y, m);
   const spend = getCategorySpend(data, y, m);
   const cats = getVisibleCategories(data);
@@ -54,15 +52,16 @@ export function renderReports() {
       ${prev ? `<p class="hero-sub">전월 ${fmtMoney(prev.net)}</p>` : ''}
     </section>
     <section class="section">
-      <h2>수입 · 지출 요약</h2>
+      <h2>수입 · 예산 실적</h2>
       <div class="summary-row">
         <div class="mini-card"><span>수입</span><strong class="income">${fmtMoney(income)}</strong></div>
-        <div class="mini-card"><span>지출</span><strong class="danger">${fmtMoney(expense)}</strong></div>
+        <div class="mini-card"><span>예산 실적</span><strong class="danger">${fmtMoney(expense)}</strong></div>
         <div class="mini-card"><span>투자 손익(평가)</span><strong class="${invest.pnl >= 0 ? 'income' : 'danger'}">${invest.pnl >= 0 ? '+' : ''}${fmtMoney(invest.pnl)}</strong></div>
       </div>
+      <p class="muted">예산 실적은 지출 탭에서 입력한 카테고리별 실적 합계입니다.</p>
     </section>
     <section class="section">
-      <h2>지출 분석</h2>
+      <h2>카테고리별 실적</h2>
       ${barChart(barItems)}
     </section>
     <section class="section">

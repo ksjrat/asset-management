@@ -97,11 +97,11 @@ export function renderDashboard() {
       <p class="month-label">${fmtMonth(y, m)} 한눈에</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card"><span>수입</span><strong class="income">${fmtShort(flow.income)}</strong></div>
-        <div class="mini-card"><span>지출</span><strong class="danger">${fmtShort(flow.expense)}</strong></div>
+        <div class="mini-card"><span>예산 실적</span><strong class="danger">${fmtShort(flow.expense)}</strong></div>
         <div class="mini-card"><span>저축 실행</span><strong class="income">${fmtShort(flow.savings)}</strong></div>
         <div class="mini-card"><span>투자 손익</span><strong class="${flow.investPnL >= 0 ? 'income' : 'danger'}">${flow.investPnL >= 0 ? '+' : ''}${fmtShort(flow.investPnL)}</strong></div>
       </div>
-      <p class="muted">투자 손익은 평가 기록(전월 대비) 기준입니다.</p>
+      <p class="muted">예산 실적은 지출 탭 카테고리 실적 합계입니다. 투자 손익은 평가 기록(전월 대비) 기준입니다.</p>
     </section>
 
     ${budgetSection}

@@ -2,6 +2,7 @@ import { initUI } from './ui.js';
 import { renderApp } from './views/index.js';
 import { state } from './state.js';
 import { load } from './store.js';
+import { isAppPinConfigured } from './app-lock.js';
 import { setupCloudSync } from './sync-service.js';
 import { initPwaInstall } from './pwa-install.js';
 
@@ -13,7 +14,7 @@ async function bootstrap() {
     state.locked = false;
   }
   if (state.data.auth.onboardingDone) {
-    state.locked = state.data.auth.appPasswordSet && state.data.settings?.lockOnLaunch !== false;
+    state.locked = isAppPinConfigured(state.data) && state.data.settings?.lockOnLaunch !== false;
   } else {
     state.locked = false;
   }
