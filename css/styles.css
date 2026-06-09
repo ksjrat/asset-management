@@ -631,7 +631,6 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
   margin-bottom: 6px;
 }
 .budget-savings-hint { font-size: 0.82rem; margin: 4px 0 8px; }
-.setup-item-row--payer { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
 .setup-savings-group { margin-bottom: 16px; padding: 12px; background: var(--surface); border-radius: 10px; }
 .setup-budget-row--sub { padding-left: 8px; }
 
@@ -1513,6 +1512,24 @@ body.modal-open { overflow: hidden; }
 .setup-step-label { font-size: 0.75rem; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
 .setup-list { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); margin: 16px 0; overflow: hidden; }
 .setup-item-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.setup-item-row.setup-item-row--payer {
+  display: grid;
+  grid-template-columns: auto minmax(5.5rem, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  justify-content: unset;
+}
+.setup-item-row--payer .setup-item-name {
+  white-space: nowrap;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.setup-item-row--payer .input-sm {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
 .setup-item-row:last-child { border-bottom: none; }
 .setup-add-form { display: flex; gap: 8px; margin-bottom: 8px; }
 .setup-add-form .input { flex: 1; }

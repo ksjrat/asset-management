@@ -36,7 +36,7 @@ function renderStep1() {
   const cats = getVisibleCategories(state.data);
   const list = cats.map((c) => `
     <div class="setup-item-row setup-item-row--payer">
-      <span>${esc(c.name)}</span>
+      <span class="setup-item-name">${esc(c.name)}</span>
       <select class="input input-sm" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>
       <button type="button" class="text-btn danger-text" data-remove-cat="${c.id}">삭제</button>
     </div>`).join('');
