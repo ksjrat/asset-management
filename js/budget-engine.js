@@ -252,6 +252,7 @@ export function ensureBudgetStructure(data) {
     }
   }
   if (b.setupDone === undefined) b.setupDone = false;
+  if (!b.recordSchedule) b.recordSchedule = RECORD_SCHEDULE_FIXED;
   if (!b.defaultRecordDay) b.defaultRecordDay = 25;
   for (const c of b.categories) {
     if (c.recordDay == null) c.recordDay = null;
@@ -284,8 +285,69 @@ export function isBudgetStartMonth(data, year, month) {
   return start.year === year && start.month === month;
 }
 
+export const RECORD_SCHEDULE_FIXED = 'fixed';
+export const RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY = 'next_month_first_sunday';
+
+export const RECORD_SCHEDULES = [
+  { id: RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY, label: '다음 달 첫째 주 일요일' },
+  { id: RECORD_SCHEDULE_FIXED, label: '매달 고정일 (1~28일)' },
+];
+
+export function getRecordSchedule(data, category = null) {
+  return category?.recordSchedule ?? data.budget?.recordSchedule ?? RECORD_SCHEDULE_FIXED;
+}
+
 export function getRecordDay(data, category) {
   return category?.recordDay ?? data.budget.defaultRecordDay ?? 25;
+}
+
+/** 해당 월의 첫 번째 일요일 (로컬 날짜) */
+export function getFirstSundayOfMonth(year, month) {
+  const first = new Date(year, month - 1, 1);
+  const offset = first.getDay() === 0 ? 0 : 7 - first.getDay();
+  return new Date(year, month - 1, 1 + offset);
+}
+
+function startOfLocalDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** 예산 월(year-month) 실적을 입력할 수 있게 되는 날 */
+export function getRecordOpensDate(data, category, budgetYear, budgetMonth) {
+  const schedule = getRecordSchedule(data, category);
+  if (schedule === RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY) {
+    const nextMonth = budgetMonth === 12 ? 1 : budgetMonth + 1;
+    const nextYear = budgetMonth === 12 ? budgetYear + 1 : budgetYear;
+    return getFirstSundayOfMonth(nextYear, nextMonth);
+  }
+  const day = getRecordDay(data, category);
+  return new Date(budgetYear, budgetMonth - 1, day);
+}
+
+const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+export function formatRecordOpensLabel(data, category, budgetYear, budgetMonth) {
+  const schedule = getRecordSchedule(data, category);
+  if (schedule === RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY) {
+    const d = getRecordOpensDate(data, category, budgetYear, budgetMonth);
+    return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAY_KO[d.getDay()]})`;
+  }
+  return `${getRecordDay(data, category)}일`;
+}
+
+/** 배너 등 — 현재 보고 있는 달 기준 입력 가능 시점 */
+export function getRecordScheduleLabel(data) {
+  const id = getRecordSchedule(data);
+  return RECORD_SCHEDULES.find((s) => s.id === id)?.label ?? '매달 고정일';
+}
+
+export function formatRecordOpensHint(data, budgetYear, budgetMonth) {
+  const schedule = getRecordSchedule(data);
+  if (schedule === RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY) {
+    const d = getRecordOpensDate(data, null, budgetYear, budgetMonth);
+    return `${d.getMonth() + 1}월 ${d.getDate()}일(일)부터`;
+  }
+  return `${getRecordDay(data)}일부터`;
 }
 
 export function isSubdividedCategoryId(data, catId) {
@@ -406,13 +468,13 @@ export function getPeriodTotals(data, year, month, categories) {
 export function canRecordActual(data, year, month, catId) {
   if (isBeforeBudgetStart(data, year, month)) return false;
   const cat = data.budget.categories.find((c) => c.id === catId);
-  const recordDay = getRecordDay(data, cat);
-  const today = new Date();
+  const today = startOfLocalDay(new Date());
   const ty = today.getFullYear();
   const tm = today.getMonth() + 1;
   if (year > ty || (year === ty && month > tm)) return false;
   if (year < ty || (year === ty && month < tm)) return true;
-  return today.getDate() >= recordDay;
+  const opens = startOfLocalDay(getRecordOpensDate(data, cat, year, month));
+  return today >= opens;
 }
 
 /** 아직 실적 미입력 + 입력 가능 */

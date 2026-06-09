@@ -5,11 +5,11 @@ import {
 } from '../store.js';
 import { showGoalForm } from './modals.js';
 import { fmtMoney } from '../format.js';
-import { getBudgetStart } from '../budget-engine.js';
+import { getBudgetStart, getRecordScheduleLabel } from '../budget-engine.js';
 import { isSyncEnabled } from '../sync.js';
 import { fmtMonth } from '../format.js';
 import { openModal, toast, confirmDialog, formField, esc, modalValue, modalForm } from '../ui.js';
-import { showBudgetStartForm } from './modals.js';
+import { showBudgetStartForm, showRecordScheduleForm } from './modals.js';
 import {
   getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
 } from '../link-wizard.js';
@@ -144,6 +144,7 @@ export function renderSettings() {
   const homeFilters = new Set(s.homeOwnerFilters || []);
   const start = getBudgetStart(state.data);
   const startLabel = start ? fmtMonth(start.year, start.month) : '미설정';
+  const recordLabel = getRecordScheduleLabel(state.data);
   const syncOn = isSyncEnabled();
   const linkDone = isLinkComplete();
 
@@ -243,6 +244,10 @@ export function renderSettings() {
       <p class="settings-group-title">예산</p>
       <button type="button" class="settings-row" id="btn-budget-start">
         <span><strong>가계부 시작 월</strong><span class="settings-row-meta">${startLabel}</span></span>
+        <span class="settings-chevron">›</span>
+      </button>
+      <button type="button" class="settings-row" id="btn-record-schedule">
+        <span><strong>실적 입력 시점</strong><span class="settings-row-meta">${esc(recordLabel)}</span></span>
         <span class="settings-chevron">›</span>
       </button>
       <button type="button" class="settings-row" id="btn-budget-setup">
@@ -412,6 +417,9 @@ export function bindSettings() {
   });
   document.getElementById('btn-budget-start')?.addEventListener('click', () => {
     showBudgetStartForm(rerender);
+  });
+  document.getElementById('btn-record-schedule')?.addEventListener('click', () => {
+    showRecordScheduleForm(rerender);
   });
   document.getElementById('btn-budget-setup')?.addEventListener('click', () => {
     state.data.budget.setupDone = false;

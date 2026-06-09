@@ -207,6 +207,7 @@ export const DEFAULT = {
   goals: [],
   budget: {
     setupDone: false,
+    recordSchedule: 'next_month_first_sunday',
     defaultRecordDay: 25,
     startYear: null,
     startMonth: null,

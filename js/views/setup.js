@@ -3,6 +3,8 @@ import { addCategory, getVisibleCategories, getOwnerDisplayLabel, OWNERS, hasSub
 import {
   setMonthlyPlanAmount, getMonthlyPlanAmount, setBudgetStart, getBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
+  RECORD_SCHEDULES, RECORD_SCHEDULE_FIXED, RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY,
+  getFirstSundayOfMonth,
 } from '../budget-engine.js';
 import { esc, toast, bindAmountPreviewsIn } from '../ui.js';
 import { fmtMoney, fmtMonth } from '../format.js';
@@ -12,7 +14,7 @@ const STEPS = [
   { n: 1, title: '항목 설정', desc: '관리할 지출 항목을 만드세요' },
   { n: 2, title: '월간 예산', desc: '항목별 매월 예산 (언제든 수정 가능)' },
   { n: 3, title: '시작 월', desc: '가계부 관리를 시작할 달' },
-  { n: 4, title: '실적 입력일', desc: '매달 실제 사용액을 입력할 날짜' },
+  { n: 4, title: '실적 입력 시점', desc: '매달 실제 사용액을 입력할 때기' },
 ];
 
 function stepHeader(step) {
@@ -124,23 +126,41 @@ function renderStep3() {
 }
 
 function renderStep4() {
+  const schedule = state.data.budget.recordSchedule ?? RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY;
   const day = state.data.budget.defaultRecordDay ?? 25;
+  const isFixed = schedule === RECORD_SCHEDULE_FIXED;
+  const now = new Date();
+  const nextSun = getFirstSundayOfMonth(
+    now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear(),
+    now.getMonth() === 11 ? 1 : now.getMonth() + 2,
+  );
+  const scheduleOpts = RECORD_SCHEDULES.map((s) =>
+    `<label class="record-schedule-opt">
+      <input type="radio" name="recordSchedule" value="${s.id}" ${schedule === s.id ? 'checked' : ''} />
+      <span>${esc(s.label)}</span>
+    </label>`).join('');
   const start = getBudgetStart(state.data);
   const cats = getVisibleCategories(state.data);
   const preview = cats.slice(0, 3).map((c) => esc(c.name)).join(', ');
   return `
     ${stepHeader(4)}
     <form id="setup-record-form" class="form-stack">
-      <label class="field">
-        <span class="field-label">매달 실적 입력일 (1~28일)</span>
-        <input class="input input-lg" name="recordDay" type="number" min="1" max="28" value="${day}" required />
+      <fieldset class="record-schedule-fieldset">
+        <legend class="field-label">실적 입력 시점</legend>
+        <div class="record-schedule-options">${scheduleOpts}</div>
+      </fieldset>
+      <label class="field record-schedule-fixed ${isFixed ? '' : 'hidden'}" id="setup-record-day-wrap">
+        <span class="field-label">매달 고정일 (1~28일)</span>
+        <input class="input input-lg" name="recordDay" type="number" min="1" max="28" value="${day}" ${isFixed ? 'required' : ''} />
       </label>
-      <p class="field-hint">설정한 날짜가 되면 <strong>${preview}${cats.length > 3 ? '…' : ''}</strong> 등 항목별 실제 사용 금액을 입력할 수 있습니다.</p>
+      <p class="field-hint" id="setup-record-hint">${isFixed
+    ? `설정한 날짜가 되면 <strong>${preview}${cats.length > 3 ? '…' : ''}</strong> 등 항목별 실제 사용액을 입력할 수 있습니다.`
+    : `이번 달(${fmtMonth(now.getFullYear(), now.getMonth() + 1)}) 실적은 <strong>${nextSun.getMonth() + 1}월 ${nextSun.getDate()}일(일)</strong>부터 입력할 수 있습니다.`}</p>
       ${start ? `<p class="field-hint">관리 시작: <strong>${fmtMonth(start.year, start.month)}</strong></p>` : ''}
       <div class="setup-info-card">
         <h3>이후 흐름</h3>
         <ol class="setup-flow-list">
-          <li>정산일 이후 → 항목별 <strong>실제 사용액</strong> 입력</li>
+          <li>정산 시점 이후 → 항목별 <strong>실제 사용액</strong> 입력</li>
           <li>월간 예산과 비교 → 초과·절약 확인</li>
           <li>남은 금액 → <strong>다음 달로 이월</strong> (시작 월 이후만)</li>
         </ol>
@@ -203,6 +223,18 @@ export function bindSetup() {
       const row = input.closest('.setup-budget-row');
       const hint = row?.querySelector('.setup-budget-monthly');
       if (hint) hint.textContent = `연 ${fmtMoney((Number(input.value) || 0) * 12)}`;
+    });
+  });
+
+  document.querySelectorAll('input[name="recordSchedule"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const isFixed = radio.value === RECORD_SCHEDULE_FIXED && radio.checked;
+      document.getElementById('setup-record-day-wrap')?.classList.toggle('hidden', !isFixed);
+      const dayInput = document.querySelector('#setup-record-form [name="recordDay"]');
+      if (dayInput) {
+        if (isFixed) dayInput.setAttribute('required', '');
+        else dayInput.removeAttribute('required');
+      }
     });
   });
 
@@ -273,8 +305,13 @@ export function bindSetup() {
     }
     if (state.setupStep === 4) {
       const form = document.getElementById('setup-record-form');
-      const day = Number(new FormData(form).get('recordDay')) || 25;
-      state.data.budget.defaultRecordDay = Math.min(28, Math.max(1, day));
+      const fd = new FormData(form);
+      const schedule = fd.get('recordSchedule')?.toString() || RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY;
+      state.data.budget.recordSchedule = schedule;
+      if (schedule === RECORD_SCHEDULE_FIXED) {
+        const day = Number(fd.get('recordDay')) || 25;
+        state.data.budget.defaultRecordDay = Math.min(28, Math.max(1, day));
+      }
       if (!getBudgetStart(state.data)) {
         const now = new Date();
         setBudgetStart(state.data, now.getFullYear(), now.getMonth() + 1);

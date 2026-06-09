@@ -8,7 +8,9 @@ import {
 } from '../store.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
-  getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
+  getActualAmount, setActualAmount, getCategoryPeriodSummary,
+  getRecordSchedule, RECORD_SCHEDULE_FIXED, RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY,
+  RECORD_SCHEDULES,
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
   getSubActualAmount, setSubActualAmount, getSubItems,
@@ -485,6 +487,55 @@ export async function showBudgetStartForm(rerender) {
   rerender();
 }
 
+export async function showRecordScheduleForm(rerender) {
+  const schedule = state.data.budget.recordSchedule ?? RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY;
+  const day = state.data.budget.defaultRecordDay ?? 25;
+  const isFixed = schedule === RECORD_SCHEDULE_FIXED;
+  const scheduleOpts = RECORD_SCHEDULES.map((s) =>
+    `<label class="record-schedule-opt">
+      <input type="radio" name="recordSchedule" value="${s.id}" ${schedule === s.id ? 'checked' : ''} />
+      <span>${esc(s.label)}</span>
+    </label>`).join('');
+  const res = await openModal({
+    title: '실적 입력 시점',
+    body: `<form id="record-schedule-form" class="form-stack">
+      <p class="field-hint">해당 월 실적을 언제부터 입력할지 정합니다.</p>
+      <fieldset class="record-schedule-fieldset">
+        <div class="record-schedule-options">${scheduleOpts}</div>
+      </fieldset>
+      <label class="field record-schedule-fixed ${isFixed ? '' : 'hidden'}" id="record-day-wrap">
+        <span class="field-label">매달 고정일 (1~28일)</span>
+        <input class="input" name="recordDay" type="number" min="1" max="28" value="${day}" ${isFixed ? 'required' : ''} />
+      </label>
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+    onOpen: (sheet) => {
+      sheet.querySelectorAll('input[name="recordSchedule"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+          const fixed = radio.value === RECORD_SCHEDULE_FIXED && radio.checked;
+          sheet.querySelector('#record-day-wrap')?.classList.toggle('hidden', !fixed);
+          const dayInput = sheet.querySelector('[name="recordDay"]');
+          if (dayInput) {
+            if (fixed) dayInput.setAttribute('required', '');
+            else dayInput.removeAttribute('required');
+          }
+        });
+      });
+    },
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  const next = fd.get('recordSchedule')?.toString() || RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY;
+  state.data.budget.recordSchedule = next;
+  if (next === RECORD_SCHEDULE_FIXED) {
+    state.data.budget.defaultRecordDay = Math.min(28, Math.max(1, Number(fd.get('recordDay')) || 25));
+  }
+  persist();
+  toast('실적 입력 시점이 저장되었습니다', 'success');
+  rerender();
+}
+
 export async function showMonthlyBudgetForm(year, rerender) {
   const cats = getVisibleCategories(state.data);
   const fields = cats.map((c) => {
@@ -678,6 +729,10 @@ function setCategoryHidden(data, cat, hidden) {
 
 async function openCategoryEdit(cat, rerender) {
   const subdivided = hasSubItems(state.data, cat.id);
+  const useFixedDay = getRecordSchedule(state.data, cat) === RECORD_SCHEDULE_FIXED;
+  const recordDayField = useFixedDay
+    ? formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)
+    : '<p class="field-hint">실적 입력은 다음 달 첫째 주 일요일부터 가능합니다 (전역 설정).</p>';
   const editRes = await openModal({
     title: '카테고리 편집',
     body: `<form id="cat-form" class="form-stack">
@@ -687,7 +742,7 @@ async function openCategoryEdit(cat, rerender) {
     : formField('부담자', payerSelect('payer', cat.payer || 'joint', state.data))}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
-      ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
+      ${recordDayField}
     </form>`,
     actions: [
       { label: '세부 항목', value: 'sub' },
@@ -714,8 +769,10 @@ async function openCategoryEdit(cat, rerender) {
   cat.name = efd.get('name');
   if (!hasSubItems(state.data, cat.id)) cat.payer = efd.get('payer') || 'joint';
   setCategoryHidden(state.data, cat, !!efd.get('hidden'));
-  const rd = efd.get('recordDay');
-  cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
+  if (getRecordSchedule(state.data, cat) === RECORD_SCHEDULE_FIXED) {
+    const rd = efd.get('recordDay');
+    cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
+  }
   persist();
   toast('저장됨', 'success');
   rerender();

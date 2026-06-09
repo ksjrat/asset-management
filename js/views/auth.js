@@ -153,6 +153,7 @@ export function finishOnboarding() {
     state.data.budget.monthlyPlan = {};
     state.data.budget.actuals = {};
     state.data.budget.setupDone = false;
+    state.data.budget.recordSchedule = 'next_month_first_sunday';
     state.data.budget.defaultRecordDay = 25;
     state.data.budget.startYear = null;
     state.data.budget.startMonth = null;

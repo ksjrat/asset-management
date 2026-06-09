@@ -5,7 +5,8 @@ import {
   getPeriodTotals,
   isRecordDue,
   canRecordActual,
-  getRecordDay,
+  formatRecordOpensLabel,
+  formatRecordOpensHint,
   getBudgetStart,
   isBeforeBudgetStart,
   getSubSummary,
@@ -42,7 +43,7 @@ function ownerUsageRows(data, year, month) {
 export function renderBudget() {
   const { data, selectedYear: y, selectedMonth: m } = state;
   const cats = getVisibleCategories(data);
-  const recordDay = data.budget.defaultRecordDay ?? 25;
+  const recordHint = formatRecordOpensHint(data, y, m);
   const totals = getPeriodTotals(data, y, m, cats);
   const start = getBudgetStart(data);
   const beforeStart = isBeforeBudgetStart(data, y, m);
@@ -51,14 +52,14 @@ export function renderBudget() {
     : '';
 
   const dueBanner = !beforeStart && totals.dueCount > 0
-    ? `<button type="button" class="tip-banner" id="btn-record-due">📌 실적 입력 ${totals.dueCount}건 대기 · ${recordDay}일부터 입력 가능</button>`
+    ? `<button type="button" class="tip-banner" id="btn-record-due">📌 실적 입력 ${totals.dueCount}건 대기 · ${esc(recordHint)} 입력 가능</button>`
     : '';
 
   const ownerSummary = getOwnerMonthlySummary(data, y, m);
 
   const catRows = cats.map((c) => {
     const s = getCategoryPeriodSummary(data, y, m, c.id);
-    const day = getRecordDay(data, c);
+    const opensLabel = formatRecordOpensLabel(data, c, y, m);
     const due = isRecordDue(data, y, m, c.id);
     const canEdit = !s.beforeStart && canRecordActual(data, y, m, c.id);
     const pct = s.available > 0 ? s.actual / s.available : 0;
@@ -79,7 +80,7 @@ export function renderBudget() {
         <div class="budget-envelope-head">
           <div>
             <strong>${esc(c.name)}</strong>
-            <span class="budget-envelope-meta">정산 ${day}일 · ${esc(payerLabel)} · 월 ${fmtShort(s.monthlyPlanned)}</span>
+            <span class="budget-envelope-meta">입력 ${esc(opensLabel)} · ${esc(payerLabel)} · 월 ${fmtShort(s.monthlyPlanned)}</span>
           </div>
           <div class="budget-envelope-badges">
             ${due ? '<span class="badge badge-proposed">입력 대기</span>' : ''}
@@ -97,7 +98,7 @@ export function renderBudget() {
         <div class="budget-envelope-foot">
           <span class="${s.remaining >= 0 ? 'income' : 'danger'}">잔액 ${fmtShort(s.remaining)}</span>
           ${s.remaining > 0 && s.hasActual ? '<span class="muted">→ 다음 달 이월</span>' : ''}
-          ${canEdit ? recordBtn : s.beforeStart ? '<span class="muted">관리 시작 전</span>' : '<span class="muted">정산일 이후 입력</span>'}
+          ${canEdit ? recordBtn : s.beforeStart ? '<span class="muted">관리 시작 전</span>' : '<span class="muted">입력 시점 이후</span>'}
         </div>
       </div>`;
   }).join('');
@@ -144,7 +145,7 @@ export function renderBudget() {
       <ol class="setup-flow-list compact">
         <li>항목별 <strong>월간 예산</strong>을 설정합니다</li>
         <li>시작 월 이후, 전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
-        <li>정산일 이후 항목별 <strong>실적</strong>을 입력하세요</li>
+        <li>설정한 시점 이후 항목별 <strong>실적</strong>을 입력하세요</li>
       </ol>
     </section>`;
 }

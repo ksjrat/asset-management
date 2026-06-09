@@ -12,7 +12,7 @@ import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
 import { lineChart, legend, budgetBar } from '../charts.js';
 import { toast, esc } from '../ui.js';
 import { needsLinkAttention, openLinkWizard } from '../link-wizard.js';
-import { getPeriodTotals, isRecordDue } from '../budget-engine.js';
+import { getPeriodTotals, isRecordDue, formatRecordOpensHint } from '../budget-engine.js';
 
 export function renderDashboard() {
   const { data } = state;
@@ -54,13 +54,13 @@ export function renderDashboard() {
     ? budgetTotals.actual / budgetTotals.available
     : 0;
   const dueCats = cats.filter((c) => isRecordDue(data, y, m, c.id));
-  const recordDay = data.budget?.defaultRecordDay ?? 25;
+  const recordHint = formatRecordOpensHint(data, y, m);
 
   const proposedGoals = data.goals.filter((g) => g.status === 'proposed').length;
 
   const dueBanner = data.budget?.setupDone && dueCats.length > 0
     ? `<button type="button" class="tip-banner" id="btn-home-record-due">
-        📌 실적 입력 ${dueCats.length}건 · ${recordDay}일부터 입력 가능 · 지금 입력
+        📌 실적 입력 ${dueCats.length}건 · ${esc(recordHint)} 입력 가능 · 지금 입력
       </button>`
     : '';
 

@@ -1576,6 +1576,10 @@ body.modal-open { overflow: hidden; }
   padding: 6px 2px;
 }
 .setup-item-row:last-child { border-bottom: none; }
+.record-schedule-fieldset { border: none; margin: 0; padding: 0; }
+.record-schedule-options { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.record-schedule-opt { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.record-schedule-opt input { flex-shrink: 0; }
 .setup-add-form { display: flex; gap: 8px; margin-bottom: 8px; }
 .setup-add-form .input { flex: 1; }
 .setup-budget-row { display: block; padding: 12px 0; border-bottom: 1px solid var(--border); }
