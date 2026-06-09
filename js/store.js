@@ -2,7 +2,8 @@ import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
 import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
-  getVisibleSavingsItems, getSavingsCategory, getActualAmount, DEFAULT_SAVINGS_ITEM_NAMES,
+  getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSavingsActualAmount,
+  DEFAULT_SAVINGS_ITEM_NAMES,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 
@@ -29,8 +30,8 @@ export const ASSET_TYPES = [
 ];
 
 export const OWNERS = [
-  { id: 'self', label: '본인' },
-  { id: 'spouse', label: '배우자' },
+  { id: 'self', label: '남편' },
+  { id: 'spouse', label: '아내' },
   { id: 'joint', label: '공동' },
 ];
 
@@ -213,7 +214,7 @@ export const DEFAULT = {
       id: `cat-${i}`, name, hidden: false, recordDay: null, payer: 'joint',
     })),
     savingsItems: DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
-      id: `sav-${i}`, name, hidden: false,
+      id: `sav-${i}`, name, hidden: false, payer: 'joint',
     })),
     savingsMonthlyPlan: {},
     savingsActuals: {},
@@ -421,10 +422,17 @@ export function generateInviteCode() {
   return Array.from(bytes, (b) => HOUSEHOLD_CODE_ALPHABET[b % HOUSEHOLD_CODE_ALPHABET.length]).join('');
 }
 
-export function getOwnerDisplayLabel(data, ownerId) {
-  if (ownerId === 'self' && data.auth?.userName?.trim()) return data.auth.userName.trim();
-  if (ownerId === 'spouse' && data.auth?.spouseName?.trim()) return data.auth.spouseName.trim();
+export function getOwnerDisplayLabel(_data, ownerId) {
   return OWNERS.find((o) => o.id === ownerId)?.label || ownerId;
+}
+
+export function getSavingsPayerLabel(data) {
+  const items = getVisibleSavingsItems(data);
+  const payers = new Set(items.map((i) => i.payer || 'joint'));
+  if (payers.size <= 1) {
+    return getOwnerDisplayLabel(data, [...payers][0] || 'joint');
+  }
+  return '항목별';
 }
 
 export function getOwnerMonthlySummary(data, year, month) {
@@ -438,14 +446,27 @@ export function getOwnerMonthlySummary(data, year, month) {
   }
 
   const expense = { self: 0, spouse: 0, joint: 0, total: 0 };
-  const cats = getVisibleCategories(data);
-  for (const cat of cats) {
-    const amt = getActualAmount(data, year, month, cat.id);
-    if (amt == null || amt <= 0) continue;
-    const payer = cat.payer || 'joint';
+
+  function addExpense(payer, amt) {
+    if (amt <= 0) return;
     if (payer === 'self' || payer === 'spouse') expense[payer] += amt;
     else expense.joint += amt;
     expense.total += amt;
+  }
+
+  const cats = getVisibleCategories(data);
+  const savingsCat = getSavingsCategory(data);
+  for (const cat of cats) {
+    if (savingsCat && cat.id === savingsCat.id) {
+      for (const item of getVisibleSavingsItems(data)) {
+        const amt = getSavingsActualAmount(data, year, month, item.id) || 0;
+        addExpense(item.payer || cat.payer || 'joint', amt);
+      }
+      continue;
+    }
+    const amt = getActualAmount(data, year, month, cat.id);
+    if (amt == null || amt <= 0) continue;
+    addExpense(cat.payer || 'joint', amt);
   }
 
   return { income, expense };

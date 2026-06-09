@@ -34,14 +34,20 @@ function payerOpts(cat) {
 
 function renderStep1() {
   const cats = getVisibleCategories(state.data);
-  const list = cats.map((c) => `
+  const savingsItems = getVisibleSavingsItems(state.data);
+  const list = cats.map((c) => {
+    const isSavingsWithSubs = c.name === '저축' && savingsItems.length > 0;
+    return `
     <div class="setup-item-row setup-item-row--payer">
       <span class="setup-item-name">${esc(c.name)}</span>
       <div class="setup-item-actions">
-        <select class="input input-sm setup-item-payer" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>
+        ${isSavingsWithSubs
+    ? '<span class="muted setup-item-hint">부담자는 세부 항목별</span>'
+    : `<select class="input input-sm setup-item-payer" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>`}
         <button type="button" class="text-btn danger-text setup-item-delete" data-remove-cat="${c.id}">삭제</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   return `
     ${stepHeader(1)}
     <div class="setup-list">${list || '<p class="muted setup-empty">아직 항목이 없습니다</p>'}</div>
@@ -49,7 +55,7 @@ function renderStep1() {
       <input class="input" name="name" placeholder="예: 식비, 주거, 교통" required />
       <button type="submit" class="btn btn-primary">추가</button>
     </form>
-    <p class="field-hint">카테고리마다 누가 부담하는지(본인/배우자/공동) 지정할 수 있습니다.</p>`;
+    <p class="field-hint">카테고리마다 누가 부담하는지(남편/아내/공동) 지정할 수 있습니다. 저축은 세부 항목별로 나눕니다.</p>`;
 }
 
 function renderStep2() {
@@ -60,8 +66,11 @@ function renderStep2() {
     if (c.name === '저축' && savingsItems.length) {
       const subRows = savingsItems.map((item) => {
         const monthly = getSavingsMonthlyPlanAmount(state.data, y, item.id);
-        return `<label class="setup-budget-row setup-budget-row--sub">
+        const payerSelect = OWNERS.map((o) =>
+          `<option value="${o.id}" ${(item.payer || 'joint') === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, o.id))}</option>`).join('');
+        return `<label class="setup-budget-row setup-budget-row--sub setup-budget-row--sav">
           <span class="setup-budget-name">${esc(item.name)}</span>
+          <select class="input input-sm" name="sav-payer-${item.id}">${payerSelect}</select>
           <div class="setup-budget-inputs">
             <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
           </div>
@@ -84,7 +93,7 @@ function renderStep2() {
   }).join('');
   return `
     ${stepHeader(2)}
-    <p class="field-hint">${y}년 기준 · 저축은 세부 항목별로 나눠 입력할 수 있습니다.</p>
+    <p class="field-hint">${y}년 기준 · 저축은 세부 항목별 예산·부담자(남편/아내/공동)를 지정할 수 있습니다.</p>
     <form id="setup-monthly-form" class="form-stack">${rows}</form>`;
 }
 
@@ -218,6 +227,7 @@ export function bindSetup() {
         for (const c of cats) {
           if (c.name === '저축' && savingsItems.length) {
             for (const item of savingsItems) {
+              item.payer = fd.get(`sav-payer-${item.id}`) || 'joint';
               setSavingsMonthlyPlanAmount(state.data, y, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
             }
           } else {

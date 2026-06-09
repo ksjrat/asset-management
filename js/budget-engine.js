@@ -155,8 +155,11 @@ export function ensureBudgetStructure(data) {
   if (!b.savingsActuals) b.savingsActuals = {};
   if (!b.savingsItems?.length) {
     b.savingsItems = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
-      id: `sav-${i}`, name, hidden: false,
+      id: `sav-${i}`, name, hidden: false, payer: 'joint',
     }));
+  }
+  for (const item of b.savingsItems) {
+    if (!item.payer) item.payer = 'joint';
   }
   if (b.setupDone === undefined) b.setupDone = false;
   if (!b.defaultRecordDay) b.defaultRecordDay = 25;
@@ -371,8 +374,11 @@ export function migrateBudgetModel(data) {
 
   if (!b.savingsItems?.length) {
     b.savingsItems = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
-      id: `sav-${i}`, name, hidden: false,
+      id: `sav-${i}`, name, hidden: false, payer: 'joint',
     }));
+  }
+  for (const item of b.savingsItems) {
+    if (!item.payer) item.payer = 'joint';
   }
 
   const savingsCat = getSavingsCategory(data);

@@ -2,7 +2,7 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getHiddenCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
-  addCategory, getOwnerDisplayLabel,
+  addCategory, getOwnerDisplayLabel, getSavingsPayerLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
   getVisibleSavingsItems, SAVINGS_ASSET_TYPES,
 } from '../store.js';
@@ -57,7 +57,7 @@ export async function showAssetForm(item, rerender) {
       ${formField('이름', `<input class="input" name="name" required value="${esc(item?.name || '')}" />`)}
       ${formField('금액', `<input class="input" name="amount" type="number" required min="0" value="${item?.amount ?? ''}" />`)}
       ${formField('소유', `<select name="owner" class="input">${ownerOpts}</select>`)}
-      <label class="toggle-row"><span>배우자에게 비공개</span>
+      <label class="toggle-row"><span>${esc(getOwnerDisplayLabel(state.data, 'spouse'))}에게 비공개</span>
         <input type="checkbox" name="private" ${item?.private ? 'checked' : ''} /></label>
     </form>`,
     actions: [
@@ -493,15 +493,16 @@ export async function showMonthlyBudgetForm(year, rerender) {
     if (c.name === '저축' && savingsItems.length) {
       const subRows = savingsItems.map((item) => {
         const monthly = getSavingsMonthlyPlanAmount(state.data, year, item.id);
-        return `<label class="savings-budget-row">
+        return `<label class="savings-budget-row savings-budget-row--payer">
           <span>${esc(item.name)}</span>
+          ${payerSelect(`sav-payer-${item.id}`, item.payer || 'joint', state.data)}
           <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
         </label>`;
       }).join('');
       return `<div class="savings-budget-group">
-        <p class="field-label">${esc(c.name)} (월) · ${esc(payerLabel)}</p>
+        <p class="field-label">${esc(c.name)} (월) · ${esc(getSavingsPayerLabel(state.data))}</p>
         ${subRows}
-        <p class="field-hint">저축 월 예산 = 세부 항목 합계</p>
+        <p class="field-hint">저축 월 예산 = 세부 항목 합계 · 항목마다 부담자 지정</p>
       </div>`;
     }
     const monthly = getMonthlyPlanAmount(state.data, year, c.id);
@@ -522,6 +523,7 @@ export async function showMonthlyBudgetForm(year, rerender) {
   for (const c of cats) {
     if (c.name === '저축' && savingsItems.length) {
       for (const item of savingsItems) {
+        item.payer = fd.get(`sav-payer-${item.id}`) || 'joint';
         setSavingsMonthlyPlanAmount(state.data, year, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
       }
     } else {
@@ -544,8 +546,9 @@ export async function showSavingsActualForm(year, month, rerender) {
   const s = getCategoryPeriodSummary(state.data, year, month, cat.id);
   const rows = items.map((item) => {
     const current = getSavingsActualAmount(state.data, year, month, item.id);
+    const payer = getOwnerDisplayLabel(state.data, item.payer || 'joint');
     return `<label class="savings-actual-row">
-      <span class="savings-actual-name">${esc(item.name)}</span>
+      <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span></span>
       <input class="input input-amount savings-actual-amt" name="${item.id}" type="number" min="0" step="1000" value="${current ?? ''}" placeholder="0" />
     </label>`;
   }).join('');
@@ -710,12 +713,14 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
   });
 }
 
-function savingsItemManageRows(items) {
-  return items.map((item) =>
-    `<div class="cat-manage-row">
-      <span>${esc(item.name)}</span>
+function savingsItemManageRows(items, data) {
+  return items.map((item) => {
+    const payer = getOwnerDisplayLabel(data, item.payer || 'joint');
+    return `<div class="cat-manage-row">
+      <span>${esc(item.name)} <span class="muted">· ${esc(payer)}</span></span>
       <button type="button" class="text-btn" data-sav-edit="${item.id}">편집</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function openSavingsItemEdit(item, rerender) {
@@ -723,6 +728,7 @@ async function openSavingsItemEdit(item, rerender) {
     title: '저축 항목 편집',
     body: `<form id="sav-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(item.name)}" required />`)}
+      ${formField('부담자', payerSelect('payer', item.payer || 'joint', state.data))}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${item.hidden ? 'checked' : ''} /></label>
     </form>`,
@@ -732,6 +738,7 @@ async function openSavingsItemEdit(item, rerender) {
   const efd = modalForm(editRes);
   if (!efd) return;
   item.name = efd.get('name');
+  item.payer = efd.get('payer') || 'joint';
   item.hidden = !!efd.get('hidden');
   persist();
   toast('저장됨', 'success');
@@ -746,9 +753,9 @@ export async function showSavingsItemsManage(rerender) {
     title: '저축 항목 관리',
     body: `<div class="cat-manage-panel">
       <p class="field-hint">저축 실적 입력 시 항목별로 금액을 기록합니다.</p>
-      <div class="list-group">${savingsItemManageRows(visible) || '<p class="muted">항목이 없습니다</p>'}</div>
+      <div class="list-group">${savingsItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
       ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
-        <div class="list-group">${savingsItemManageRows(hidden)}</div>` : ''}
+        <div class="list-group">${savingsItemManageRows(hidden, state.data)}</div>` : ''}
     </div>`,
     actions: [
       { label: '항목 추가', value: 'add' },
@@ -773,7 +780,7 @@ export async function showSavingsItemsManage(rerender) {
       const fd = modalForm(addRes);
       const name = fd?.get('name')?.toString().trim();
       if (name) {
-        state.data.budget.savingsItems.push({ id: uid(), name, hidden: false });
+        state.data.budget.savingsItems.push({ id: uid(), name, hidden: false, payer: 'joint' });
         persist();
         toast('추가되었습니다', 'success');
         showSavingsItemsManage(rerender);

@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary } from '../store.js';
+import { getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary, getSavingsPayerLabel } from '../store.js';
 import {
   getCategoryPeriodSummary,
   getPeriodTotals,
@@ -64,7 +64,7 @@ export function renderBudget() {
     const statusClass = !s.hasActual ? 'pending' : pct > 1 ? 'over' : pct >= 0.9 ? 'warn' : 'ok';
     const isSavings = c.name === '저축';
     const sub = isSavings ? getSavingsSubSummary(data, y, m) : null;
-    const payerLabel = getOwnerDisplayLabel(data, c.payer || 'joint');
+    const payerLabel = isSavings ? getSavingsPayerLabel(data) : getOwnerDisplayLabel(data, c.payer || 'joint');
     const recordLabel = isSavings
       ? (s.hasActual ? '저축 실적 수정' : '저축 실적 입력')
       : (s.hasActual ? '실적 수정' : '실적 입력');
