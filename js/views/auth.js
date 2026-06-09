@@ -88,7 +88,7 @@ function requirePolicyAgree() {
   return false;
 }
 
-export function bindAuth(onFinish) {
+export function bindAuth(onFinish, renderApp) {
   document.querySelectorAll('[data-auth]').forEach((el) => {
     el.addEventListener('click', async () => {
       const a = el.dataset.auth;
@@ -96,15 +96,16 @@ export function bindAuth(onFinish) {
         leaveStartScreen();
         state.data.auth.loggedIn = true;
         persist();
-        import('./index.js').then((m) => m.renderApp());
+        renderApp();
         return;
       }
       if (a === 'solo-start') {
         if (!requirePolicyAgree()) return;
         leaveStartScreen();
         state.data.auth.loggedIn = true;
-        persist();
         onFinish();
+        persist();
+        renderApp();
         return;
       }
       if (a === 'link-start') {
@@ -130,9 +131,11 @@ export function bindAuth(onFinish) {
         persist();
         toast('연동되었습니다', 'success');
         if (state.data.auth.onboardingDone) {
-          import('./index.js').then((m) => m.renderApp());
+          renderApp();
         } else {
           onFinish();
+          persist();
+          renderApp();
         }
       }
     });
@@ -153,14 +156,10 @@ export function finishOnboarding() {
     state.data.budget.defaultRecordDay = 25;
     state.data.budget.startYear = null;
     state.data.budget.startMonth = null;
+  }
+  if (!state.data.budget?.setupDone) {
     state.setupStep = 1;
   }
   leaveStartScreen();
-  persist();
   state.locked = false;
-  state.authScreen = 'welcome';
-  import('./index.js').then((m) => m.renderApp());
-  if (!state.data.budget?.setupDone) {
-    toast('예산 항목을 설정해 주세요', 'success');
-  }
 }

@@ -2,16 +2,16 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getHiddenCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
-  addCategory, getOwnerDisplayLabel, getSavingsPayerLabel,
+  addCategory, getOwnerDisplayLabel, getSubPayerLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
-  getVisibleSavingsItems, SAVINGS_ASSET_TYPES,
+  getVisibleSavingsItems, hasSubItems, getVisibleSubItems, SAVINGS_ASSET_TYPES,
 } from '../store.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
   getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
-  getBudgetStart, setBudgetStart, isSavingsCategoryId,
-  getSavingsMonthlyPlanAmount, setSavingsMonthlyPlanAmount, syncSavingsEnvelopeMonthlyPlan,
-  getSavingsActualAmount, setSavingsActualAmount, getSavingsSubSummary,
+  getBudgetStart, setBudgetStart,
+  getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
+  getSubActualAmount, setSubActualAmount, getSubItems,
   addSavingsItemActual, subtractSavingsItemActual,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
@@ -487,22 +487,24 @@ export async function showBudgetStartForm(rerender) {
 
 export async function showMonthlyBudgetForm(year, rerender) {
   const cats = getVisibleCategories(state.data);
-  const savingsItems = getVisibleSavingsItems(state.data);
   const fields = cats.map((c) => {
-    const payerLabel = getOwnerDisplayLabel(state.data, c.payer || 'joint');
-    if (c.name === '저축' && savingsItems.length) {
-      const subRows = savingsItems.map((item) => {
-        const monthly = getSavingsMonthlyPlanAmount(state.data, year, item.id);
+    const payerLabel = hasSubItems(state.data, c.id)
+      ? getSubPayerLabel(state.data, c.id)
+      : getOwnerDisplayLabel(state.data, c.payer || 'joint');
+    if (hasSubItems(state.data, c.id)) {
+      const subItems = getVisibleSubItems(state.data, c.id);
+      const subRows = subItems.map((item) => {
+        const monthly = getSubMonthlyPlanAmount(state.data, year, item.id);
         return `<label class="savings-budget-row savings-budget-row--payer">
           <span>${esc(item.name)}</span>
-          ${payerSelect(`sav-payer-${item.id}`, item.payer || 'joint', state.data)}
-          <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+          ${payerSelect(`sub-payer-${item.id}`, item.payer || 'joint', state.data)}
+          <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
         </label>`;
       }).join('');
       return `<div class="savings-budget-group">
-        <p class="field-label">${esc(c.name)} (월) · ${esc(getSavingsPayerLabel(state.data))}</p>
+        <p class="field-label">${esc(c.name)} (월) · ${esc(payerLabel)}</p>
         ${subRows}
-        <p class="field-hint">저축 월 예산 = 세부 항목 합계 · 항목마다 부담자 지정</p>
+        <p class="field-hint">세부 항목 합계가 월 예산으로 반영됩니다</p>
       </div>`;
     }
     const monthly = getMonthlyPlanAmount(state.data, year, c.id);
@@ -514,38 +516,40 @@ export async function showMonthlyBudgetForm(year, rerender) {
   }).join('');
   const res = await openModal({
     title: `${year}년 월간 예산`,
-    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">항목별 매월 예산 · 부담자는 항목 관리에서 변경할 수 있습니다.</p>${fields}</form>`,
+    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">세부 항목이 있는 카테고리는 항목별 예산·부담자를 지정합니다.</p>${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
   for (const c of cats) {
-    if (c.name === '저축' && savingsItems.length) {
-      for (const item of savingsItems) {
-        item.payer = fd.get(`sav-payer-${item.id}`) || 'joint';
-        setSavingsMonthlyPlanAmount(state.data, year, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
+    if (hasSubItems(state.data, c.id)) {
+      for (const item of getVisibleSubItems(state.data, c.id)) {
+        item.payer = fd.get(`sub-payer-${item.id}`) || 'joint';
+        setSubMonthlyPlanAmount(state.data, year, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
       }
     } else {
       setMonthlyPlanAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
     }
   }
-  syncSavingsEnvelopeMonthlyPlan(state.data, year);
+  for (const c of cats) {
+    if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, year, c.id);
+  }
   persist();
   toast('월간 예산이 저장되었습니다', 'success');
   rerender();
 }
 
-export async function showSavingsActualForm(year, month, rerender) {
-  const items = getVisibleSavingsItems(state.data);
-  const cat = state.data.budget.categories.find((c) => c.name === '저축');
+export async function showSubActualForm(catId, year, month, rerender) {
+  const cat = state.data.budget.categories.find((c) => c.id === catId);
+  const items = getVisibleSubItems(state.data, catId);
   if (!cat || !items.length) {
-    if (cat) showActualForm(cat.id, year, month, rerender);
+    if (cat) showActualForm(catId, year, month, rerender);
     return;
   }
-  const s = getCategoryPeriodSummary(state.data, year, month, cat.id);
+  const s = getCategoryPeriodSummary(state.data, year, month, catId);
   const rows = items.map((item) => {
-    const current = getSavingsActualAmount(state.data, year, month, item.id);
+    const current = getSubActualAmount(state.data, year, month, item.id);
     const payer = getOwnerDisplayLabel(state.data, item.payer || 'joint');
     return `<label class="savings-actual-row">
       <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span></span>
@@ -553,17 +557,17 @@ export async function showSavingsActualForm(year, month, rerender) {
     </label>`;
   }).join('');
   const res = await openModal({
-    title: `${fmtMonth(year, month)} · 저축 실적`,
-    body: `<form id="savings-actual-form" class="form-stack">
+    title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
+    body: `<form id="sub-actual-form" class="form-stack">
       <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
-      <p class="field-hint">항목별 금액을 입력하세요. 합계가 저축 실적으로 반영됩니다.</p>
+      <p class="field-hint">세부 항목별 금액을 입력하세요. 합계가 실적으로 반영됩니다.</p>
       <div class="savings-actual-list">${rows}</div>
-      <p class="savings-actual-sum">합계 <strong id="savings-sum-preview">0원</strong></p>
+      <p class="savings-actual-sum">합계 <strong id="sub-sum-preview">0원</strong></p>
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
     onOpen: (sheet) => {
-      const form = sheet.querySelector('#savings-actual-form');
-      const preview = sheet.querySelector('#savings-sum-preview');
+      const form = sheet.querySelector('#sub-actual-form');
+      const preview = sheet.querySelector('#sub-sum-preview');
       const update = () => {
         let sum = 0;
         form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
@@ -581,19 +585,24 @@ export async function showSavingsActualForm(year, month, rerender) {
   const fd = modalForm(res);
   if (!fd) return;
   for (const item of items) {
-    setSavingsActualAmount(state.data, year, month, item.id, Number(fd.get(item.id)) || 0);
+    setSubActualAmount(state.data, year, month, catId, item.id, Number(fd.get(item.id)) || 0);
   }
   persist();
-  const after = getCategoryPeriodSummary(state.data, year, month, cat.id);
+  const after = getCategoryPeriodSummary(state.data, year, month, catId);
   toast(after.remaining >= 0
     ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 잔액 ${fmtMoney(after.remaining)}`
     : `저장됨 · ${fmtMoney(-after.remaining)} 초과`, after.remaining >= 0 ? 'success' : 'error');
   rerender();
 }
 
+export async function showSavingsActualForm(year, month, rerender) {
+  const cat = state.data.budget.categories.find((c) => c.name === '저축');
+  if (cat) return showSubActualForm(cat.id, year, month, rerender);
+}
+
 export async function showActualForm(catId, year, month, rerender) {
-  if (isSavingsCategoryId(state.data, catId)) {
-    return showSavingsActualForm(year, month, rerender);
+  if (hasSubItems(state.data, catId)) {
+    return showSubActualForm(catId, year, month, rerender);
   }
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   if (!cat) return;
@@ -638,12 +647,22 @@ export async function showBudgetForm(y, m, rerender) {
   persist(); toast('월간 예산이 저장되었습니다', 'success'); rerender();
 }
 
+function subManageButtonLabel(data, catId) {
+  const n = getVisibleSubItems(data, catId).length;
+  return n ? `세부 ${n}` : '세부 나누기';
+}
+
 function categoryManageRows(cats, data) {
   return cats.map((c) => {
-    const payer = getOwnerDisplayLabel(data, c.payer || 'joint');
+    const payer = hasSubItems(data, c.id)
+      ? getSubPayerLabel(data, c.id)
+      : getOwnerDisplayLabel(data, c.payer || 'joint');
     return `<div class="cat-manage-row">
       <span>${esc(c.name)} <span class="muted">· ${esc(payer)}</span></span>
-      <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
+      <span class="cat-manage-actions">
+        <button type="button" class="text-btn" data-sub-manage="${c.id}">${subManageButtonLabel(data, c.id)}</button>
+        <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
+      </span>
     </div>`;
   }).join('');
 }
@@ -658,21 +677,29 @@ function setCategoryHidden(data, cat, hidden) {
 }
 
 async function openCategoryEdit(cat, rerender) {
+  const subdivided = hasSubItems(state.data, cat.id);
   const editRes = await openModal({
     title: '카테고리 편집',
     body: `<form id="cat-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(cat.name)}" required />`)}
-      ${formField('부담자', payerSelect('payer', cat.payer || 'joint', state.data))}
+      ${subdivided
+    ? '<p class="field-hint">세부 항목이 있어 부담자는 세부 항목에서 지정합니다.</p>'
+    : formField('부담자', payerSelect('payer', cat.payer || 'joint', state.data))}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
       ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
     </form>`,
     actions: [
+      { label: '세부 항목', value: 'sub' },
       { label: '숨기기', value: 'delete', danger: true },
       { label: '저장', value: 'save', primary: true },
     ],
   });
   const ea = modalValue(editRes);
+  if (ea === 'sub') {
+    showSubItemsManage(cat.id, rerender);
+    return;
+  }
   if (ea === 'delete') {
     setCategoryHidden(state.data, cat, true);
     persist();
@@ -685,7 +712,7 @@ async function openCategoryEdit(cat, rerender) {
   const efd = modalForm(editRes);
   if (!efd) return;
   cat.name = efd.get('name');
-  cat.payer = efd.get('payer') || 'joint';
+  if (!hasSubItems(state.data, cat.id)) cat.payer = efd.get('payer') || 'joint';
   setCategoryHidden(state.data, cat, !!efd.get('hidden'));
   const rd = efd.get('recordDay');
   cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
@@ -702,6 +729,11 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
       if (cat) await openCategoryEdit(cat, rerender);
     });
   });
+  sheet.querySelectorAll('[data-sub-manage]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showSubItemsManage(btn.dataset.subManage, rerender);
+    });
+  });
   const toggle = sheet.querySelector('#btn-toggle-hidden-cats');
   const section = sheet.querySelector('.cat-manage-hidden-section');
   if (!toggle || !section) return;
@@ -713,20 +745,20 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
   });
 }
 
-function savingsItemManageRows(items, data) {
+function subItemManageRows(items, data) {
   return items.map((item) => {
     const payer = getOwnerDisplayLabel(data, item.payer || 'joint');
     return `<div class="cat-manage-row">
       <span>${esc(item.name)} <span class="muted">· ${esc(payer)}</span></span>
-      <button type="button" class="text-btn" data-sav-edit="${item.id}">편집</button>
+      <button type="button" class="text-btn" data-sub-edit="${item.id}">편집</button>
     </div>`;
   }).join('');
 }
 
-async function openSavingsItemEdit(item, rerender) {
+async function openSubItemEdit(catId, item, rerender) {
   const editRes = await openModal({
-    title: '저축 항목 편집',
-    body: `<form id="sav-form" class="form-stack">
+    title: '세부 항목 편집',
+    body: `<form id="sub-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(item.name)}" required />`)}
       ${formField('부담자', payerSelect('payer', item.payer || 'joint', state.data))}
       <label class="toggle-row"><span>숨김</span>
@@ -742,53 +774,91 @@ async function openSavingsItemEdit(item, rerender) {
   item.hidden = !!efd.get('hidden');
   persist();
   toast('저장됨', 'success');
-  showSavingsItemsManage(rerender);
+  showSubItemsManage(catId, rerender);
 }
 
-export async function showSavingsItemsManage(rerender) {
-  const items = state.data.budget.savingsItems || [];
+export async function showSubItemsManage(catId, rerender) {
+  const cat = state.data.budget.categories.find((c) => c.id === catId);
+  if (!cat) return;
+  const items = getSubItems(state.data, catId);
   const visible = items.filter((i) => !i.hidden);
   const hidden = items.filter((i) => i.hidden);
   const res = await openModal({
-    title: '저축 항목 관리',
+    title: `${cat.name} · 세부 항목`,
     body: `<div class="cat-manage-panel">
-      <p class="field-hint">저축 실적 입력 시 항목별로 금액을 기록합니다.</p>
-      <div class="list-group">${savingsItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
+      <p class="field-hint">실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.</p>
+      <div class="list-group">${subItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
       ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
-        <div class="list-group">${savingsItemManageRows(hidden, state.data)}</div>` : ''}
+        <div class="list-group">${subItemManageRows(hidden, state.data)}</div>` : ''}
     </div>`,
     actions: [
       { label: '항목 추가', value: 'add' },
       { label: '닫기', value: null, primary: true },
     ],
     onOpen: (sheet) => {
-      sheet.querySelectorAll('[data-sav-edit]').forEach((btn) => {
+      sheet.querySelectorAll('[data-sub-edit]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const item = items.find((i) => i.id === btn.dataset.savEdit);
-          if (item) openSavingsItemEdit(item, rerender);
+          const item = items.find((i) => i.id === btn.dataset.subEdit);
+          if (item) openSubItemEdit(catId, item, rerender);
         });
       });
     },
   });
   if (modalValue(res) === 'add') {
     const addRes = await openModal({
-      title: '저축 항목 추가',
-      body: formField('이름', '<input class="input" name="name" required />'),
+      title: '세부 항목 추가',
+      body: `<form id="sub-add-form" class="form-stack">
+        ${formField('이름', '<input class="input" name="name" required placeholder="예: 생명보험, 관리비" />')}
+        ${formField('부담자', payerSelect('payer', 'joint', state.data))}
+      </form>`,
       actions: [{ label: '취소', value: null }, { label: '추가', value: 'save', primary: true }],
     });
     if (modalValue(addRes) === 'save') {
       const fd = modalForm(addRes);
       const name = fd?.get('name')?.toString().trim();
       if (name) {
-        state.data.budget.savingsItems.push({ id: uid(), name, hidden: false, payer: 'joint' });
+        getSubItems(state.data, catId).push({
+          id: uid(), name, hidden: false, payer: fd.get('payer') || 'joint',
+        });
         persist();
         toast('추가되었습니다', 'success');
-        showSavingsItemsManage(rerender);
+        showSubItemsManage(catId, rerender);
         return;
       }
     }
   }
   rerender();
+}
+
+/** 원하는 카테고리를 고른 뒤 세부 항목 관리 화면으로 이동 */
+export async function showSubItemsCategoryPicker(rerender) {
+  const cats = getVisibleCategories(state.data);
+  if (!cats.length) {
+    toast('먼저 카테고리를 추가해 주세요', 'error');
+    return;
+  }
+  const opts = cats.map((c) => {
+    const n = getVisibleSubItems(state.data, c.id).length;
+    const suffix = n ? ` · 세부 ${n}개` : '';
+    return `<option value="${c.id}">${esc(c.name)}${suffix}</option>`;
+  }).join('');
+  const res = await openModal({
+    title: '세부 항목 나누기',
+    body: `<form id="sub-cat-pick-form" class="form-stack">
+      <p class="field-hint">보험·주거·저축 등 원하는 카테고리를 선택한 뒤 세부 항목을 추가하세요.</p>
+      ${formField('카테고리', `<select class="input" name="catId" required>${opts}</select>`)}
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '다음', value: 'pick', primary: true }],
+  });
+  if (modalValue(res) !== 'pick') return;
+  const fd = modalForm(res);
+  const catId = fd?.get('catId')?.toString();
+  if (catId) await showSubItemsManage(catId, rerender);
+}
+
+export async function showSavingsItemsManage(rerender) {
+  const cat = state.data.budget.categories.find((c) => c.name === '저축');
+  if (cat) showSubItemsManage(cat.id, rerender);
 }
 
 export async function showCategoryManage(rerender) {
@@ -806,18 +876,19 @@ export async function showCategoryManage(rerender) {
   const res = await openModal({
     title: '카테고리 관리',
     body: `<div class="cat-manage-panel">
+      <p class="field-hint">각 항목의 「세부 나누기」로 원하는 카테고리에 세부 내역을 추가할 수 있습니다.</p>
       <div class="list-group">${visibleRows || '<p class="muted cat-manage-empty">사용 중인 카테고리가 없습니다.</p>'}</div>
       ${hiddenBlock}
     </div>`,
     actions: [
-      { label: '저축 항목', value: 'savings' },
+      { label: '세부 항목 나누기', value: 'sub-pick' },
       { label: '카테고리 추가', value: 'add' },
       { label: '닫기', value: null, primary: true },
     ],
     onOpen: (sheet) => bindCategoryManageSheet(sheet, allCats, hiddenCats.length, rerender),
   });
-  if (modalValue(res) === 'savings') {
-    showSavingsItemsManage(rerender);
+  if (modalValue(res) === 'sub-pick') {
+    await showSubItemsCategoryPicker(rerender);
     return;
   }
   if (modalValue(res) === 'add') {

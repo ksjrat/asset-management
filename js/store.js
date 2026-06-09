@@ -2,8 +2,8 @@ import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
 import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
-  getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSavingsActualAmount,
-  DEFAULT_SAVINGS_ITEM_NAMES,
+  getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSubActualAmount,
+  getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 
@@ -213,11 +213,13 @@ export const DEFAULT = {
     categories: DEFAULT_CATEGORIES.map((name, i) => ({
       id: `cat-${i}`, name, hidden: false, recordDay: null, payer: 'joint',
     })),
-    savingsItems: DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
-      id: `sav-${i}`, name, hidden: false, payer: 'joint',
-    })),
-    savingsMonthlyPlan: {},
-    savingsActuals: {},
+    subItemsByCategory: {
+      'cat-9': DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
+        id: `sav-${i}`, name, hidden: false, payer: 'joint',
+      })),
+    },
+    subMonthlyPlan: {},
+    subActuals: {},
     monthlyPlan: {},
     actuals: {},
   },
@@ -426,13 +428,18 @@ export function getOwnerDisplayLabel(_data, ownerId) {
   return OWNERS.find((o) => o.id === ownerId)?.label || ownerId;
 }
 
-export function getSavingsPayerLabel(data) {
-  const items = getVisibleSavingsItems(data);
+export function getSubPayerLabel(data, catId) {
+  const items = getVisibleSubItems(data, catId);
   const payers = new Set(items.map((i) => i.payer || 'joint'));
   if (payers.size <= 1) {
     return getOwnerDisplayLabel(data, [...payers][0] || 'joint');
   }
   return '항목별';
+}
+
+export function getSavingsPayerLabel(data) {
+  const cat = getSavingsCategory(data);
+  return cat ? getSubPayerLabel(data, cat.id) : '공동';
 }
 
 export function getOwnerMonthlySummary(data, year, month) {
@@ -455,11 +462,10 @@ export function getOwnerMonthlySummary(data, year, month) {
   }
 
   const cats = getVisibleCategories(data);
-  const savingsCat = getSavingsCategory(data);
   for (const cat of cats) {
-    if (savingsCat && cat.id === savingsCat.id) {
-      for (const item of getVisibleSavingsItems(data)) {
-        const amt = getSavingsActualAmount(data, year, month, item.id) || 0;
+    if (hasSubItems(data, cat.id)) {
+      for (const item of getVisibleSubItems(data, cat.id)) {
+        const amt = getSubActualAmount(data, year, month, item.id) || 0;
         addExpense(item.payer || cat.payer || 'joint', amt);
       }
       continue;
@@ -472,7 +478,9 @@ export function getOwnerMonthlySummary(data, year, month) {
   return { income, expense };
 }
 
-export { getVisibleSavingsItems, getSavingsCategory } from './budget-engine.js';
+export {
+  getVisibleSavingsItems, getSavingsCategory, getVisibleSubItems, hasSubItems,
+} from './budget-engine.js';
 
 export function addCategory(data, name, recordDay = null) {
   const id = uid();

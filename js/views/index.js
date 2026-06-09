@@ -53,7 +53,7 @@ export function renderApp() {
   if (!data.auth.onboardingDone || state.showWelcome || data.auth.atStartScreen) {
     root.className = 'app-auth';
     root.innerHTML = renderAuth();
-    bindAuth(finishOnboarding);
+    bindAuth(finishOnboarding, renderApp);
     return;
   }
 

@@ -1,12 +1,12 @@
 import { state, persist, setMonth } from '../state.js';
-import { addCategory, getVisibleCategories, getOwnerDisplayLabel, OWNERS } from '../store.js';
+import { addCategory, getVisibleCategories, getOwnerDisplayLabel, OWNERS, hasSubItems, getVisibleSubItems } from '../store.js';
 import {
   setMonthlyPlanAmount, getMonthlyPlanAmount, setBudgetStart, getBudgetStart,
-  getVisibleSavingsItems, getSavingsMonthlyPlanAmount, setSavingsMonthlyPlanAmount,
-  syncSavingsEnvelopeMonthlyPlan,
+  getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
 } from '../budget-engine.js';
 import { esc, toast, bindAmountPreviewsIn } from '../ui.js';
 import { fmtMoney, fmtMonth } from '../format.js';
+import { showSubItemsManage } from './modals.js';
 
 const STEPS = [
   { n: 1, title: '항목 설정', desc: '관리할 지출 항목을 만드세요' },
@@ -34,16 +34,18 @@ function payerOpts(cat) {
 
 function renderStep1() {
   const cats = getVisibleCategories(state.data);
-  const savingsItems = getVisibleSavingsItems(state.data);
   const list = cats.map((c) => {
-    const isSavingsWithSubs = c.name === '저축' && savingsItems.length > 0;
+    const subCount = getVisibleSubItems(state.data, c.id).length;
+    const hasSubs = subCount > 0;
+    const subBtnLabel = hasSubs ? `세부 ${subCount}` : '세부 나누기';
     return `
     <div class="setup-item-row setup-item-row--payer">
       <span class="setup-item-name">${esc(c.name)}</span>
       <div class="setup-item-actions">
-        ${isSavingsWithSubs
-    ? '<span class="muted setup-item-hint" title="부담자는 세부 항목별로 지정">세부 항목별</span>'
+        ${hasSubs
+    ? `<span class="muted setup-item-hint" title="부담자는 세부 항목별로 지정">세부 ${subCount}개</span>`
     : `<select class="input input-sm setup-item-payer" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>`}
+        <button type="button" class="text-btn setup-item-sub" data-sub-manage="${c.id}">${subBtnLabel}</button>
         <button type="button" class="text-btn danger-text setup-item-delete" data-remove-cat="${c.id}">삭제</button>
       </div>
     </div>`;
@@ -55,24 +57,24 @@ function renderStep1() {
       <input class="input" name="name" placeholder="예: 식비, 주거, 교통" required />
       <button type="submit" class="btn btn-primary">추가</button>
     </form>
-    <p class="field-hint">카테고리마다 누가 부담하는지(남편/아내/공동) 지정할 수 있습니다. 저축은 세부 항목별로 나눕니다.</p>`;
+    <p class="field-hint">「세부 나누기」로 보험·주거·저축 등 원하는 항목에 세부 내역을 추가할 수 있습니다.</p>`;
 }
 
 function renderStep2() {
   const y = new Date().getFullYear();
   const cats = getVisibleCategories(state.data);
-  const savingsItems = getVisibleSavingsItems(state.data);
   const rows = cats.map((c) => {
-    if (c.name === '저축' && savingsItems.length) {
-      const subRows = savingsItems.map((item) => {
-        const monthly = getSavingsMonthlyPlanAmount(state.data, y, item.id);
+    if (hasSubItems(state.data, c.id)) {
+      const subItems = getVisibleSubItems(state.data, c.id);
+      const subRows = subItems.map((item) => {
+        const monthly = getSubMonthlyPlanAmount(state.data, y, item.id);
         const payerSelect = OWNERS.map((o) =>
           `<option value="${o.id}" ${(item.payer || 'joint') === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, o.id))}</option>`).join('');
         return `<label class="setup-budget-row setup-budget-row--sub setup-budget-row--sav">
           <span class="setup-budget-name">${esc(item.name)}</span>
-          <select class="input input-sm" name="sav-payer-${item.id}">${payerSelect}</select>
+          <select class="input input-sm" name="sub-payer-${item.id}">${payerSelect}</select>
           <div class="setup-budget-inputs">
-            <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+            <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
           </div>
         </label>`;
       }).join('');
@@ -93,7 +95,7 @@ function renderStep2() {
   }).join('');
   return `
     ${stepHeader(2)}
-    <p class="field-hint">${y}년 기준 · 저축은 세부 항목별 예산·부담자(남편/아내/공동)를 지정할 수 있습니다.</p>
+    <p class="field-hint">${y}년 기준 · 세부 항목이 있는 카테고리는 항목별 예산·부담자를 지정합니다.</p>
     <form id="setup-monthly-form" class="form-stack">${rows}</form>`;
 }
 
@@ -188,6 +190,12 @@ export function bindSetup() {
     });
   });
 
+  document.querySelectorAll('[data-sub-manage]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showSubItemsManage(btn.dataset.subManage, rerender);
+    });
+  });
+
   const monthlyForm = document.getElementById('setup-monthly-form');
   bindAmountPreviewsIn(monthlyForm);
   monthlyForm?.querySelectorAll('.input-amount').forEach((input) => {
@@ -221,20 +229,21 @@ export function bindSetup() {
     }
     if (state.setupStep === 2) {
       const form = document.getElementById('setup-monthly-form');
-      const savingsItems = getVisibleSavingsItems(state.data);
       if (form) {
         const fd = new FormData(form);
         for (const c of cats) {
-          if (c.name === '저축' && savingsItems.length) {
-            for (const item of savingsItems) {
-              item.payer = fd.get(`sav-payer-${item.id}`) || 'joint';
-              setSavingsMonthlyPlanAmount(state.data, y, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
+          if (hasSubItems(state.data, c.id)) {
+            for (const item of getVisibleSubItems(state.data, c.id)) {
+              item.payer = fd.get(`sub-payer-${item.id}`) || 'joint';
+              setSubMonthlyPlanAmount(state.data, y, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
             }
           } else {
             setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
           }
         }
-        syncSavingsEnvelopeMonthlyPlan(state.data, y);
+        for (const c of cats) {
+          if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, y, c.id);
+        }
       }
       const hasAny = cats.some((c) => getMonthlyPlanAmount(state.data, y, c.id) > 0);
       if (!hasAny) {

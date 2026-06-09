@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary, getSavingsPayerLabel } from '../store.js';
+import { getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary, getSubPayerLabel, hasSubItems } from '../store.js';
 import {
   getCategoryPeriodSummary,
   getPeriodTotals,
@@ -8,7 +8,7 @@ import {
   getRecordDay,
   getBudgetStart,
   isBeforeBudgetStart,
-  getSavingsSubSummary,
+  getSubSummary,
 } from '../budget-engine.js';
 import { fmtShort, fmtPct, fmtMonth } from '../format.js';
 import { esc, emptyState } from '../ui.js';
@@ -17,7 +17,8 @@ import {
   showCategoryManage,
   showMonthlyBudgetForm,
   showActualForm,
-  showSavingsActualForm,
+  showSubActualForm,
+  showSubItemsCategoryPicker,
 } from './modals.js';
 
 function ownerUsageRows(data, year, month) {
@@ -62,14 +63,16 @@ export function renderBudget() {
     const canEdit = !s.beforeStart && canRecordActual(data, y, m, c.id);
     const pct = s.available > 0 ? s.actual / s.available : 0;
     const statusClass = !s.hasActual ? 'pending' : pct > 1 ? 'over' : pct >= 0.9 ? 'warn' : 'ok';
-    const isSavings = c.name === '저축';
-    const sub = isSavings ? getSavingsSubSummary(data, y, m) : null;
-    const payerLabel = isSavings ? getSavingsPayerLabel(data) : getOwnerDisplayLabel(data, c.payer || 'joint');
-    const recordLabel = isSavings
-      ? (s.hasActual ? '저축 실적 수정' : '저축 실적 입력')
+    const subdivided = hasSubItems(data, c.id);
+    const sub = subdivided ? getSubSummary(data, y, m, c.id) : null;
+    const payerLabel = subdivided
+      ? getSubPayerLabel(data, c.id)
+      : getOwnerDisplayLabel(data, c.payer || 'joint');
+    const recordLabel = subdivided
+      ? (s.hasActual ? '세부 실적 수정' : '세부 실적 입력')
       : (s.hasActual ? '실적 수정' : '실적 입력');
-    const recordBtn = isSavings
-      ? `<button type="button" class="btn btn-sm ${due ? 'btn-primary' : 'btn-ghost'}" data-record-savings>${recordLabel}</button>`
+    const recordBtn = subdivided
+      ? `<button type="button" class="btn btn-sm ${due ? 'btn-primary' : 'btn-ghost'}" data-record-sub="${c.id}">${recordLabel}</button>`
       : `<button type="button" class="btn btn-sm ${due ? 'btn-primary' : 'btn-ghost'}" data-record-cat="${c.id}">${recordLabel}</button>`;
     return `
       <div class="budget-envelope budget-envelope--${statusClass}">
@@ -129,6 +132,7 @@ export function renderBudget() {
         <h2>항목별 비교</h2>
         <div class="btn-row-inline">
           <button type="button" class="text-btn" id="btn-categories">항목</button>
+          <button type="button" class="text-btn" id="btn-sub-items">세부 나누기</button>
           <button type="button" class="text-btn" id="btn-edit-monthly">월간 예산</button>
         </div>
       </div>
@@ -150,6 +154,7 @@ export function bindBudget() {
   const { selectedYear: y, selectedMonth: m } = state;
 
   document.getElementById('btn-categories')?.addEventListener('click', () => showCategoryManage(rerender));
+  document.getElementById('btn-sub-items')?.addEventListener('click', () => showSubItemsCategoryPicker(rerender));
   document.getElementById('btn-edit-monthly')?.addEventListener('click', () => showMonthlyBudgetForm(y, rerender));
   document.getElementById('btn-setup-again')?.addEventListener('click', () => {
     state.data.budget.setupDone = false;
@@ -163,7 +168,7 @@ export function bindBudget() {
   document.querySelectorAll('[data-record-cat]').forEach((btn) => {
     btn.addEventListener('click', () => showActualForm(btn.dataset.recordCat, y, m, rerender));
   });
-  document.querySelectorAll('[data-record-savings]').forEach((btn) => {
-    btn.addEventListener('click', () => showSavingsActualForm(y, m, rerender));
+  document.querySelectorAll('[data-record-sub]').forEach((btn) => {
+    btn.addEventListener('click', () => showSubActualForm(btn.dataset.recordSub, y, m, rerender));
   });
 }

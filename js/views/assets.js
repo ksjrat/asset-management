@@ -54,7 +54,11 @@ function incomeRow(tx) {
 
 function savingsRow({ asset, entry }) {
   const type = ASSET_TYPES.find((t) => t.id === asset.type);
-  const item = (state.data.budget?.savingsItems || []).find((i) => i.id === entry.savingsItemId);
+  let item = null;
+  for (const items of Object.values(state.data.budget?.subItemsByCategory || {})) {
+    item = items.find((i) => i.id === entry.savingsItemId);
+    if (item) break;
+  }
   const itemLabel = item ? item.name : '';
   return `<button type="button" class="list-item" data-savings-id="${entry.id}">
     <span class="avatar avatar--icon" aria-hidden="true">🏦</span>

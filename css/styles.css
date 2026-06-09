@@ -1075,6 +1075,7 @@ body.modal-open { overflow: hidden; }
 .goal-impact.warn { color: var(--danger); }
 .timeline-item { font-size: 0.85rem; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .cat-manage-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cat-manage-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .cat-manage-panel .list-group:last-child .cat-manage-row:last-child { border-bottom: none; }
 .cat-manage-toggle-hidden {
   display: block;
@@ -1542,13 +1543,19 @@ body.modal-open { overflow: hidden; }
   word-break: keep-all;
   overflow-wrap: normal;
 }
+.setup-item-row--payer .setup-item-sub {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
 .setup-item-row--payer .setup-item-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px 8px;
   flex-shrink: 0;
+  max-width: min(100%, 16rem);
 }
 .setup-item-row--payer .setup-item-payer {
   width: 5.25rem;
