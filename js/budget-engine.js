@@ -1,5 +1,9 @@
 import { ymKey, parseYm } from './format.js';
 
+export const DEFAULT_SAVINGS_ITEM_NAMES = [
+  '비상금', '여행', '주택', '자동차', '결혼', '육아', '노후', '투자', '목표적금', '기타',
+];
+
 function now() {
   return new Date().toISOString();
 }
@@ -8,14 +12,157 @@ export function monthIndex(year, month) {
   return year * 12 + month;
 }
 
+export function getSavingsCategory(data) {
+  return data.budget?.categories?.find((c) => c.name === '저축') || null;
+}
+
+export function getVisibleSavingsItems(data) {
+  ensureBudgetStructure(data);
+  return (data.budget.savingsItems || []).filter((i) => !i.hidden);
+}
+
+export function getSavingsMonthlyPlanAmount(data, year, itemId) {
+  ensureBudgetStructure(data);
+  return data.budget.savingsMonthlyPlan[String(year)]?.[itemId] ?? 0;
+}
+
+export function setSavingsMonthlyPlanAmount(data, year, itemId, amount) {
+  ensureBudgetStructure(data);
+  const y = String(year);
+  if (!data.budget.savingsMonthlyPlan[y]) data.budget.savingsMonthlyPlan[y] = {};
+  data.budget.savingsMonthlyPlan[y][itemId] = Math.max(0, Number(amount) || 0);
+  syncSavingsEnvelopeMonthlyPlan(data, year);
+}
+
+export function getSavingsMonthlyPlanTotal(data, year) {
+  return getVisibleSavingsItems(data).reduce(
+    (s, i) => s + getSavingsMonthlyPlanAmount(data, year, i.id), 0,
+  );
+}
+
+export function syncSavingsEnvelopeMonthlyPlan(data, year) {
+  const cat = getSavingsCategory(data);
+  if (!cat) return;
+  const y = String(year);
+  if (!data.budget.monthlyPlan[y]) data.budget.monthlyPlan[y] = {};
+  data.budget.monthlyPlan[y][cat.id] = getSavingsMonthlyPlanTotal(data, year);
+}
+
+export function getSavingsActualEntry(data, year, month, itemId) {
+  ensureBudgetStructure(data);
+  const key = ymKey(year, month);
+  return data.budget.savingsActuals[key]?.[itemId] ?? null;
+}
+
+export function getSavingsActualAmount(data, year, month, itemId) {
+  const entry = getSavingsActualEntry(data, year, month, itemId);
+  return entry?.amount ?? null;
+}
+
+export function setSavingsActualAmount(data, year, month, itemId, amount) {
+  ensureBudgetStructure(data);
+  const key = ymKey(year, month);
+  if (!data.budget.savingsActuals[key]) data.budget.savingsActuals[key] = {};
+  const val = Math.max(0, Number(amount) || 0);
+  if (val === 0) {
+    delete data.budget.savingsActuals[key][itemId];
+    if (!Object.keys(data.budget.savingsActuals[key]).length) {
+      delete data.budget.savingsActuals[key];
+    }
+  } else {
+    data.budget.savingsActuals[key][itemId] = { amount: val, recordedAt: now() };
+  }
+  syncSavingsEnvelopeActual(data, year, month);
+}
+
+export function getSavingsActualsSum(data, year, month) {
+  return getVisibleSavingsItems(data).reduce(
+    (s, i) => s + (getSavingsActualAmount(data, year, month, i.id) || 0), 0,
+  );
+}
+
+export function hasSavingsActuals(data, year, month) {
+  const key = ymKey(year, month);
+  const bucket = data.budget?.savingsActuals?.[key];
+  if (!bucket) return false;
+  return Object.values(bucket).some((e) => (e?.amount || 0) > 0);
+}
+
+export function syncSavingsEnvelopeActual(data, year, month) {
+  const cat = getSavingsCategory(data);
+  if (!cat) return;
+  const sum = getSavingsActualsSum(data, year, month);
+  if (sum > 0 || hasSavingsActuals(data, year, month)) {
+    setActualAmount(data, year, month, cat.id, sum);
+  } else {
+    const key = ymKey(year, month);
+    if (data.budget.actuals[key]?.[cat.id]) {
+      delete data.budget.actuals[key][cat.id];
+      if (!Object.keys(data.budget.actuals[key]).length) delete data.budget.actuals[key];
+    }
+  }
+}
+
+export function setSavingsActualsBulk(data, year, month, amountsByItemId) {
+  for (const [itemId, amount] of Object.entries(amountsByItemId)) {
+    setSavingsActualAmount(data, year, month, itemId, amount);
+  }
+}
+
+export function getSavingsSubSummary(data, year, month) {
+  const items = getVisibleSavingsItems(data);
+  let filledCount = 0;
+  let sum = 0;
+  for (const item of items) {
+    const amt = getSavingsActualAmount(data, year, month, item.id) || 0;
+    if (amt > 0) filledCount++;
+    sum += amt;
+  }
+  return { filledCount, total: sum, itemCount: items.length };
+}
+
+export function addSavingsItemActual(data, dateStr, amount, itemId = null) {
+  const cat = getSavingsCategory(data);
+  if (!cat || !data.budget?.setupDone) return;
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const items = getVisibleSavingsItems(data);
+  const targetId = itemId || items.find((i) => i.name === '기타')?.id || items[0]?.id;
+  if (!targetId) return;
+  const prev = getSavingsActualAmount(data, y, m, targetId) || 0;
+  setSavingsActualAmount(data, y, m, targetId, prev + amount);
+}
+
+export function subtractSavingsItemActual(data, dateStr, amount, itemId = null) {
+  const cat = getSavingsCategory(data);
+  if (!cat || !data.budget?.setupDone) return;
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const items = getVisibleSavingsItems(data);
+  const targetId = itemId || items.find((i) => i.name === '기타')?.id || items[0]?.id;
+  if (!targetId) return;
+  const prev = getSavingsActualAmount(data, y, m, targetId) || 0;
+  setSavingsActualAmount(data, y, m, targetId, Math.max(0, prev - amount));
+}
+
 export function ensureBudgetStructure(data) {
   const b = data.budget;
   if (!b.monthlyPlan) b.monthlyPlan = {};
   if (!b.actuals) b.actuals = {};
+  if (!b.savingsMonthlyPlan) b.savingsMonthlyPlan = {};
+  if (!b.savingsActuals) b.savingsActuals = {};
+  if (!b.savingsItems?.length) {
+    b.savingsItems = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
+      id: `sav-${i}`, name, hidden: false,
+    }));
+  }
   if (b.setupDone === undefined) b.setupDone = false;
   if (!b.defaultRecordDay) b.defaultRecordDay = 25;
   for (const c of b.categories) {
     if (c.recordDay == null) c.recordDay = null;
+    if (!c.payer) c.payer = 'joint';
   }
 }
 
@@ -48,13 +195,22 @@ export function getRecordDay(data, category) {
   return category?.recordDay ?? data.budget.defaultRecordDay ?? 25;
 }
 
+export function isSavingsCategoryId(data, catId) {
+  const cat = data.budget.categories.find((c) => c.id === catId);
+  return cat?.name === '저축';
+}
+
 export function getMonthlyPlanAmount(data, year, catId) {
   ensureBudgetStructure(data);
+  if (isSavingsCategoryId(data, catId)) {
+    return getSavingsMonthlyPlanTotal(data, year);
+  }
   return data.budget.monthlyPlan[String(year)]?.[catId] ?? 0;
 }
 
 export function setMonthlyPlanAmount(data, year, catId, amount) {
   ensureBudgetStructure(data);
+  if (isSavingsCategoryId(data, catId)) return;
   const y = String(year);
   if (!data.budget.monthlyPlan[y]) data.budget.monthlyPlan[y] = {};
   data.budget.monthlyPlan[y][catId] = Math.max(0, Number(amount) || 0);
@@ -209,7 +365,30 @@ export function migrateBudgetModel(data) {
   }
 
   if (b.setupDone && (!b.startYear || !b.startMonth)) {
-    const now = new Date();
-    setBudgetStart(data, now.getFullYear(), now.getMonth() + 1);
+    const nowD = new Date();
+    setBudgetStart(data, nowD.getFullYear(), nowD.getMonth() + 1);
+  }
+
+  if (!b.savingsItems?.length) {
+    b.savingsItems = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
+      id: `sav-${i}`, name, hidden: false,
+    }));
+  }
+
+  const savingsCat = getSavingsCategory(data);
+  if (savingsCat) {
+    const miscId = b.savingsItems.find((i) => i.name === '기타')?.id || 'sav-9';
+    for (const [key, cats] of Object.entries(b.actuals || {})) {
+      const entry = cats[savingsCat.id];
+      if (!entry?.amount) continue;
+      if (b.savingsActuals[key] && Object.keys(b.savingsActuals[key]).length) continue;
+      if (!b.savingsActuals[key]) b.savingsActuals[key] = {};
+      b.savingsActuals[key][miscId] = { amount: entry.amount, recordedAt: entry.recordedAt || now() };
+    }
+    syncSavingsEnvelopeMonthlyPlan(data, y);
+  }
+
+  for (const tx of data.transactions || []) {
+    if (tx.type === 'income' && !tx.owner) tx.owner = 'self';
   }
 }

@@ -1,7 +1,9 @@
 import { state, persist, setMonth } from '../state.js';
-import { addCategory, getVisibleCategories } from '../store.js';
+import { addCategory, getVisibleCategories, getOwnerDisplayLabel, OWNERS } from '../store.js';
 import {
   setMonthlyPlanAmount, getMonthlyPlanAmount, setBudgetStart, getBudgetStart,
+  getVisibleSavingsItems, getSavingsMonthlyPlanAmount, setSavingsMonthlyPlanAmount,
+  syncSavingsEnvelopeMonthlyPlan,
 } from '../budget-engine.js';
 import { esc, toast, bindAmountPreviewsIn } from '../ui.js';
 import { fmtMoney, fmtMonth } from '../format.js';
@@ -25,11 +27,17 @@ function stepHeader(step) {
     </div>`;
 }
 
+function payerOpts(cat) {
+  return OWNERS.map((o) =>
+    `<option value="${o.id}" ${(cat.payer || 'joint') === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, o.id))}</option>`).join('');
+}
+
 function renderStep1() {
   const cats = getVisibleCategories(state.data);
   const list = cats.map((c) => `
-    <div class="setup-item-row">
+    <div class="setup-item-row setup-item-row--payer">
       <span>${esc(c.name)}</span>
+      <select class="input input-sm" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>
       <button type="button" class="text-btn danger-text" data-remove-cat="${c.id}">삭제</button>
     </div>`).join('');
   return `
@@ -39,13 +47,29 @@ function renderStep1() {
       <input class="input" name="name" placeholder="예: 식비, 주거, 교통" required />
       <button type="submit" class="btn btn-primary">추가</button>
     </form>
-    <p class="field-hint">토스·가계부처럼 쓰실 카테고리를 자유롭게 추가하세요.</p>`;
+    <p class="field-hint">카테고리마다 누가 부담하는지(본인/배우자/공동) 지정할 수 있습니다.</p>`;
 }
 
 function renderStep2() {
   const y = new Date().getFullYear();
   const cats = getVisibleCategories(state.data);
+  const savingsItems = getVisibleSavingsItems(state.data);
   const rows = cats.map((c) => {
+    if (c.name === '저축' && savingsItems.length) {
+      const subRows = savingsItems.map((item) => {
+        const monthly = getSavingsMonthlyPlanAmount(state.data, y, item.id);
+        return `<label class="setup-budget-row setup-budget-row--sub">
+          <span class="setup-budget-name">${esc(item.name)}</span>
+          <div class="setup-budget-inputs">
+            <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+          </div>
+        </label>`;
+      }).join('');
+      return `<div class="setup-savings-group">
+        <p class="field-label">${esc(c.name)} (세부 항목)</p>
+        ${subRows}
+      </div>`;
+    }
     const monthly = getMonthlyPlanAmount(state.data, y, c.id);
     return `
       <label class="setup-budget-row">
@@ -58,7 +82,7 @@ function renderStep2() {
   }).join('');
   return `
     ${stepHeader(2)}
-    <p class="field-hint">${y}년 기준 · 매월 동일 금액이 적용됩니다.</p>
+    <p class="field-hint">${y}년 기준 · 저축은 세부 항목별로 나눠 입력할 수 있습니다.</p>
     <form id="setup-monthly-form" class="form-stack">${rows}</form>`;
 }
 
@@ -175,17 +199,30 @@ export function bindSetup() {
         toast('항목을 1개 이상 추가해 주세요', 'error');
         return;
       }
+      document.querySelectorAll('[data-cat-payer]').forEach((sel) => {
+        const cat = state.data.budget.categories.find((c) => c.id === sel.dataset.catPayer);
+        if (cat) cat.payer = sel.value || 'joint';
+      });
+      persist();
       state.setupStep = 2;
       rerender();
       return;
     }
     if (state.setupStep === 2) {
       const form = document.getElementById('setup-monthly-form');
+      const savingsItems = getVisibleSavingsItems(state.data);
       if (form) {
         const fd = new FormData(form);
         for (const c of cats) {
-          setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+          if (c.name === '저축' && savingsItems.length) {
+            for (const item of savingsItems) {
+              setSavingsMonthlyPlanAmount(state.data, y, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
+            }
+          } else {
+            setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+          }
         }
+        syncSavingsEnvelopeMonthlyPlan(state.data, y);
       }
       const hasAny = cats.some((c) => getMonthlyPlanAmount(state.data, y, c.id) > 0);
       if (!hasAny) {

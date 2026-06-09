@@ -3,7 +3,7 @@ import {
   computeNetWorth, computeGoalProgress, getMonthBudget,
   getMonthCashflowSummary, getCategorySpend, getVisibleCategories,
   getInvestmentPnLForMonth,
-  buildReportShareText,
+  buildReportShareText, getOwnerDisplayLabel, getOwnerMonthlySummary,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtMonth } from '../format.js';
 import { esc, copyText, toast } from '../ui.js';
@@ -16,6 +16,7 @@ export function renderReports() {
   const cur = snaps.find((s) => s.year === y && s.month === m);
   const prev = snaps.filter((s) => s.year < y || (s.year === y && s.month < m)).pop();
   const { income, expense } = getMonthCashflowSummary(data, y, m);
+  const ownerSummary = getOwnerMonthlySummary(data, y, m);
   const invest = getInvestmentPnLForMonth(data, y, m);
   const spend = getCategorySpend(data, y, m);
   const cats = getVisibleCategories(data);
@@ -59,6 +60,16 @@ export function renderReports() {
         <div class="mini-card"><span>투자 손익(평가)</span><strong class="${invest.pnl >= 0 ? 'income' : 'danger'}">${invest.pnl >= 0 ? '+' : ''}${fmtMoney(invest.pnl)}</strong></div>
       </div>
       <p class="muted">예산 실적은 지출 탭에서 입력한 카테고리별 실적 합계입니다.</p>
+    </section>
+    <section class="section">
+      <h2>부담자별 수입 · 지출</h2>
+      <div class="summary-lines">
+        <div class="summary-line"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 수입</span><strong class="income">${fmtMoney(ownerSummary.income.self)}</strong></div>
+        <div class="summary-line"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 수입</span><strong class="income">${fmtMoney(ownerSummary.income.spouse)}</strong></div>
+        <div class="summary-line"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 지출</span><strong class="danger">${fmtMoney(ownerSummary.expense.self)}</strong></div>
+        <div class="summary-line"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 지출</span><strong class="danger">${fmtMoney(ownerSummary.expense.spouse)}</strong></div>
+        <div class="summary-line"><span>${esc(getOwnerDisplayLabel(data, 'joint'))} 지출</span><strong>${fmtMoney(ownerSummary.expense.joint)}</strong></div>
+      </div>
     </section>
     <section class="section">
       <h2>카테고리별 실적</h2>

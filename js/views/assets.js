@@ -1,6 +1,7 @@
 import { state } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, getInvestmentPnLForMonth, listSavingsContributions,
+  getOwnerDisplayLabel,
 } from '../store.js';
 import { fmtMoney } from '../format.js';
 import { esc, emptyState, openModal, modalValue } from '../ui.js';
@@ -40,11 +41,12 @@ function itemRow(item) {
 }
 
 function incomeRow(tx) {
+  const ownerLabel = getOwnerDisplayLabel(state.data, tx.owner || 'self');
   return `<button type="button" class="list-item" data-income-id="${tx.id}">
     <span class="avatar avatar--icon" aria-hidden="true">＋</span>
     <span class="list-body">
       <span class="list-title">${esc(tx.memo || '수익')}</span>
-      <span class="list-meta">${esc(String(tx.date || '').slice(0, 10))}${tx.paymentMethod ? ` · ${esc(tx.paymentMethod)}` : ''}</span>
+      <span class="list-meta">${esc(ownerLabel)} · ${esc(String(tx.date || '').slice(0, 10))}${tx.paymentMethod ? ` · ${esc(tx.paymentMethod)}` : ''}</span>
     </span>
     <span class="list-amount income">${fmtMoney(tx.amount)}</span>
   </button>`;
@@ -52,11 +54,13 @@ function incomeRow(tx) {
 
 function savingsRow({ asset, entry }) {
   const type = ASSET_TYPES.find((t) => t.id === asset.type);
+  const item = (state.data.budget?.savingsItems || []).find((i) => i.id === entry.savingsItemId);
+  const itemLabel = item ? item.name : '';
   return `<button type="button" class="list-item" data-savings-id="${entry.id}">
     <span class="avatar avatar--icon" aria-hidden="true">🏦</span>
     <span class="list-body">
-      <span class="list-title">${esc(entry.memo || '저축')}</span>
-      <span class="list-meta">${esc(String(entry.date).slice(0, 10))} · ${esc(asset.name)} (${esc(type?.label || '')})</span>
+      <span class="list-title">${esc(entry.memo || itemLabel || '저축')}</span>
+      <span class="list-meta">${itemLabel ? `${esc(itemLabel)} · ` : ''}${esc(String(entry.date).slice(0, 10))} · ${esc(asset.name)} (${esc(type?.label || '')})</span>
     </span>
     <span class="list-amount income">+${fmtMoney(entry.amount)}</span>
   </button>`;

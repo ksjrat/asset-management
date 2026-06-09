@@ -2,14 +2,17 @@ import { state, persist } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, GOAL_TEMPLATES, getVisibleCategories, getHiddenCategories,
   calcMonthlyContribution, monthsBetween, computeGoalProgress,
-  addCategory,
+  addCategory, getOwnerDisplayLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
-  SAVINGS_ASSET_TYPES,
+  getVisibleSavingsItems, SAVINGS_ASSET_TYPES,
 } from '../store.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
   getActualAmount, setActualAmount, getCategoryPeriodSummary, getRecordDay,
-  getBudgetStart, setBudgetStart,
+  getBudgetStart, setBudgetStart, isSavingsCategoryId,
+  getSavingsMonthlyPlanAmount, setSavingsMonthlyPlanAmount, syncSavingsEnvelopeMonthlyPlan,
+  getSavingsActualAmount, setSavingsActualAmount, getSavingsSubSummary,
+  addSavingsItemActual, subtractSavingsItemActual,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
@@ -142,28 +145,16 @@ export async function showAssetValuationForm(assetId, rerender) {
   rerender();
 }
 
-function savingsBudgetCategory(data) {
-  return getVisibleCategories(data).find((c) => c.name === '저축') || null;
+function payerSelect(name, value, data) {
+  const opts = OWNERS.map((o) =>
+    `<option value="${o.id}" ${value === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(data, o.id))}</option>`).join('');
+  return `<select name="${name}" class="input input-sm">${opts}</select>`;
 }
 
-function addSavingsBudgetActual(data, dateStr, amount) {
-  const cat = savingsBudgetCategory(data);
-  if (!cat || !data.budget?.setupDone) return;
-  const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  const prev = getActualAmount(data, y, m, cat.id) || 0;
-  setActualAmount(data, y, m, cat.id, prev + amount);
-}
-
-function subtractSavingsBudgetActual(data, dateStr, amount) {
-  const cat = savingsBudgetCategory(data);
-  if (!cat || !data.budget?.setupDone) return;
-  const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  const prev = getActualAmount(data, y, m, cat.id) || 0;
-  setActualAmount(data, y, m, cat.id, Math.max(0, prev - amount));
+function incomeOwnerSelect(value, data) {
+  const opts = OWNERS.filter((o) => o.id !== 'joint').map((o) =>
+    `<option value="${o.id}" ${value === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(data, o.id))}</option>`).join('');
+  return `<select name="owner" class="input">${opts}</select>`;
 }
 
 export async function showSavingsForm(rerender, entryId = null) {
@@ -181,11 +172,16 @@ export async function showSavingsForm(rerender, entryId = null) {
     return `<option value="${a.id}" ${selected ? 'selected' : ''}>${esc(a.name)} (${type?.label || ''} · ${fmtMoney(a.amount)})</option>`;
   }).join('');
 
+  const savingsItems = getVisibleSavingsItems(state.data);
+  const itemOpts = savingsItems.map((i) =>
+    `<option value="${i.id}" ${existing?.entry.savingsItemId === i.id ? 'selected' : ''}>${esc(i.name)}</option>`).join('');
+
   const res = await openModal({
     title: existing ? '저축 실행 수정' : '저축 실행',
     body: `<form id="savings-form" class="form-stack">
-      <p class="field-hint">이체한 예·적금 계좌와 금액을 입력하면 <strong>자산 잔액이 올라갑니다</strong>. (지출 카테고리와 별도)</p>
+      <p class="field-hint">이체한 예·적금 계좌와 금액을 입력하면 <strong>자산 잔액이 올라갑니다</strong>. 저축 실적에도 반영됩니다.</p>
       ${formField('넣을 계좌', `<select name="assetId" class="input" required>${assetOpts}</select>`)}
+      ${savingsItems.length ? formField('저축 항목', `<select name="savingsItemId" class="input" required>${itemOpts}</select>`) : ''}
       ${formField('날짜', `<input class="input" name="date" type="date" value="${existing?.entry.date || todayISO()}" required />`)}
       ${formField('금액', `<input class="input" name="amount" type="number" required min="1" value="${existing?.entry.amount ?? ''}" />`)}
       ${formField('메모', `<input class="input" name="memo" value="${esc(existing?.entry.memo || '')}" placeholder="급여일 저축 등" />`)}
@@ -203,7 +199,7 @@ export async function showSavingsForm(rerender, entryId = null) {
     const { asset, entry } = existing;
     asset.amount = Math.max(0, (asset.amount || 0) - entry.amount);
     asset.savingsLog = (asset.savingsLog || []).filter((e) => e.id !== entry.id);
-    subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
+    subtractSavingsItemActual(state.data, entry.date, entry.amount, entry.savingsItemId);
     persist();
     toast('삭제되었습니다', 'success');
     rerender();
@@ -222,6 +218,7 @@ export async function showSavingsForm(rerender, entryId = null) {
   const amount = Number(fd.get('amount'));
   const date = fd.get('date');
   const memo = fd.get('memo')?.toString().trim() || '';
+  const savingsItemId = fd.get('savingsItemId')?.toString() || null;
   if (!Number.isFinite(amount) || amount < 1 || !date) {
     toast('금액과 날짜를 확인해 주세요', 'error');
     return;
@@ -230,33 +227,39 @@ export async function showSavingsForm(rerender, entryId = null) {
   if (existing) {
     const { asset: oldAsset, entry } = existing;
     const delta = amount - entry.amount;
+    const oldItemId = entry.savingsItemId;
+    const newItemId = savingsItemId || oldItemId;
     if (oldAsset.id !== asset.id) {
       oldAsset.amount = Math.max(0, (oldAsset.amount || 0) - entry.amount);
-      subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
+      subtractSavingsItemActual(state.data, entry.date, entry.amount, oldItemId);
       asset.amount = (asset.amount || 0) + amount;
-      addSavingsBudgetActual(state.data, date, amount);
+      addSavingsItemActual(state.data, date, amount, newItemId);
       oldAsset.savingsLog = (oldAsset.savingsLog || []).filter((e) => e.id !== entry.id);
       asset.savingsLog = asset.savingsLog || [];
-      Object.assign(entry, { date, amount, memo, at: new Date().toISOString() });
+      Object.assign(entry, {
+        date, amount, memo, savingsItemId: newItemId, at: new Date().toISOString(),
+      });
       asset.savingsLog.push(entry);
     } else {
       oldAsset.amount = Math.max(0, (oldAsset.amount || 0) + delta);
-      if (entry.date !== date) {
-        subtractSavingsBudgetActual(state.data, entry.date, entry.amount);
-        addSavingsBudgetActual(state.data, date, amount);
+      if (entry.date !== date || oldItemId !== newItemId) {
+        subtractSavingsItemActual(state.data, entry.date, entry.amount, oldItemId);
+        addSavingsItemActual(state.data, date, amount, newItemId);
       } else if (delta !== 0) {
-        if (delta > 0) addSavingsBudgetActual(state.data, date, delta);
-        else subtractSavingsBudgetActual(state.data, date, -delta);
+        if (delta > 0) addSavingsItemActual(state.data, date, delta, newItemId);
+        else subtractSavingsItemActual(state.data, date, -delta, newItemId);
       }
-      Object.assign(entry, { date, amount, memo, at: new Date().toISOString() });
+      Object.assign(entry, {
+        date, amount, memo, savingsItemId: newItemId, at: new Date().toISOString(),
+      });
     }
   } else {
     asset.amount = (asset.amount || 0) + amount;
     asset.savingsLog = asset.savingsLog || [];
     asset.savingsLog.push({
-      id: uid(), date, amount, memo, at: new Date().toISOString(),
+      id: uid(), date, amount, memo, savingsItemId, at: new Date().toISOString(),
     });
-    addSavingsBudgetActual(state.data, date, amount);
+    addSavingsItemActual(state.data, date, amount, savingsItemId);
   }
 
   asset.history = asset.history || [];
@@ -399,12 +402,16 @@ export async function showTxForm(type, item, rerender, opts = {}) {
   const catOpts = cats.map((c) =>
     `<option value="${c.id}" ${(item?.categoryId === c.id || (!item && presetCatId === c.id)) ? 'selected' : ''}>${c.name}</option>`).join('');
   const memoPlaceholder = type === 'income' ? '예: 5월 급여, 배당' : '예: 외식, 데이트';
+  const ownerField = type === 'income'
+    ? formField('수입자', incomeOwnerSelect(item?.owner || 'self', state.data))
+    : '';
   const res = await openModal({
     title: item ? '거래 수정' : (type === 'income' ? '수익 입력' : '지출 입력'),
     body: `<form id="tx-form" class="form-stack">
       <input type="hidden" name="type" value="${type}" />
       ${formField('날짜', `<input class="input" name="date" type="date" value="${item?.date || todayISO()}" required />`)}
       ${formField('금액', `<input class="input" name="amount" type="number" required min="1" value="${item?.amount ?? ''}" />`)}
+      ${ownerField}
       ${formField('카테고리', `<select name="categoryId" class="input">${catOpts}</select>`)}
       ${formField('결제수단', `<select name="paymentMethod" class="input">
         <option value="현금" ${item?.paymentMethod === '현금' ? 'selected' : ''}>현금</option>
@@ -433,6 +440,7 @@ export async function showTxForm(type, item, rerender, opts = {}) {
     categoryId: fd.get('categoryId'), paymentMethod: fd.get('paymentMethod'),
     memo: fd.get('memo')?.toString().trim() || '',
     shared: !!fd.get('shared'), createdBy: item?.createdBy || 'self',
+    ...(type === 'income' ? { owner: fd.get('owner') || 'self' } : {}),
   };
   if (item) {
     Object.assign(item, payload);
@@ -479,29 +487,111 @@ export async function showBudgetStartForm(rerender) {
 
 export async function showMonthlyBudgetForm(year, rerender) {
   const cats = getVisibleCategories(state.data);
+  const savingsItems = getVisibleSavingsItems(state.data);
   const fields = cats.map((c) => {
+    const payerLabel = getOwnerDisplayLabel(state.data, c.payer || 'joint');
+    if (c.name === '저축' && savingsItems.length) {
+      const subRows = savingsItems.map((item) => {
+        const monthly = getSavingsMonthlyPlanAmount(state.data, year, item.id);
+        return `<label class="savings-budget-row">
+          <span>${esc(item.name)}</span>
+          <input class="input input-amount" name="sav-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+        </label>`;
+      }).join('');
+      return `<div class="savings-budget-group">
+        <p class="field-label">${esc(c.name)} (월) · ${esc(payerLabel)}</p>
+        ${subRows}
+        <p class="field-hint">저축 월 예산 = 세부 항목 합계</p>
+      </div>`;
+    }
     const monthly = getMonthlyPlanAmount(state.data, year, c.id);
     return formField(
-      `${c.name} (월)`,
+      `${c.name} (월) · ${payerLabel}`,
       `<input class="input input-amount" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
        <span class="field-hint">연 ${fmtMoney(monthly * 12)}</span>`,
     );
   }).join('');
   const res = await openModal({
     title: `${year}년 월간 예산`,
-    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">항목별 매월 예산 · 언제든 수정할 수 있습니다.</p>${fields}</form>`,
+    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">항목별 매월 예산 · 부담자는 항목 관리에서 변경할 수 있습니다.</p>${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
-  for (const c of cats) setMonthlyPlanAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
+  for (const c of cats) {
+    if (c.name === '저축' && savingsItems.length) {
+      for (const item of savingsItems) {
+        setSavingsMonthlyPlanAmount(state.data, year, item.id, Number(fd.get(`sav-${item.id}`)) || 0);
+      }
+    } else {
+      setMonthlyPlanAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
+    }
+  }
+  syncSavingsEnvelopeMonthlyPlan(state.data, year);
   persist();
   toast('월간 예산이 저장되었습니다', 'success');
   rerender();
 }
 
+export async function showSavingsActualForm(year, month, rerender) {
+  const items = getVisibleSavingsItems(state.data);
+  const cat = state.data.budget.categories.find((c) => c.name === '저축');
+  if (!cat || !items.length) {
+    if (cat) showActualForm(cat.id, year, month, rerender);
+    return;
+  }
+  const s = getCategoryPeriodSummary(state.data, year, month, cat.id);
+  const rows = items.map((item) => {
+    const current = getSavingsActualAmount(state.data, year, month, item.id);
+    return `<label class="savings-actual-row">
+      <span class="savings-actual-name">${esc(item.name)}</span>
+      <input class="input input-amount savings-actual-amt" name="${item.id}" type="number" min="0" step="1000" value="${current ?? ''}" placeholder="0" />
+    </label>`;
+  }).join('');
+  const res = await openModal({
+    title: `${fmtMonth(year, month)} · 저축 실적`,
+    body: `<form id="savings-actual-form" class="form-stack">
+      <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
+      <p class="field-hint">항목별 금액을 입력하세요. 합계가 저축 실적으로 반영됩니다.</p>
+      <div class="savings-actual-list">${rows}</div>
+      <p class="savings-actual-sum">합계 <strong id="savings-sum-preview">0원</strong></p>
+    </form>`,
+    actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+    onOpen: (sheet) => {
+      const form = sheet.querySelector('#savings-actual-form');
+      const preview = sheet.querySelector('#savings-sum-preview');
+      const update = () => {
+        let sum = 0;
+        form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
+          sum += Number(inp.value) || 0;
+        });
+        if (preview) preview.textContent = fmtMoney(sum);
+      };
+      form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
+        inp.addEventListener('input', update);
+      });
+      update();
+    },
+  });
+  if (modalValue(res) !== 'save') return;
+  const fd = modalForm(res);
+  if (!fd) return;
+  for (const item of items) {
+    setSavingsActualAmount(state.data, year, month, item.id, Number(fd.get(item.id)) || 0);
+  }
+  persist();
+  const after = getCategoryPeriodSummary(state.data, year, month, cat.id);
+  toast(after.remaining >= 0
+    ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 잔액 ${fmtMoney(after.remaining)}`
+    : `저장됨 · ${fmtMoney(-after.remaining)} 초과`, after.remaining >= 0 ? 'success' : 'error');
+  rerender();
+}
+
 export async function showActualForm(catId, year, month, rerender) {
+  if (isSavingsCategoryId(state.data, catId)) {
+    return showSavingsActualForm(year, month, rerender);
+  }
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   if (!cat) return;
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
@@ -545,12 +635,14 @@ export async function showBudgetForm(y, m, rerender) {
   persist(); toast('월간 예산이 저장되었습니다', 'success'); rerender();
 }
 
-function categoryManageRows(cats) {
-  return cats.map((c) =>
-    `<div class="cat-manage-row">
-      <span>${esc(c.name)}</span>
+function categoryManageRows(cats, data) {
+  return cats.map((c) => {
+    const payer = getOwnerDisplayLabel(data, c.payer || 'joint');
+    return `<div class="cat-manage-row">
+      <span>${esc(c.name)} <span class="muted">· ${esc(payer)}</span></span>
       <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function setCategoryHidden(data, cat, hidden) {
@@ -567,6 +659,7 @@ async function openCategoryEdit(cat, rerender) {
     title: '카테고리 편집',
     body: `<form id="cat-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(cat.name)}" required />`)}
+      ${formField('부담자', payerSelect('payer', cat.payer || 'joint', state.data))}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
       ${formField('정산일 (비우면 기본)', `<input class="input" name="recordDay" type="number" min="1" max="28" placeholder="${state.data.budget.defaultRecordDay}" value="${cat.recordDay ?? ''}" />`)}
@@ -589,6 +682,7 @@ async function openCategoryEdit(cat, rerender) {
   const efd = modalForm(editRes);
   if (!efd) return;
   cat.name = efd.get('name');
+  cat.payer = efd.get('payer') || 'joint';
   setCategoryHidden(state.data, cat, !!efd.get('hidden'));
   const rd = efd.get('recordDay');
   cat.recordDay = rd ? Math.min(28, Math.max(1, Number(rd))) : null;
@@ -616,16 +710,90 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
   });
 }
 
+function savingsItemManageRows(items) {
+  return items.map((item) =>
+    `<div class="cat-manage-row">
+      <span>${esc(item.name)}</span>
+      <button type="button" class="text-btn" data-sav-edit="${item.id}">편집</button>
+    </div>`).join('');
+}
+
+async function openSavingsItemEdit(item, rerender) {
+  const editRes = await openModal({
+    title: '저축 항목 편집',
+    body: `<form id="sav-form" class="form-stack">
+      ${formField('이름', `<input class="input" name="name" value="${esc(item.name)}" required />`)}
+      <label class="toggle-row"><span>숨김</span>
+        <input type="checkbox" name="hidden" ${item.hidden ? 'checked' : ''} /></label>
+    </form>`,
+    actions: [{ label: '저장', value: 'save', primary: true }],
+  });
+  if (modalValue(editRes) !== 'save') return;
+  const efd = modalForm(editRes);
+  if (!efd) return;
+  item.name = efd.get('name');
+  item.hidden = !!efd.get('hidden');
+  persist();
+  toast('저장됨', 'success');
+  showSavingsItemsManage(rerender);
+}
+
+export async function showSavingsItemsManage(rerender) {
+  const items = state.data.budget.savingsItems || [];
+  const visible = items.filter((i) => !i.hidden);
+  const hidden = items.filter((i) => i.hidden);
+  const res = await openModal({
+    title: '저축 항목 관리',
+    body: `<div class="cat-manage-panel">
+      <p class="field-hint">저축 실적 입력 시 항목별로 금액을 기록합니다.</p>
+      <div class="list-group">${savingsItemManageRows(visible) || '<p class="muted">항목이 없습니다</p>'}</div>
+      ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
+        <div class="list-group">${savingsItemManageRows(hidden)}</div>` : ''}
+    </div>`,
+    actions: [
+      { label: '항목 추가', value: 'add' },
+      { label: '닫기', value: null, primary: true },
+    ],
+    onOpen: (sheet) => {
+      sheet.querySelectorAll('[data-sav-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const item = items.find((i) => i.id === btn.dataset.savEdit);
+          if (item) openSavingsItemEdit(item, rerender);
+        });
+      });
+    },
+  });
+  if (modalValue(res) === 'add') {
+    const addRes = await openModal({
+      title: '저축 항목 추가',
+      body: formField('이름', '<input class="input" name="name" required />'),
+      actions: [{ label: '취소', value: null }, { label: '추가', value: 'save', primary: true }],
+    });
+    if (modalValue(addRes) === 'save') {
+      const fd = modalForm(addRes);
+      const name = fd?.get('name')?.toString().trim();
+      if (name) {
+        state.data.budget.savingsItems.push({ id: uid(), name, hidden: false });
+        persist();
+        toast('추가되었습니다', 'success');
+        showSavingsItemsManage(rerender);
+        return;
+      }
+    }
+  }
+  rerender();
+}
+
 export async function showCategoryManage(rerender) {
   const allCats = state.data.budget.categories;
   const visibleCats = getVisibleCategories(state.data);
   const hiddenCats = getHiddenCategories(state.data);
-  const visibleRows = categoryManageRows(visibleCats);
+  const visibleRows = categoryManageRows(visibleCats, state.data);
   const hiddenBlock = hiddenCats.length
     ? `<button type="button" class="text-btn cat-manage-toggle-hidden" id="btn-toggle-hidden-cats">숨긴 항목 ${hiddenCats.length}개 보기</button>
        <div class="cat-manage-hidden-section hidden">
          <p class="cat-manage-section-label muted">숨긴 항목</p>
-         <div class="list-group">${categoryManageRows(hiddenCats)}</div>
+         <div class="list-group">${categoryManageRows(hiddenCats, state.data)}</div>
        </div>`
     : '';
   const res = await openModal({
@@ -635,11 +803,16 @@ export async function showCategoryManage(rerender) {
       ${hiddenBlock}
     </div>`,
     actions: [
+      { label: '저축 항목', value: 'savings' },
       { label: '카테고리 추가', value: 'add' },
       { label: '닫기', value: null, primary: true },
     ],
     onOpen: (sheet) => bindCategoryManageSheet(sheet, allCats, hiddenCats.length, rerender),
   });
+  if (modalValue(res) === 'savings') {
+    showSavingsItemsManage(rerender);
+    return;
+  }
   if (modalValue(res) === 'add') {
     const addRes = await openModal({
       title: '카테고리 추가',

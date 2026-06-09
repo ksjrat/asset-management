@@ -2,6 +2,7 @@ import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
 import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
+  getVisibleSavingsItems, getSavingsCategory, getActualAmount, DEFAULT_SAVINGS_ITEM_NAMES,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 
@@ -208,7 +209,14 @@ export const DEFAULT = {
     defaultRecordDay: 25,
     startYear: null,
     startMonth: null,
-    categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat-${i}`, name, hidden: false, recordDay: null })),
+    categories: DEFAULT_CATEGORIES.map((name, i) => ({
+      id: `cat-${i}`, name, hidden: false, recordDay: null, payer: 'joint',
+    })),
+    savingsItems: DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
+      id: `sav-${i}`, name, hidden: false,
+    })),
+    savingsMonthlyPlan: {},
+    savingsActuals: {},
     monthlyPlan: {},
     actuals: {},
   },
@@ -413,9 +421,43 @@ export function generateInviteCode() {
   return Array.from(bytes, (b) => HOUSEHOLD_CODE_ALPHABET[b % HOUSEHOLD_CODE_ALPHABET.length]).join('');
 }
 
+export function getOwnerDisplayLabel(data, ownerId) {
+  if (ownerId === 'self' && data.auth?.userName?.trim()) return data.auth.userName.trim();
+  if (ownerId === 'spouse' && data.auth?.spouseName?.trim()) return data.auth.spouseName.trim();
+  return OWNERS.find((o) => o.id === ownerId)?.label || ownerId;
+}
+
+export function getOwnerMonthlySummary(data, year, month) {
+  ensureBudgetStructure(data);
+  const income = { self: 0, spouse: 0, total: 0 };
+  for (const tx of getMonthTransactions(data, year, month)) {
+    if (tx.type !== 'income') continue;
+    const owner = tx.owner === 'spouse' ? 'spouse' : 'self';
+    income[owner] += tx.amount;
+    income.total += tx.amount;
+  }
+
+  const expense = { self: 0, spouse: 0, joint: 0, total: 0 };
+  const cats = getVisibleCategories(data);
+  for (const cat of cats) {
+    const amt = getActualAmount(data, year, month, cat.id);
+    if (amt == null || amt <= 0) continue;
+    const payer = cat.payer || 'joint';
+    if (payer === 'self' || payer === 'spouse') expense[payer] += amt;
+    else expense.joint += amt;
+    expense.total += amt;
+  }
+
+  return { income, expense };
+}
+
+export { getVisibleSavingsItems, getSavingsCategory } from './budget-engine.js';
+
 export function addCategory(data, name, recordDay = null) {
   const id = uid();
-  data.budget.categories.push({ id, name: name.trim(), hidden: false, recordDay });
+  data.budget.categories.push({
+    id, name: name.trim(), hidden: false, recordDay, payer: 'joint',
+  });
   return id;
 }
 

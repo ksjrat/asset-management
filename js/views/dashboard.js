@@ -5,10 +5,12 @@ import {
   getVisibleHomeOwnerFilters,
   getMonthCashflowSummary,
   getVisibleCategories,
+  getOwnerDisplayLabel,
+  getOwnerMonthlySummary,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
 import { lineChart, legend, budgetBar } from '../charts.js';
-import { toast } from '../ui.js';
+import { toast, esc } from '../ui.js';
 import { needsLinkAttention, openLinkWizard } from '../link-wizard.js';
 import { getPeriodTotals, isRecordDue } from '../budget-engine.js';
 
@@ -43,6 +45,7 @@ export function renderDashboard() {
     : '';
 
   const flow = getMonthCashflowSummary(data, y, m);
+  const ownerSummary = getOwnerMonthlySummary(data, y, m);
   const cats = getVisibleCategories(data);
   const budgetTotals = data.budget?.setupDone
     ? getPeriodTotals(data, y, m, cats)
@@ -102,6 +105,12 @@ export function renderDashboard() {
         <div class="mini-card"><span>투자 손익</span><strong class="${flow.investPnL >= 0 ? 'income' : 'danger'}">${flow.investPnL >= 0 ? '+' : ''}${fmtShort(flow.investPnL)}</strong></div>
       </div>
       <p class="muted">예산 실적은 지출 탭 카테고리 실적 합계입니다. 투자 손익은 평가 기록(전월 대비) 기준입니다.</p>
+      <div class="summary-row" style="margin-top:10px">
+        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.self)}</strong></div>
+        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.spouse)}</strong></div>
+        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 지출</span><strong class="danger">${fmtShort(ownerSummary.expense.self)}</strong></div>
+        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 지출</span><strong class="danger">${fmtShort(ownerSummary.expense.spouse)}</strong></div>
+      </div>
     </section>
 
     ${budgetSection}

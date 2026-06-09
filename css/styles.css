@@ -613,9 +613,31 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
   cursor: pointer;
 }
 
+.savings-actual-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.savings-actual-row {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  align-items: center;
+  gap: 10px;
+}
+.savings-actual-name { font-size: 0.9rem; }
+.savings-actual-sum { text-align: right; margin-top: 12px; font-size: 0.95rem; }
+.savings-budget-group { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.savings-budget-row {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.budget-savings-hint { font-size: 0.82rem; margin: 4px 0 8px; }
+.setup-item-row--payer { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.setup-savings-group { margin-bottom: 16px; padding: 12px; background: var(--surface); border-radius: 10px; }
+.setup-budget-row--sub { padding-left: 8px; }
+
 .owner-row {
   display: grid;
-  grid-template-columns: 52px 1fr auto;
+  grid-template-columns: 72px 1fr auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
