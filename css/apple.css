@@ -988,14 +988,23 @@ html, body {
 }
 
 .setup-item-row.setup-item-row--payer {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 .setup-item-row--payer .setup-item-name {
   white-space: nowrap;
   word-break: keep-all;
   overflow-wrap: normal;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  min-width: 0;
 }
-.setup-item-row--payer .setup-item-delete {
+.setup-item-row--payer .setup-item-actions {
+  flex-shrink: 0;
+}
+.setup-item-row--payer .setup-item-delete,
+.setup-item-row--payer .setup-item-hint {
   white-space: nowrap;
   word-break: keep-all;
 }

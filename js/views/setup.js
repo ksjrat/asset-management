@@ -42,7 +42,7 @@ function renderStep1() {
       <span class="setup-item-name">${esc(c.name)}</span>
       <div class="setup-item-actions">
         ${isSavingsWithSubs
-    ? '<span class="muted setup-item-hint">부담자는 세부 항목별</span>'
+    ? '<span class="muted setup-item-hint" title="부담자는 세부 항목별로 지정">세부 항목별</span>'
     : `<select class="input input-sm setup-item-payer" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>`}
         <button type="button" class="text-btn danger-text setup-item-delete" data-remove-cat="${c.id}">삭제</button>
       </div>
