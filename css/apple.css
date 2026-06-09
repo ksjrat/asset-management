@@ -987,6 +987,19 @@ html, body {
   background: var(--primary-muted);
 }
 
+.setup-item-row.setup-item-row--payer {
+  display: block;
+}
+.setup-item-row--payer .setup-item-name {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+.setup-item-row--payer .setup-item-delete {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
 /* Toast — vibrancy pill */
 .toast {
   background: rgba(60, 60, 67, 0.88);
