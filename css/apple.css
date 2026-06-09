@@ -520,6 +520,8 @@ html, body {
   color: var(--primary);
   font-size: var(--text-body);
   font-weight: var(--fw-body);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .month-label {

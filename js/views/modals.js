@@ -938,7 +938,7 @@ export async function showCategoryManage(rerender) {
       ${hiddenBlock}
     </div>`,
     actions: [
-      { label: '세부 항목 나누기', value: 'sub-pick' },
+      { label: '세부 나누기', value: 'sub-pick' },
       { label: '카테고리 추가', value: 'add' },
       { label: '닫기', value: null, primary: true },
     ],
