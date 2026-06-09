@@ -37,8 +37,10 @@ function renderStep1() {
   const list = cats.map((c) => `
     <div class="setup-item-row setup-item-row--payer">
       <span class="setup-item-name">${esc(c.name)}</span>
-      <select class="input input-sm" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>
-      <button type="button" class="text-btn danger-text" data-remove-cat="${c.id}">삭제</button>
+      <div class="setup-item-actions">
+        <select class="input input-sm setup-item-payer" name="payer-${c.id}" data-cat-payer="${c.id}">${payerOpts(c)}</select>
+        <button type="button" class="text-btn danger-text setup-item-delete" data-remove-cat="${c.id}">삭제</button>
+      </div>
     </div>`).join('');
   return `
     ${stepHeader(1)}
