@@ -149,6 +149,44 @@ export function getMonthSavingsTotal(data, year, month) {
   return total;
 }
 
+export function getLatestValuation(item) {
+  const vals = item.valuations || [];
+  if (!vals.length) return null;
+  return vals[vals.length - 1];
+}
+
+/** 투자 자산은 최신 평가금액, 그 외는 등록 금액 */
+export function getEffectiveAssetAmount(item) {
+  if (item.type === 'invest') {
+    const latest = getLatestValuation(item);
+    if (latest) return Number(latest.amount) || 0;
+  }
+  return Number(item.amount) || 0;
+}
+
+function valuationBaselineAmount(item, prevYmStr, curYm) {
+  const vals = item.valuations || [];
+  const prevVal = vals.find((v) => v.ym === prevYmStr);
+  if (prevVal) return Number(prevVal.amount);
+  const older = vals.filter((v) => v.ym < curYm);
+  if (older.length) return Number(older[older.length - 1].amount);
+  return Number(item.history?.[0]?.amount ?? item.amount) || 0;
+}
+
+export function syncInvestAssetAmount(item) {
+  const latest = getLatestValuation(item);
+  if (latest) item.amount = Number(latest.amount) || 0;
+  else item.amount = Number(item.history?.[0]?.amount ?? item.amount) || 0;
+}
+
+export function syncInvestAssetAmounts(data) {
+  for (const item of data.assets?.items || []) {
+    if (item.type === 'invest' && (item.valuations || []).length) {
+      syncInvestAssetAmount(item);
+    }
+  }
+}
+
 export function getInvestmentPnLForMonth(data, year, month) {
   const curYm = ymStr(year, month);
   const prev = prevYm(year, month);
@@ -159,9 +197,10 @@ export function getInvestmentPnLForMonth(data, year, month) {
   for (const it of items) {
     const vals = it.valuations || [];
     const curVal = vals.find((v) => v.ym === curYm);
-    const prevVal = vals.find((v) => v.ym === prev.ym);
-    if (!curVal || !prevVal) continue;
-    const delta = Number(curVal.amount) - Number(prevVal.amount);
+    if (!curVal) continue;
+    const previous = valuationBaselineAmount(it, prev.ym, curYm);
+    const current = Number(curVal.amount);
+    const delta = current - previous;
     if (!Number.isFinite(delta)) continue;
     pnl += delta;
     perAsset.push({
@@ -169,8 +208,8 @@ export function getInvestmentPnLForMonth(data, year, month) {
       name: it.name,
       ym: curYm,
       prevYm: prev.ym,
-      current: Number(curVal.amount),
-      previous: Number(prevVal.amount),
+      current,
+      previous,
       delta,
     });
   }
@@ -316,6 +355,7 @@ export function load() {
     data = tryRestoreSafetyBackup(data);
     ensureAppSettings(data);
     ensureAppLockAuth(data);
+    syncInvestAssetAmounts(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -344,8 +384,9 @@ export function computeNetWorth(data, ownerFilter = 'all') {
     if (ownerFilter !== 'all' && item.owner !== ownerFilter) continue;
     const type = ASSET_TYPES.find((t) => t.id === item.type);
     if (!type) continue;
-    if (type.group === 'asset') assets += item.amount;
-    else liabilities += item.amount;
+    const amount = getEffectiveAssetAmount(item);
+    if (type.group === 'asset') assets += amount;
+    else liabilities += amount;
   }
   return { assets, liabilities, net: assets - liabilities };
 }

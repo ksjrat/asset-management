@@ -5,6 +5,7 @@ import {
   addCategory, getOwnerDisplayLabel, getSubPayerLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
   getVisibleSavingsItems, hasSubItems, getVisibleSubItems, SAVINGS_ASSET_TYPES,
+  syncInvestAssetAmount,
 } from '../store.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
@@ -123,6 +124,8 @@ export async function showAssetValuationForm(assetId, rerender) {
   item.valuations = item.valuations || [];
   if (action === 'delete') {
     item.valuations = item.valuations.filter((v) => v.ym !== ym);
+    syncInvestAssetAmount(item);
+    item.updatedAt = new Date().toISOString();
     persist();
     toast('삭제되었습니다', 'success');
     rerender();
@@ -142,6 +145,8 @@ export async function showAssetValuationForm(assetId, rerender) {
   if (idx >= 0) item.valuations[idx] = entry;
   else item.valuations.push(entry);
   item.valuations.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+  syncInvestAssetAmount(item);
+  item.updatedAt = entry.at;
   persist();
   toast('기록되었습니다', 'success');
   rerender();

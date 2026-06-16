@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, getInvestmentPnLForMonth, listSavingsContributions,
-  getOwnerDisplayLabel,
+  getOwnerDisplayLabel, getEffectiveAssetAmount,
 } from '../store.js';
 import { fmtMoney } from '../format.js';
 import { esc, emptyState, openModal, modalValue } from '../ui.js';
@@ -36,7 +36,7 @@ function itemRow(item) {
       <span class="list-title">${esc(item.name)}${item.private ? ' 🔒' : ''}</span>
       <span class="list-meta">${esc(type?.label)} · ${esc(owner?.label)}${isInvest ? valMeta : ''}</span>
     </span>
-    <span class="list-amount ${type?.group === 'liability' ? 'danger' : ''}">${fmtMoney(item.amount)}</span>
+    <span class="list-amount ${type?.group === 'liability' ? 'danger' : ''}">${fmtMoney(getEffectiveAssetAmount(item))}</span>
   </button>`;
 }
 
