@@ -6,7 +6,7 @@ import { renderLock, bindLock } from './lock.js';
 import { renderDashboard, bindDashboard } from './dashboard.js';
 import { renderAssets, bindAssets } from './assets.js';
 import { renderBudget, bindBudget } from './budget.js';
-import { renderReports, bindReports } from './reports.js';
+import { renderMemos, bindMemos } from './memos.js';
 import { renderSettings, bindSettings } from './settings.js';
 import { renderGoals, bindGoals } from './goals.js';
 import { renderSetup, bindSetup } from './setup.js';
@@ -20,11 +20,11 @@ const TABS = [
   { id: 'dashboard', label: '홈' },
   { id: 'assets', label: '자산·수익' },
   { id: 'expense', label: '지출' },
-  { id: 'reports', label: '리포트' },
+  { id: 'memos', label: '메모' },
   { id: 'settings', label: '설정' },
 ];
 
-const MONTH_TABS = new Set(['expense', 'reports']);
+const MONTH_TABS = new Set(['expense']);
 
 function monthHeader() {
   const { selectedYear: y, selectedMonth: m } = state;
@@ -42,6 +42,9 @@ function monthHeader() {
 function fabHtml() {
   if (state.tab === 'expense') {
     return `<button type="button" class="fab" id="fab-record-actual" aria-label="실적 입력">✓</button>`;
+  }
+  if (state.tab === 'memos') {
+    return `<button type="button" class="fab" id="fab-add-memo" aria-label="메모 추가">+</button>`;
   }
   return '';
 }
@@ -114,7 +117,7 @@ function renderMain() {
     case 'dashboard': return renderDashboard();
     case 'assets': return renderAssets();
     case 'expense': return renderBudget();
-    case 'reports': return renderReports();
+    case 'memos': return renderMemos();
     case 'settings':
       return state.settingsSubView === 'goals' ? renderGoals() : renderSettings();
     default: return '';
@@ -161,7 +164,7 @@ function bindShell() {
   if (state.tab === 'dashboard') bindDashboard();
   if (state.tab === 'assets') bindAssets();
   if (state.tab === 'expense') bindBudget();
-  if (state.tab === 'reports') bindReports();
+  if (state.tab === 'memos') bindMemos();
   if (state.tab === 'settings') {
     if (state.settingsSubView === 'goals') bindGoals();
     else bindSettings();

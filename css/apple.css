@@ -540,6 +540,30 @@ html, body {
   margin-bottom: var(--space-md);
 }
 
+.summary-row--quad {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.summary-row--quad .mini-card {
+  padding: 8px 4px;
+}
+
+.summary-row--quad .mini-card span {
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.summary-row--quad .mini-card strong {
+  font-size: 15px;
+}
+
+.summary-row--quad .mom-badge {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 10px;
+}
+
 .mini-card {
   padding: var(--space-sm) var(--space-xs);
   text-align: center;
@@ -576,28 +600,41 @@ html, body {
 .spend-delta-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--separator);
+  border-radius: var(--squircle-r);
 }
 
 .spend-delta-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
-  gap: 2px var(--space-sm);
-  padding: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 7px var(--space-sm);
   background: var(--surface);
-  border-radius: var(--squircle-r);
-  border: 0.5px solid var(--separator);
+  border: none;
+  border-bottom: 0.5px solid var(--separator);
+  border-radius: 0;
+}
+
+.spend-delta-row:last-child {
+  border-bottom: none;
 }
 
 .spend-delta-name {
+  flex: 1;
+  min-width: 0;
   font-weight: var(--fw-semibold);
-  font-size: var(--text-body);
+  font-size: var(--text-footnote);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .spend-delta-change {
+  flex-shrink: 0;
   font-weight: var(--fw-bold);
-  font-size: var(--text-body);
+  font-size: var(--text-footnote);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -605,9 +642,10 @@ html, body {
 .spend-delta-change.up { color: var(--danger); }
 
 .spend-delta-detail {
-  grid-column: 1 / -1;
-  font-size: var(--text-footnote);
+  flex-shrink: 0;
+  font-size: var(--text-caption);
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 /* Lists */

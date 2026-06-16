@@ -11,6 +11,7 @@ function normalizeSavedTab(tab) {
   if (!tab) return null;
   if (tab === 'budget') return 'expense';
   if (tab === 'goals') return 'dashboard';
+  if (tab === 'reports') return 'memos';
   return tab;
 }
 

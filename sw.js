@@ -25,7 +25,7 @@ const ASSETS = [
   './js/app-update.js',
   './js/pwa-install.js',
   './js/views/budget.js',
-  './js/views/reports.js',
+  './js/views/memos.js',
   './js/views/settings.js',
   './js/views/modals.js',
   './js/validators.js',

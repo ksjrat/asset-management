@@ -345,6 +345,7 @@ export const DEFAULT = {
   },
   transactions: [],
   recurring: [],
+  memos: [],
   guideChecks: {},
 };
 
@@ -478,10 +479,12 @@ export function load() {
     ensureBudgetStructure(data);
     migrateBudgetModel(data);
     ensureAppSettings(data);
+    ensureMemos(data);
     ensureAppLockAuth(data);
     normalizeAuthHousehold(data);
     data = tryRestoreSafetyBackup(data);
     ensureAppSettings(data);
+    ensureMemos(data);
     ensureAppLockAuth(data);
     normalizeAuthHousehold(data);
     syncInvestAssetAmounts(data);
@@ -703,17 +706,15 @@ export function guideExecutionRate(data) {
   return done / checks.length;
 }
 
-export function buildReportShareText(data, year, month) {
-  const { income, expense, investPnL } = getMonthCashflowSummary(data, year, month);
-  const nw = computeNetWorth(data);
-  const lines = [
-    `[우리 자산] ${year}년 ${month}월 보고서`,
-    `순자산: ${nw.net.toLocaleString('ko-KR')}원`,
-    `수입: ${income.toLocaleString('ko-KR')}원 / 예산 실적: ${expense.toLocaleString('ko-KR')}원`,
-    ...(investPnL ? [`투자 손익(평가): ${(investPnL >= 0 ? '+' : '') + investPnL.toLocaleString('ko-KR')}원`] : []),
-    `목표 ${data.goals.length}개 · 배우자 ${data.auth.spouseConnected ? '연결됨' : '미연결'}`,
-  ];
-  return lines.join('\n');
+export function ensureMemos(data) {
+  if (!Array.isArray(data.memos)) data.memos = [];
+}
+
+export function listMemos(data) {
+  ensureMemos(data);
+  return [...data.memos].sort(
+    (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)),
+  );
 }
 
 export function recordPolicyConsent(data) {

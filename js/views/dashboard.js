@@ -109,8 +109,8 @@ export function renderDashboard() {
         ${budgetOveruse.map((r) => `
           <div class="spend-delta-row">
             <span class="spend-delta-name">${esc(r.name)}</span>
-            <span class="spend-delta-change ${r.usedPct > 1 ? 'up' : ''}">${fmtPct(r.usedPct)}</span>
             <span class="spend-delta-detail muted">${fmtShort(r.actual)} / ${fmtShort(r.available)}</span>
+            <span class="spend-delta-change ${r.usedPct > 1 ? 'up' : ''}">${fmtPct(r.usedPct)}</span>
           </div>`).join('')}
       </div>
     </section>` : '';

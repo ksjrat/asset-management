@@ -64,6 +64,7 @@ export function mergePayloadPreservingPrivate(local, remotePayload) {
   merged.transactions = mergeRecordsById(local.transactions, remotePayload.transactions);
   merged.goals = mergeRecordsById(local.goals, remotePayload.goals);
   merged.recurring = mergeRecordsById(local.recurring, remotePayload.recurring);
+  merged.memos = mergeRecordsById(local.memos, remotePayload.memos);
   if (remotePayload.settings || local.settings) {
     merged.settings = {
       ...(local.settings || {}),

@@ -11,7 +11,7 @@ export const TAB_SVG = {
     <path d="M7.25 16.25l2.25-2.25 2 2 3.75-3.75"/>
   </svg>`,
   expense: `<svg ${S}><rect x="4" y="7" width="16" height="12" rx="2.25"/><path d="M4 11h16"/><path d="M8.5 15.5h3"/></svg>`,
-  reports: `<svg ${S}><path d="M7 19V11M12 19V5M17 19v-5"/></svg>`,
+  memos: `<svg ${S}><path d="M6.5 5.5h11a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18V7a1.5 1.5 0 0 1 1.5-1.5Z"/><path d="M8.5 10.5h7M8.5 13.5h5M8.5 16.5h6"/></svg>`,
   settings: `<svg ${S}><circle cx="12" cy="12" r="2.25"/><path d="M12 4.5v1.75M12 17.75V19.5M5.56 5.56l1.24 1.24M17.2 17.2l1.24 1.24M4.5 12h1.75M17.75 12H19.5M5.56 18.44l1.24-1.24M17.2 6.8l1.24-1.24"/></svg>`,
 };
 
