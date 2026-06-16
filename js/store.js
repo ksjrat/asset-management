@@ -5,7 +5,7 @@ import {
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
   setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
-  getBudgetStart, isBeforeBudgetStart, isMonthSettlementComplete,
+  getBudgetStart, isBeforeBudgetStart, isMonthSettlementComplete, getCategoryPeriodSummary,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 import {
@@ -72,12 +72,29 @@ export function ensureAppSettings(data) {
     if (!filters.length) filters = ['all'];
   }
   data.settings.homeOwnerFilters = filters;
+  const visible = new Set(filters);
+  let selected = data.settings.homeOwnerFilter;
+  if (!selected || !visible.has(selected)) {
+    selected = filters[0] || 'all';
+  }
+  data.settings.homeOwnerFilter = selected;
 }
 
 export function getVisibleHomeOwnerFilters(data) {
   ensureAppSettings(data);
   const set = new Set(data.settings.homeOwnerFilters);
   return HOME_OWNER_FILTERS.filter((o) => set.has(o.id));
+}
+
+/** 홈 소유자 필터 선택 저장 */
+export function setHomeOwnerFilter(data, filterId) {
+  ensureAppSettings(data);
+  const visible = getVisibleHomeOwnerFilters(data);
+  const next = visible.some((o) => o.id === filterId)
+    ? filterId
+    : (visible[0]?.id || 'all');
+  data.settings.homeOwnerFilter = next;
+  return next;
 }
 
 export const DEFAULT_CATEGORIES = [
@@ -301,6 +318,8 @@ export const DEFAULT = {
     hiddenCategories: [],
     /** 홈 탭에 표시할 소유자 필터: all | self | spouse | joint */
     homeOwnerFilters: ['all', 'self', 'spouse', 'joint'],
+    /** 홈 탭에서 마지막으로 선택한 소유자 필터 */
+    homeOwnerFilter: 'all',
   },
   policyConsents: [],
   assets: { items: [], snapshots: [] },
@@ -560,26 +579,31 @@ export function getCategorySpend(data, year, month) {
   return map;
 }
 
-/** 카테고리별 지출 전월 대비 증가 (저축·세부항목 카테고리 제외) */
-export function getCategorySpendComparison(data, year, month, limit = 5) {
-  const prev = prevYm(year, month);
-  const curSpend = getCategorySpend(data, year, month);
-  const prevSpend = getCategorySpend(data, prev.year, prev.month);
+/** 카테고리별 예산 대비 과다 사용 (실적 입력·예산 있는 항목, 저축 제외) */
+export function getCategoryBudgetOveruse(data, year, month, limit = 5) {
   const savingsCat = getSavingsCategory(data);
   const excludeId = savingsCat?.id;
-
   const rows = [];
   for (const cat of getVisibleCategories(data)) {
     if (cat.id === excludeId || cat.name === '저축') continue;
-    if (hasSubItems(data, cat.id)) continue;
-    const current = curSpend[cat.id] || 0;
-    const previous = prevSpend[cat.id] || 0;
-    const delta = current - previous;
-    if (delta > 0) {
-      rows.push({ catId: cat.id, name: cat.name, current, previous, delta });
-    }
+    const s = getCategoryPeriodSummary(data, year, month, cat.id);
+    if (!s.hasActual || s.actual <= 0) continue;
+    const usedPct = s.available > 0 ? s.actual / s.available : 1;
+    rows.push({
+      catId: cat.id,
+      name: cat.name,
+      actual: s.actual,
+      available: s.available,
+      usedPct,
+      overAmount: s.actual - s.available,
+    });
   }
-  return rows.sort((a, b) => b.delta - a.delta).slice(0, limit);
+  return rows.sort((a, b) => {
+    if (a.overAmount > 0 && b.overAmount <= 0) return -1;
+    if (b.overAmount > 0 && a.overAmount <= 0) return 1;
+    if (a.overAmount > 0 && b.overAmount > 0) return b.overAmount - a.overAmount;
+    return b.usedPct - a.usedPct;
+  }).slice(0, limit);
 }
 
 export function createSnapshot(data, year, month) {

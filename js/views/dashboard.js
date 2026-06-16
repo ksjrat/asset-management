@@ -5,13 +5,12 @@ import {
   getVisibleHomeOwnerFilters,
   getMonthCashflowSummary,
   getVisibleCategories,
-  getOwnerDisplayLabel,
-  getOwnerMonthlySummary,
   getHomeSummaryMonth,
   getSnapshotAtMonth,
   getPreviousSnapshot,
-  getCategorySpendComparison,
+  getCategoryBudgetOveruse,
   prevYm,
+  setHomeOwnerFilter,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
 import { lineChart, legend, budgetBar } from '../charts.js';
@@ -33,7 +32,7 @@ export function renderDashboard() {
 
   const visibleOwnerFilters = getVisibleHomeOwnerFilters(data);
   if (!visibleOwnerFilters.some((o) => o.id === state.ownerFilter)) {
-    state.ownerFilter = visibleOwnerFilters[0]?.id || 'all';
+    state.ownerFilter = setHomeOwnerFilter(data, visibleOwnerFilters[0]?.id || 'all');
   }
   const ownerFilter = state.ownerFilter;
   const nw = computeNetWorth(data, ownerFilter);
@@ -66,7 +65,6 @@ export function renderDashboard() {
 
   const flow = getMonthCashflowSummary(data, sy, sm);
   const prevFlow = getMonthCashflowSummary(data, prev.year, prev.month);
-  const ownerSummary = getOwnerMonthlySummary(data, sy, sm);
   const cats = getVisibleCategories(data);
   const budgetTotals = data.budget?.setupDone
     ? getPeriodTotals(data, sy, sm, cats)
@@ -78,8 +76,9 @@ export function renderDashboard() {
   const recordHint = formatRecordOpensHint(data, sy, sm);
 
   const proposedGoals = data.goals.filter((g) => g.status === 'proposed').length;
-  const impliedChange = flow.income - flow.expense + flow.savings + flow.investPnL;
-  const spendDeltas = getCategorySpendComparison(data, sy, sm);
+  const budgetOveruse = data.budget?.setupDone
+    ? getCategoryBudgetOveruse(data, sy, sm)
+    : [];
 
   const dueBanner = data.budget?.setupDone && dueCats.length > 0
     ? `<button type="button" class="tip-banner" id="btn-home-record-due">
@@ -102,16 +101,16 @@ export function renderDashboard() {
       </div>
     </section>` : '';
 
-  const spendDeltaSection = spendDeltas.length ? `
+  const budgetOveruseSection = budgetOveruse.length ? `
     <section class="section">
-      <div class="section-head"><h2>지출이 늘어난 항목</h2></div>
-      <p class="month-label">전월(${fmtMonth(prev.year, prev.month)}) 대비 · ${fmtMonth(sy, sm)}</p>
+      <div class="section-head"><h2>예산 대비 많이 쓴 항목</h2></div>
+      <p class="month-label">${fmtMonth(sy, sm)} · 사용률 높은 순</p>
       <div class="spend-delta-list">
-        ${spendDeltas.map((r) => `
+        ${budgetOveruse.map((r) => `
           <div class="spend-delta-row">
             <span class="spend-delta-name">${esc(r.name)}</span>
-            <span class="spend-delta-change up">+${fmtShort(r.delta)}</span>
-            <span class="spend-delta-detail muted">${fmtShort(r.previous)} → ${fmtShort(r.current)}</span>
+            <span class="spend-delta-change ${r.usedPct > 1 ? 'up' : ''}">${fmtPct(r.usedPct)}</span>
+            <span class="spend-delta-detail muted">${fmtShort(r.actual)} / ${fmtShort(r.available)}</span>
           </div>`).join('')}
       </div>
     </section>` : '';
@@ -157,16 +156,9 @@ export function renderDashboard() {
           <strong class="${flow.investPnL >= 0 ? 'income' : 'danger'}">${flow.investPnL >= 0 ? '+' : ''}${fmtShort(flow.investPnL)}</strong>
         </div>
       </div>
-      <p class="muted">정산 완료 ${fmtMonth(sy, sm)} 기준 · 순변동 참고 ${impliedChange >= 0 ? '+' : ''}${fmtShort(impliedChange)} (수입−지출+저축+투자손익)</p>
-      <div class="summary-row" style="margin-top:10px">
-        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.self)}</strong></div>
-        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.spouse)}</strong></div>
-        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 지출</span><strong class="danger">${fmtShort(ownerSummary.expense.self)}</strong></div>
-        <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 지출</span><strong class="danger">${fmtShort(ownerSummary.expense.spouse)}</strong></div>
-      </div>
     </section>
 
-    ${spendDeltaSection}
+    ${budgetOveruseSection}
 
     ${budgetSection}
 
@@ -185,7 +177,11 @@ export function bindDashboard() {
   const { year: sy, month: sm } = getHomeSummaryMonth(state.data);
 
   document.querySelectorAll('[data-owner]').forEach((b) => {
-    b.addEventListener('click', () => { state.ownerFilter = b.dataset.owner; rerender(); });
+    b.addEventListener('click', () => {
+      state.ownerFilter = setHomeOwnerFilter(state.data, b.dataset.owner);
+      persist();
+      rerender();
+    });
   });
   document.getElementById('btn-link-setup')?.addEventListener('click', () => openLinkWizard());
   document.getElementById('btn-proposed-goals')?.addEventListener('click', () => {

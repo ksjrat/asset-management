@@ -2,7 +2,7 @@ import { state, persist, enterStartScreen } from '../state.js';
 import {
   hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData, dataFootprint,
   countBudgetActualEntries,
-  HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress,
+  HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress, setHomeOwnerFilter,
 } from '../store.js';
 import { showGoalForm } from './modals.js';
 import { fmtMoney } from '../format.js';
@@ -376,9 +376,7 @@ export function bindSettings() {
         return;
       }
       state.data.settings.homeOwnerFilters = checked;
-      if (!checked.includes(state.ownerFilter)) {
-        state.ownerFilter = checked[0];
-      }
+      state.ownerFilter = setHomeOwnerFilter(state.data, state.ownerFilter);
       const summaryEl = document.getElementById('home-filter-summary');
       if (summaryEl) summaryEl.textContent = homeFilterSummary(checked);
       persist();

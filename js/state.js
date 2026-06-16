@@ -1,6 +1,8 @@
 import { load, save } from './store.js';
 import { syncAfterPersist } from './sync-service.js';
 
+const initialData = load();
+
 const savedTab = (() => {
   try { return localStorage.getItem('couple-asset-tab'); } catch { return null; }
 })();
@@ -13,10 +15,10 @@ function normalizeSavedTab(tab) {
 }
 
 export const state = {
-  data: load(),
+  data: initialData,
   tab: normalizeSavedTab(savedTab) || 'dashboard',
   subView: null,
-  ownerFilter: 'all',
+  ownerFilter: initialData.settings?.homeOwnerFilter || 'all',
   selectedYear: new Date().getFullYear(),
   selectedMonth: new Date().getMonth() + 1,
   selectedGoalId: null,

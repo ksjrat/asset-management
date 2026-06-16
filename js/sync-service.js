@@ -1,5 +1,5 @@
 import { state, persist } from './state.js';
-import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries } from './store.js';
+import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries, ensureAppSettings, setHomeOwnerFilter } from './store.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload,
@@ -63,6 +63,8 @@ async function applyPullResult(result, { silent = false } = {}) {
     || JSON.stringify(data.transactions) !== JSON.stringify(before.transactions);
 
   state.data = data;
+  ensureAppSettings(state.data);
+  state.ownerFilter = setHomeOwnerFilter(state.data, state.ownerFilter);
   state.data._syncMeta = {
     ...(state.data._syncMeta || {}),
     autoSync: true,
