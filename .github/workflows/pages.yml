@@ -32,6 +32,9 @@ jobs:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: node scripts/build-sync-config.mjs
 
+      - name: 서비스 워커 캐시 갱신
+        run: node scripts/bump-sw-cache.mjs
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
         with:

@@ -56,8 +56,31 @@ self.addEventListener('message', (e) => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+function isMutableAppRequest(request) {
+  if (request.method !== 'GET') return false;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return false;
+  if (request.mode === 'navigate') return true;
+  return /\.(js|css|html)$/.test(url.pathname);
+}
+
+/** HTML·JS·CSS는 네트워크 우선 — push 배포 후 최신 코드를 빨리 받음 */
+function networkFirst(request) {
+  return fetch(request).then((res) => {
+    if (res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(request, copy));
+    }
+    return res;
+  }).catch(() => caches.match(request));
+}
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  if (isMutableAppRequest(e.request)) {
+    e.respondWith(networkFirst(e.request));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cached) =>
       cached || fetch(e.request).then((res) => {

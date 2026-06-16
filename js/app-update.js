@@ -35,29 +35,41 @@ function backupLocalDataBeforeReload() {
   } catch { /* quota */ }
 }
 
-/** 캐시 삭제 → SW 갱신 → 페이지 새로고침 */
+/** 설치 중인 SW가 waiting 상태가 될 때까지 대기 (네트워크 다운로드) */
+function waitForWaitingWorker(reg, maxMs = 6000) {
+  if (reg.waiting) return Promise.resolve();
+  const worker = reg.installing;
+  if (!worker) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, maxMs);
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' || worker.state === 'redundant') done();
+    });
+  });
+}
+
+async function activateLatestServiceWorker(reg) {
+  if (!reg.waiting) await reg.update();
+  if (!reg.waiting) await waitForWaitingWorker(reg);
+  if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+}
+
+/** 캐시 삭제·SW 갱신 병렬 처리 후 즉시 새로고침 (controllerchange 대기 없음) */
 export async function applyAppUpdate() {
   backupLocalDataBeforeReload();
-  await clearAppCaches();
 
+  const tasks = [clearAppCaches()];
   if ('serviceWorker' in navigator && !isLocalDevHost()) {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.update();
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          await new Promise((resolve) => {
-            const t = setTimeout(resolve, 2500);
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-              clearTimeout(t);
-              resolve();
-            }, { once: true });
-          });
-        }
-      }
-    } catch { /* reload anyway */ }
+    tasks.push(
+      navigator.serviceWorker.getRegistration()
+        .then((reg) => (reg ? activateLatestServiceWorker(reg) : undefined))
+        .catch(() => {}),
+    );
   }
-
+  await Promise.all(tasks);
   location.reload();
 }
