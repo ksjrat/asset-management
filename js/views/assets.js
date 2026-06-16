@@ -131,7 +131,7 @@ export function renderAssets() {
       <div class="list-group">
         ${incomes.length ? incomes.map(incomeRow).join('') : (!savings.length ? emptyState('✨', '수익·저축 기록이 없어요', '근로소득은 수익 입력, 저축은 지출 탭 세부 실적', '지출 탭으로', 'empty-go-expense') : '')}
       </div>
-      <p class="muted" style="margin-top:10px">저축은 지출 탭 → 저축 → 세부 실적 입력 시 예금·적금 잔액에 자동 반영됩니다.</p>
+      <p class="muted" style="margin-top:10px">저축은 지출 탭 → 저축 → 세부 실적 입력 시 예금·적금·투자 계좌에 자동 반영됩니다.</p>
     </section>
   `;
 }

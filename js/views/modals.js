@@ -663,7 +663,7 @@ export async function showSubActualForm(catId, year, month, rerender) {
   const isSavings = getSavingsCategory(state.data)?.id === catId;
   const hasLoanLink = items.some((i) => i.loanId);
   const savingsHint = isSavings
-    ? '<p class="field-hint">입력한 금액은 <strong>예금·적금 잔액에 자동 반영</strong>됩니다.</p>'
+    ? '<p class="field-hint">입력한 금액은 <strong>연결된 예금·적금·투자 계좌</strong>에 자동 반영됩니다.</p>'
     : '';
   const loanHint = hasLoanLink
     ? '<p class="field-hint">대출 연결 항목은 <strong>원리금 중 원금만 대출 잔액에서 차감</strong>됩니다. (연 이율·상환 방식은 대출 등록 시 설정)</p>'
@@ -726,8 +726,8 @@ export async function showSubActualForm(catId, year, month, rerender) {
   if (isSavings) {
     const hasAsset = getSavingsEligibleAssets(state.data).length > 0;
     toast(hasAsset
-      ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금 잔액에 반영`
-      : `저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금 자산을 등록하면 잔액에 반영됩니다`,
+      ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 연결 계좌 잔액에 반영`
+      : `저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자 자산을 등록하면 잔액에 반영됩니다`,
     hasAsset ? 'success' : 'info');
   } else if (hasLoanLink) {
     const missingRate = items.filter((i) => {
@@ -907,7 +907,8 @@ function subItemManageRows(items, data) {
   return items.map((item) => {
     const payer = getOwnerDisplayLabel(data, item.payer || 'joint');
     const loan = item.loanId ? data.assets?.items?.find((x) => x.id === item.loanId) : null;
-    const link = loan ? ` · ${esc(loan.name)}` : '';
+    const linked = item.assetId ? data.assets?.items?.find((x) => x.id === item.assetId) : null;
+    const link = loan ? ` · ${esc(loan.name)}` : (linked ? ` · ${esc(linked.name)}` : '');
     return `<div class="cat-manage-row">
       <span>${esc(item.name)} <span class="muted">· ${esc(payer)}${link}</span></span>
       <button type="button" class="text-btn" data-sub-edit="${item.id}">편집</button>
@@ -920,12 +921,15 @@ async function openSubItemEdit(catId, item, rerender) {
   const isSavings = cat?.name === '저축';
   const eligible = isSavings ? getSavingsEligibleAssets(state.data) : [];
   const loans = getLoanAssets(state.data);
-  const assetField = isSavings && eligible.length > 1
+  const assetField = isSavings && eligible.length
     ? formField('연결 계좌', `<select name="assetId" class="input">
-        <option value="">기본 계좌 (${esc(eligible[0]?.name || '')})</option>
-        ${eligible.map((a) => `<option value="${a.id}" ${item.assetId === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
+        <option value="">기본 계좌 (${esc(eligible[0]?.name || '')} · ${esc(ASSET_TYPES.find((t) => t.id === eligible[0]?.type)?.label || '')})</option>
+        ${eligible.map((a) => {
+    const type = ASSET_TYPES.find((t) => t.id === a.type);
+    return `<option value="${a.id}" ${item.assetId === a.id ? 'selected' : ''}>${esc(a.name)} (${esc(type?.label || '')})</option>`;
+  }).join('')}
       </select>
-      <span class="field-hint">지출 실적 입력 시 이 계좌 잔액에 반영됩니다</span>`)
+      <span class="field-hint">지출 실적 입력 시 예금·적금·투자 계좌 잔액에 반영됩니다</span>`)
     : '';
   const loanField = loans.length
     ? formField('연결 대출', `<select name="loanId" class="input">
@@ -977,7 +981,7 @@ export async function showSubItemsManage(catId, rerender) {
     title: `${cat.name} · 세부 항목`,
     body: `<div class="cat-manage-panel">
       <p class="field-hint">${isSavings
-    ? '지출 실적 입력 시 연결된 예금·적금 계좌 잔액에 자동 반영됩니다. 계좌가 여러 개면 항목별로 연결 계좌를 지정하세요.'
+    ? '지출 실적 입력 시 연결된 예금·적금·투자 계좌에 자동 반영됩니다. 계좌가 여러 개면 항목별로 연결 계좌를 지정하세요.'
     : isHousing
       ? '주담대 원리금 항목은 대출을 연결하고, 지출 실적 입력 시 대출 잔액에서 원금만 차감됩니다.'
       : '실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.'}</p>

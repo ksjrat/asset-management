@@ -97,8 +97,8 @@ export function getIncomeCategories() {
   return INCOME_CATEGORIES;
 }
 
-/** 저축 실행으로 돈을 넣을 수 있는 자산 (예금·적금) */
-export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings']);
+/** 저축 세부 실적 연동 가능 자산 (예금·적금·투자) */
+export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest']);
 
 export function getSavingsEligibleAssets(data) {
   return (data.assets?.items || []).filter(
