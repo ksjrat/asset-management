@@ -1,11 +1,12 @@
-import { state } from '../state.js';
+import { state, persist, setTab, setMonth } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, getInvestmentPnLForMonth, listSavingsContributions,
   getOwnerDisplayLabel, getEffectiveAssetAmount,
 } from '../store.js';
+import { getLoanRepaymentLabel } from '../loan-amort.js';
 import { fmtMoney } from '../format.js';
 import { esc, emptyState, openModal, modalValue } from '../ui.js';
-import { showAssetForm, showTxForm, showAssetValuationForm, showSavingsForm } from './modals.js';
+import { showAssetForm, showTxForm, showAssetValuationForm, showSavingsActualForm } from './modals.js';
 import { assetIcon } from '../icons.js';
 
 function latestValuation(item) {
@@ -30,11 +31,14 @@ function itemRow(item) {
   const delta = latest && prev ? latest.amount - prev.amount : null;
   const deltaLabel = delta == null ? '' : `${delta >= 0 ? '+' : ''}${fmtMoney(delta)}`;
   const valMeta = latest ? ` · 평가 ${esc(latest.ym)} ${fmtMoney(latest.amount)}${delta != null ? ` (${esc(deltaLabel)})` : ''}` : '';
+  const loanMeta = item.type === 'loan' && item.annualRate != null
+    ? ` · ${item.annualRate}% · ${getLoanRepaymentLabel(item.repaymentMethod)}`
+    : '';
   return `<button type="button" class="list-item" data-asset-id="${item.id}">
     <span class="avatar avatar--asset avatar--icon" aria-hidden="true">${icon}</span>
     <span class="list-body">
       <span class="list-title">${esc(item.name)}${item.private ? ' 🔒' : ''}</span>
-      <span class="list-meta">${esc(type?.label)} · ${esc(owner?.label)}${isInvest ? valMeta : ''}</span>
+      <span class="list-meta">${esc(type?.label)} · ${esc(owner?.label)}${isInvest ? valMeta : ''}${loanMeta}</span>
     </span>
     <span class="list-amount ${type?.group === 'liability' ? 'danger' : ''}">${fmtMoney(getEffectiveAssetAmount(item))}</span>
   </button>`;
@@ -60,7 +64,8 @@ function savingsRow({ asset, entry }) {
     if (item) break;
   }
   const itemLabel = item ? item.name : '';
-  return `<button type="button" class="list-item" data-savings-id="${entry.id}">
+  const fromBudget = entry.source === 'budget';
+  return `<button type="button" class="list-item" data-savings-id="${entry.id}" data-savings-budget="${fromBudget ? '1' : ''}" data-savings-year="${entry.year ?? ''}" data-savings-month="${entry.month ?? ''}">
     <span class="avatar avatar--icon" aria-hidden="true">🏦</span>
     <span class="list-body">
       <span class="list-title">${esc(entry.memo || itemLabel || '저축')}</span>
@@ -100,7 +105,6 @@ export function renderAssets() {
       <div class="section-head"><h2>수익 · 저축</h2>
         <div class="btn-row-inline">
           <button type="button" class="text-btn" id="btn-add-income">수익 입력</button>
-          <button type="button" class="text-btn" id="btn-add-savings">저축 실행</button>
         </div>
       </div>
       <div class="list-group">
@@ -122,12 +126,12 @@ export function renderAssets() {
             <span class="list-amount ${p.delta >= 0 ? 'income' : 'danger'}">${p.delta >= 0 ? '+' : ''}${fmtMoney(p.delta)}</span>
           </div>`).join('')}
       </div>
-      ${savings.length ? `<h3 class="list-subtitle">저축 실행 기록</h3>
+      ${savings.length ? `<h3 class="list-subtitle">저축 기록</h3>
       <div class="list-group">${savings.map(savingsRow).join('')}</div>` : ''}
       <div class="list-group">
-        ${incomes.length ? incomes.map(incomeRow).join('') : (!savings.length ? emptyState('✨', '수익·저축 기록이 없어요', '근로소득은 수익 입력, 예·적금 이체는 저축 실행', '저축 실행', 'empty-add-savings') : '')}
+        ${incomes.length ? incomes.map(incomeRow).join('') : (!savings.length ? emptyState('✨', '수익·저축 기록이 없어요', '근로소득은 수익 입력, 저축은 지출 탭 세부 실적', '지출 탭으로', 'empty-go-expense') : '')}
       </div>
-      <p class="muted" style="margin-top:10px">최근 20건만 표시됩니다. 저축 실행은 예금·적금 잔액에 바로 반영됩니다.</p>
+      <p class="muted" style="margin-top:10px">저축은 지출 탭 → 저축 → 세부 실적 입력 시 예금·적금 잔액에 자동 반영됩니다.</p>
     </section>
   `;
 }
@@ -141,8 +145,10 @@ export function bindAssets() {
   document.getElementById('btn-add-income')?.addEventListener('click', () => showTxForm('income', null, rerender));
   document.getElementById('empty-add-income')?.addEventListener('click', () => showTxForm('income', null, rerender));
 
-  document.getElementById('btn-add-savings')?.addEventListener('click', () => showSavingsForm(rerender));
-  document.getElementById('empty-add-savings')?.addEventListener('click', () => showSavingsForm(rerender));
+  document.getElementById('empty-go-expense')?.addEventListener('click', () => {
+    setTab('expense');
+    rerender();
+  });
 
   document.querySelectorAll('[data-asset-id]').forEach((b) => {
     b.addEventListener('click', () => {
@@ -174,7 +180,15 @@ export function bindAssets() {
 
   document.querySelectorAll('[data-savings-id]').forEach((b) => {
     b.addEventListener('click', () => {
-      showSavingsForm(rerender, b.dataset.savingsId);
+      if (b.dataset.savingsBudget === '1') {
+        const y = Number(b.dataset.savingsYear) || state.selectedYear;
+        const m = Number(b.dataset.savingsMonth) || state.selectedMonth;
+        setMonth(y, m);
+        setTab('expense');
+        rerender().then(() => showSavingsActualForm(y, m, rerender));
+        return;
+      }
+      import('./modals.js').then((m) => m.showSavingsForm(rerender, b.dataset.savingsId));
     });
   });
 }

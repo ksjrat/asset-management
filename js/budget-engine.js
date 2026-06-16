@@ -80,6 +80,19 @@ export function getSubActualAmount(data, year, month, itemId) {
   return entry?.amount ?? null;
 }
 
+let onSavingsSubActualSet = null;
+let onLoanSubActualSet = null;
+
+/** 저축 세부 실적 저장 시 자산 잔액 연동 (store에서 등록) */
+export function setOnSavingsSubActualSet(fn) {
+  onSavingsSubActualSet = fn;
+}
+
+/** 대출 연결 세부 실적 저장 시 대출 잔액 연동 (store에서 등록) */
+export function setOnLoanSubActualSet(fn) {
+  onLoanSubActualSet = fn;
+}
+
 export function setSubActualAmount(data, year, month, catId, itemId, amount) {
   ensureBudgetStructure(data);
   const key = ymKey(year, month);
@@ -92,6 +105,13 @@ export function setSubActualAmount(data, year, month, catId, itemId, amount) {
     data.budget.subActuals[key][itemId] = { amount: val, recordedAt: now() };
   }
   syncSubEnvelopeActual(data, year, month, catId);
+  const savingsCat = getSavingsCategory(data);
+  if (onSavingsSubActualSet && savingsCat && catId === savingsCat.id) {
+    onSavingsSubActualSet(data, year, month, itemId, val);
+  }
+  if (onLoanSubActualSet) {
+    onLoanSubActualSet(data, year, month, itemId, val);
+  }
 }
 
 export function getSubActualsSum(data, year, month, catId) {

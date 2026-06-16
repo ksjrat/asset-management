@@ -3,9 +3,22 @@ import { uid, todayISO, ymKey } from './format.js';
 import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSubActualAmount,
-  getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES,
+  getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
+  setOnSavingsSubActualSet, setOnLoanSubActualSet,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
+import {
+  syncSavingsSubActualToAsset, reconcileAllSavingsBudgetSync,
+} from './savings-sync.js';
+import {
+  syncLoanSubActualToAsset, reconcileAllLoanBudgetSync, ensureLoanFields,
+} from './loan-sync.js';
+import { LOAN_REPAYMENT_METHODS } from './loan-amort.js';
+
+setOnSavingsSubActualSet(syncSavingsSubActualToAsset);
+setOnLoanSubActualSet(syncLoanSubActualToAsset);
+
+export { LOAN_REPAYMENT_METHODS };
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -90,6 +103,10 @@ export function getSavingsEligibleAssets(data) {
   );
 }
 
+export function getLoanAssets(data) {
+  return (data.assets?.items || []).filter((i) => i.type === 'loan');
+}
+
 export function listSavingsContributions(data) {
   const rows = [];
   for (const asset of data.assets?.items || []) {
@@ -137,6 +154,8 @@ export function getMonthCashflowSummary(data, year, month) {
 }
 
 export function getMonthSavingsTotal(data, year, month) {
+  const cat = getSavingsCategory(data);
+  if (cat) return getSubActualsSum(data, year, month, cat.id);
   let total = 0;
   for (const asset of data.assets?.items || []) {
     for (const entry of asset.savingsLog || []) {
@@ -356,6 +375,9 @@ export function load() {
     ensureAppSettings(data);
     ensureAppLockAuth(data);
     syncInvestAssetAmounts(data);
+    reconcileAllSavingsBudgetSync(data);
+    for (const item of data.assets?.items || []) ensureLoanFields(item);
+    reconcileAllLoanBudgetSync(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
