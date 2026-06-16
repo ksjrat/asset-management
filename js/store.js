@@ -4,7 +4,7 @@ import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
-  setOnSavingsSubActualSet, setOnLoanSubActualSet,
+  setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 import {
@@ -14,6 +14,10 @@ import {
   syncLoanSubActualToAsset, reconcileAllLoanBudgetSync, ensureLoanFields,
 } from './loan-sync.js';
 import { LOAN_REPAYMENT_METHODS } from './loan-amort.js';
+import {
+  countBudgetActualEntries,
+  mergeBudgetMonthMaps,
+} from './budget-data.js';
 
 setOnSavingsSubActualSet(syncSavingsSubActualToAsset);
 setOnLoanSubActualSet(syncLoanSubActualToAsset);
@@ -309,7 +313,9 @@ export function dataFootprint(data) {
   return (data.assets?.items?.length || 0)
     + (data.goals?.length || 0)
     + (data.transactions?.length || 0)
-    + (data.assets?.items || []).reduce((s, a) => s + (a.savingsLog?.length || 0), 0);
+    + (data.assets?.items || []).reduce((s, a) => s + (a.savingsLog?.length || 0), 0)
+    + (data.assets?.items || []).reduce((s, a) => s + (a.repaymentLog?.length || 0), 0)
+    + countBudgetActualEntries(data);
 }
 
 export function saveSafetyBackup(data) {
@@ -361,6 +367,42 @@ export function hasSafetyBackup() {
   }
 }
 
+/** 백업에 실적이 더 많으면 세부·항목 실적을 자동 복구 */
+function recoverBudgetActualsFromSafety(data) {
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY);
+    if (!raw) return data;
+    const backup = JSON.parse(raw);
+    const curCount = countBudgetActualEntries(data);
+    const bakCount = countBudgetActualEntries(backup);
+    if (bakCount <= curCount) return data;
+
+    ensureBudgetStructure(data);
+    data.budget.subActuals = mergeBudgetMonthMaps(
+      data.budget.subActuals,
+      backup.budget?.subActuals,
+    );
+    data.budget.actuals = mergeBudgetMonthMaps(
+      data.budget.actuals,
+      backup.budget?.actuals,
+    );
+    if (backup.budget?.setupDone) data.budget.setupDone = true;
+
+    for (const cat of data.budget.categories || []) {
+      if (!hasSubItems(data, cat.id)) continue;
+      for (const key of Object.keys(data.budget.subActuals || {})) {
+        const m = key.match(/^(\d{4})-(\d{2})$/);
+        if (!m) continue;
+        syncSubEnvelopeActual(data, Number(m[1]), Number(m[2]), cat.id);
+      }
+    }
+    save(data);
+  } catch {
+    /* quota / parse */
+  }
+  return data;
+}
+
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
@@ -378,6 +420,7 @@ export function load() {
     reconcileAllSavingsBudgetSync(data);
     for (const item of data.assets?.items || []) ensureLoanFields(item);
     reconcileAllLoanBudgetSync(data);
+    data = recoverBudgetActualsFromSafety(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -541,6 +584,8 @@ export function getOwnerMonthlySummary(data, year, month) {
 
   return { income, expense };
 }
+
+export { countBudgetActualEntries } from './budget-data.js';
 
 export {
   getVisibleSavingsItems, getSavingsCategory, getVisibleSubItems, hasSubItems,

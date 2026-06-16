@@ -1,6 +1,7 @@
 import { state, persist, enterStartScreen } from '../state.js';
 import {
   hasSafetyBackup, restoreFromSafetyBackup, hasUserFinancialData, dataFootprint,
+  countBudgetActualEntries,
   HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress,
 } from '../store.js';
 import { showGoalForm } from './modals.js';
@@ -195,6 +196,7 @@ export function renderSettings() {
       const showRestore = backup && (
         !hasUserFinancialData(state.data)
         || dataFootprint(backup) > dataFootprint(state.data)
+        || countBudgetActualEntries(backup) > countBudgetActualEntries(state.data)
       );
       return showRestore ? `
     <div class="settings-group settings-group--highlight">

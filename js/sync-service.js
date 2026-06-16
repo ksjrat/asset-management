@@ -41,7 +41,8 @@ async function applyPullResult(result, { silent = false } = {}) {
   saveSafetyBackup(before);
 
   const wouldShrink = hasUserFinancialData(before)
-    && dataFootprint(data) < dataFootprint(before);
+    && (dataFootprint(data) < dataFootprint(before)
+      || countBudgetActualEntries(data) < countBudgetActualEntries(before));
 
   if (rejectedEmptyRemote || wouldShrink) {
     if (hasCloudPassphraseSession() && hasUserFinancialData(before)) {

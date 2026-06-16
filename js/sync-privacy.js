@@ -1,5 +1,7 @@
 /** 클라우드 동기화 시 개인·비공개 데이터 분리 */
 
+import { mergeBudgetObjects } from './budget-data.js';
+
 export function stripPrivateAssets(assets) {
   if (!assets?.items) return assets;
   return {
@@ -55,6 +57,9 @@ export function mergePayloadPreservingPrivate(local, remotePayload) {
         remotePayload.assets?.items,
       ),
     };
+  }
+  if (remotePayload.budget || local.budget) {
+    merged.budget = mergeBudgetObjects(local.budget, remotePayload.budget);
   }
   merged.transactions = mergeRecordsById(local.transactions, remotePayload.transactions);
   merged.goals = mergeRecordsById(local.goals, remotePayload.goals);

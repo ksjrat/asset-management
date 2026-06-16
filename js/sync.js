@@ -1,4 +1,4 @@
-import { DATA_VERSION, dataFootprint, hasUserFinancialData } from './store.js';
+import { DATA_VERSION, dataFootprint, hasUserFinancialData, countBudgetActualEntries } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
 import {
   encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
@@ -104,6 +104,9 @@ export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
   const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
   if (hasUserFinancialData(local) && dataFootprint(merged) < dataFootprint(local)) {
+    return { data: local, rejectedEmptyRemote: true };
+  }
+  if (countBudgetActualEntries(merged) < countBudgetActualEntries(local)) {
     return { data: local, rejectedEmptyRemote: true };
   }
   merged._syncMeta = { ...(local._syncMeta || {}), lastMergedAt: remoteUpdatedAt || Date.now() };

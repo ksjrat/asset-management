@@ -568,6 +568,8 @@ export function migrateBudgetModel(data) {
   );
   const hasActuals = Object.values(b.actuals || {}).some(
     (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
+  ) || Object.values(b.subActuals || {}).some(
+    (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
   );
   if (b.setupDone && !hasPositivePlan && !hasActuals) {
     b.setupDone = false;
