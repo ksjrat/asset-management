@@ -1,10 +1,10 @@
 import { state, persist } from './state.js';
-import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint } from './store.js';
+import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries } from './store.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload,
   hasCloudPassphraseSession, restoreCloudPassphrase, persistCloudPassphrase,
-  hasStoredCloudPassphrase,
+  hasStoredCloudPassphrase, getSyncDiagnostics,
 } from './sync.js';
 import { toast } from './ui.js';
 
@@ -148,9 +148,14 @@ export async function setupCloudSync() {
     ensureHouseholdId(state.data);
     if (state.data.auth.householdId && ensureCloudPassphraseLoaded()) {
       saveSafetyBackup(state.data);
+      state.data._syncMeta = { ...(state.data._syncMeta || {}), autoSync: true };
       await startLiveSync();
       const pull = await pullFromCloud(state.data);
       await applyPullResult(pull, { silent: true });
+      if (hasUserFinancialData(state.data)) {
+        await pushToCloud(state.data);
+      }
+      persist();
     }
   }
   bootstrapped = true;
@@ -195,14 +200,27 @@ export async function syncManualRefresh() {
 
   await startLiveSync();
 
-  if (status === 'no-doc' || pull.status === 'no-doc') {
-    await pushToCloud(state.data);
-    return { ok: true, reason: 'uploaded' };
+  const pushResult = hasUserFinancialData(state.data)
+    ? await pushToCloud(state.data)
+    : { ok: false };
+
+  if (!pushResult.ok && pushResult.reason === 'error') {
+    return { ok: false, reason: 'error' };
   }
 
-  if (hasUserFinancialData(state.data)) {
-    await pushToCloud(state.data);
-  }
+  state.data._syncMeta = { ...(state.data._syncMeta || {}), autoSync: true };
+  persist();
   import('./views/index.js').then((m) => m.renderApp());
+
+  if (status === 'no-doc' || pull.status === 'no-doc') {
+    return { ok: true, reason: 'uploaded' };
+  }
+  if (status === 'local-kept') {
+    return { ok: true, reason: pushResult.ok ? 'uploaded' : 'local-kept' };
+  }
   return { ok: true, reason: status === 'ok' ? 'ok' : 'local-only' };
+}
+
+export function getCloudSyncDiagnostics() {
+  return getSyncDiagnostics(state.data);
 }

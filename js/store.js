@@ -403,6 +403,15 @@ function recoverBudgetActualsFromSafety(data) {
   return data;
 }
 
+function normalizeAuthHousehold(data) {
+  const hid = data.auth?.householdId?.toString().trim().toUpperCase();
+  if (!hid) return;
+  data.auth.householdId = hid;
+  if (data.auth.inviteCode) {
+    data.auth.inviteCode = data.auth.inviteCode.toString().trim().toUpperCase();
+  }
+}
+
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
@@ -413,9 +422,11 @@ export function load() {
     migrateBudgetModel(data);
     ensureAppSettings(data);
     ensureAppLockAuth(data);
+    normalizeAuthHousehold(data);
     data = tryRestoreSafetyBackup(data);
     ensureAppSettings(data);
     ensureAppLockAuth(data);
+    normalizeAuthHousehold(data);
     syncInvestAssetAmounts(data);
     reconcileAllSavingsBudgetSync(data);
     for (const item of data.assets?.items || []) ensureLoanFields(item);

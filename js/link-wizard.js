@@ -60,22 +60,23 @@ export function getLinkSteps() {
   const syncOn = isSyncEnabled();
   const code = state.data.auth.householdId || state.data.auth.inviteCode;
   const hid = state.data.auth.householdId || code;
-  const linked = isCloudSyncActive() || (syncOn && hid && hasStoredCloudPassphrase(hid));
+  const hasPass = !!(syncOn && hid && (hasStoredCloudPassphrase(hid) || hasCloudPassphraseSession()));
+  const syncActive = isCloudSyncActive();
   return [
     { id: 'cloud', label: '클라우드', hint: cloudOffHint(), done: syncOn, required: syncOn },
     { id: 'code', label: '가족 코드', hint: code || '발급 또는 입력', done: !!code, required: true },
     {
       id: 'pass',
       label: '가족 암호',
-      hint: linked ? '이 기기에 저장됨' : `${HOUSEHOLD_PASS_MIN}자 이상`,
-      done: linked,
+      hint: hasPass ? '이 기기에 저장됨' : `${HOUSEHOLD_PASS_MIN}자 이상`,
+      done: hasPass,
       required: syncOn,
     },
     {
       id: 'sync',
       label: '자동 동기화',
-      hint: linked ? '켜짐 · 저장 시 실시간 반영' : '연동 후 자동',
-      done: !!state.data._syncMeta?.autoSync || linked,
+      hint: syncActive ? '켜짐 · 저장 시 실시간 반영' : (hasPass ? '「지금 맞추기」 실행 필요' : '연동 후 자동'),
+      done: syncActive,
       required: syncOn,
     },
   ];
@@ -85,7 +86,7 @@ export function isLinkComplete() {
   const code = !!(state.data.auth.householdId || state.data.auth.inviteCode);
   if (!isSyncEnabled()) return code;
   if (!code) return false;
-  return isCloudSyncActive() || hasStoredCloudPassphrase(state.data.auth.householdId);
+  return isCloudSyncActive();
 }
 
 export function needsLinkAttention() {

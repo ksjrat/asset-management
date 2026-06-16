@@ -14,7 +14,7 @@ import { showBudgetStartForm, showRecordScheduleForm } from './modals.js';
 import {
   getLinkSteps, isLinkComplete, openLinkWizard, runSyncWithFeedback,
 } from '../link-wizard.js';
-import { isCloudSyncActive } from '../sync-service.js';
+import { isCloudSyncActive, getCloudSyncDiagnostics } from '../sync-service.js';
 import { applyAppUpdate, checkAppUpdateAvailable } from '../app-update.js';
 import {
   canPromptInstall, getPwaInstallHint, pwaInstallInstructionsHtml, tryPwaInstall,
@@ -34,9 +34,32 @@ function homeFilterSummary(filterIds) {
   return labels.length ? labels.join(', ') : '선택 없음';
 }
 
+function formatSyncTime(ts) {
+  if (!ts) return '없음';
+  try {
+    return new Date(ts).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '없음';
+  }
+}
+
+function syncStatusDetail() {
+  if (!isSyncEnabled()) return '클라우드 미설정';
+  const d = getCloudSyncDiagnostics();
+  if (!d.householdId) return '가족 코드 없음';
+  if (!d.hasPass) return '가족 암호 필요';
+  if (!d.autoSync) return '「지금 맞추기」 필요';
+  if (d.lastPushError) return `업로드 오류 · ${d.lastPushError}`;
+  const t = formatSyncTime(d.lastPushedAt || d.lastMergedAt);
+  return `마지막 동기화 ${t}`;
+}
 function linkSectionSummary(linkDone) {
-  if (isCloudSyncActive()) return '자동 동기화 켜짐';
-  return linkDone ? '연동 완료' : linkStatusLabel();
+  if (!isSyncEnabled()) {
+    return linkDone ? '가족 코드만 · 클라우드 꺼짐' : '미연동 (클라우드 꺼짐)';
+  }
+  if (isCloudSyncActive()) return syncStatusDetail();
+  if (linkDone) return '가족 코드·암호 설정됨 · 동기화 대기';
+  return linkStatusLabel();
 }
 
 const pinFieldsHtml = (fields) => fields.map(([label, name, opts = '']) =>
@@ -175,6 +198,9 @@ export function renderSettings() {
           <span><strong>지금 맞추기</strong><span class="settings-row-meta">${isCloudSyncActive() ? '수동으로 다시 맞춤' : '동기화 시작'}</span></span>
           <span class="settings-chevron">›</span>
         </button>` : ''}
+        ${!syncOn ? `<p class="muted settings-hint">클라우드가 꺼져 있어 이 기기에만 저장됩니다. 배포 사이트·Firebase 설정이 필요합니다.</p>` : ''}
+        ${syncOn && !isCloudSyncActive() && linkDone ? `<p class="muted settings-hint">자동 동기화가 아직 켜지지 않았습니다. <strong>지금 맞추기</strong>를 눌러 주세요.</p>` : ''}
+        ${syncOn && isCloudSyncActive() ? `<p class="muted settings-hint">${esc(syncStatusDetail())} · 코드 ${esc(state.data.auth.householdId || '')}</p>` : ''}
         ${a.spouseConnected ? `<button type="button" class="settings-row" id="btn-disconnect" style="color:var(--danger)">
           <span><strong>배우자 연결 해제</strong></span><span class="settings-chevron">›</span>
         </button>` : ''}
