@@ -15,7 +15,7 @@ import {
   RECORD_SCHEDULES,
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
-  getSubActualAmount, setSubActualAmount, getSubItems,
+  getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
@@ -636,12 +636,13 @@ export async function showMonthlyBudgetForm(year, rerender) {
   rerender();
 }
 
-export async function showSubActualForm(catId, year, month, rerender) {
+export async function showSubActualForm(catId, year, month, rerender, options = {}) {
+  const skipRerender = options.skipRerender ?? false;
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   const items = getVisibleSubItems(state.data, catId);
   if (!cat || !items.length) {
-    if (cat) showActualForm(catId, year, month, rerender);
-    return;
+    if (cat) return showActualForm(catId, year, month, rerender, options);
+    return false;
   }
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
   const rows = items.map((item) => {
@@ -715,9 +716,9 @@ export async function showSubActualForm(catId, year, month, rerender) {
       update();
     },
   });
-  if (modalValue(res) !== 'save') return;
+  if (modalValue(res) !== 'save') return false;
   const fd = modalForm(res);
-  if (!fd) return;
+  if (!fd) return false;
   for (const item of items) {
     setSubActualAmount(state.data, year, month, catId, item.id, Number(fd.get(item.id)) || 0);
   }
@@ -744,7 +745,8 @@ export async function showSubActualForm(catId, year, month, rerender) {
       ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 잔액 ${fmtMoney(after.remaining)}`
       : `저장됨 · ${fmtMoney(-after.remaining)} 초과`, after.remaining >= 0 ? 'success' : 'error');
   }
-  rerender();
+  if (!skipRerender) rerender();
+  return true;
 }
 
 export async function showSavingsActualForm(year, month, rerender) {
@@ -752,12 +754,13 @@ export async function showSavingsActualForm(year, month, rerender) {
   if (cat) return showSubActualForm(cat.id, year, month, rerender);
 }
 
-export async function showActualForm(catId, year, month, rerender) {
+export async function showActualForm(catId, year, month, rerender, options = {}) {
+  const skipRerender = options.skipRerender ?? false;
   if (hasSubItems(state.data, catId)) {
-    return showSubActualForm(catId, year, month, rerender);
+    return showSubActualForm(catId, year, month, rerender, options);
   }
   const cat = state.data.budget.categories.find((c) => c.id === catId);
-  if (!cat) return;
+  if (!cat) return false;
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
   const entry = getActualEntry(state.data, year, month, catId);
   const current = entry?.amount ?? null;
@@ -778,9 +781,9 @@ export async function showActualForm(catId, year, month, rerender) {
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
-  if (modalValue(res) !== 'save') return;
+  if (modalValue(res) !== 'save') return false;
   const fd = modalForm(res);
-  if (!fd) return;
+  if (!fd) return false;
   const payer = isMisc ? fd.get('payer')?.toString() : undefined;
   setActualAmount(state.data, year, month, catId, Number(fd.get('amount')) || 0, payer);
   persist();
@@ -788,7 +791,22 @@ export async function showActualForm(catId, year, month, rerender) {
   toast(after.remaining >= 0
     ? `저장됨 · 잔액 ${fmtMoney(after.remaining)}이 다음 달로 이월됩니다`
     : `저장됨 · ${fmtMoney(-after.remaining)} 초과 사용`, after.remaining >= 0 ? 'success' : 'error');
-  rerender();
+  if (!skipRerender) rerender();
+  return true;
+}
+
+/** 입력 대기 항목을 연속으로 입력 (취소 시 중단) */
+export async function showDueActualForms(year, month, rerender) {
+  let changed = false;
+  for (;;) {
+    const due = getVisibleCategories(state.data).find((c) => isRecordDue(state.data, year, month, c.id));
+    if (!due) break;
+    const saved = await showActualForm(due.id, year, month, rerender, { skipRerender: true });
+    if (!saved) break;
+    changed = true;
+  }
+  if (changed) rerender();
+  return changed;
 }
 
 export async function showBudgetForm(y, m, rerender) {

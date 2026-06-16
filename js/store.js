@@ -5,6 +5,7 @@ import {
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
   setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
+  getBudgetStart, isBeforeBudgetStart, isMonthSettlementComplete,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 import {
@@ -140,60 +141,31 @@ export function prevYm(year, month) {
   return { year: y, month: m, ym: ymStr(y, m) };
 }
 
-function monthIndex(year, month) {
-  return year * 12 + month;
-}
-
-/** 홈 요약에 쓸 가장 최근 데이터가 있는 달 */
+/** 홈 요약에 쓸 가장 최근 정산 완료 달 (정산일 경과 + 모든 항목 실적 입력) */
 export function getHomeSummaryMonth(data) {
-  const indices = new Map();
+  const now = new Date();
+  const endY = now.getFullYear();
+  const endM = now.getMonth() + 1;
+  const fallback = () => prevYm(endY, endM);
 
-  function addMonth(year, month) {
-    if (!year || !month) return;
-    indices.set(monthIndex(year, month), { year, month });
-  }
+  if (!data.budget?.setupDone) return fallback();
 
-  for (const [key, actuals] of Object.entries(data.budget?.actuals || {})) {
-    const sum = Object.values(actuals).reduce((s, e) => s + (Number(e?.amount) || 0), 0);
-    if (sum > 0) {
-      const [y, m] = key.split('-').map(Number);
-      addMonth(y, m);
+  const start = getBudgetStart(data);
+  if (!start) return fallback();
+
+  const cats = getVisibleCategories(data);
+  let latest = null;
+  let y = start.year;
+  let m = start.month;
+  while (y < endY || (y === endY && m <= endM)) {
+    if (isMonthSettlementComplete(data, y, m, cats)) {
+      latest = { year: y, month: m };
     }
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
   }
 
-  for (const [key, sub] of Object.entries(data.budget?.subActuals || {})) {
-    const sum = Object.values(sub).reduce((s, e) => s + (Number(e?.amount) || 0), 0);
-    if (sum > 0) {
-      const [y, m] = key.split('-').map(Number);
-      addMonth(y, m);
-    }
-  }
-
-  for (const tx of data.transactions || []) {
-    if (tx.type !== 'income') continue;
-    const d = new Date(tx.date);
-    if (!Number.isNaN(d.getTime())) addMonth(d.getFullYear(), d.getMonth() + 1);
-  }
-
-  for (const s of data.assets?.snapshots || []) {
-    addMonth(s.year, s.month);
-  }
-
-  for (const item of data.assets?.items || []) {
-    for (const v of item.valuations || []) {
-      if (!v.ym) continue;
-      const [y, m] = v.ym.split('-').map(Number);
-      addMonth(y, m);
-    }
-  }
-
-  if (!indices.size) {
-    const now = new Date();
-    return prevYm(now.getFullYear(), now.getMonth() + 1);
-  }
-
-  const maxIdx = Math.max(...indices.keys());
-  return indices.get(maxIdx);
+  return latest ?? fallback();
 }
 
 export function getSnapshotAtMonth(data, year, month) {

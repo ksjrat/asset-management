@@ -507,6 +507,18 @@ export function isRecordDue(data, year, month, catId) {
   return getActualEntry(data, year, month, catId) == null;
 }
 
+/** 정산일이 지났고 모든 항목 실적이 입력된 달인지 */
+export function isMonthSettlementComplete(data, year, month, categories) {
+  if (!data.budget?.setupDone) return false;
+  if (isBeforeBudgetStart(data, year, month)) return false;
+  if (!categories.length) return false;
+  for (const c of categories) {
+    if (!canRecordActual(data, year, month, c.id)) return false;
+    if (isRecordDue(data, year, month, c.id)) return false;
+  }
+  return true;
+}
+
 export function migrateBudgetModel(data) {
   ensureBudgetStructure(data);
   const b = data.budget;

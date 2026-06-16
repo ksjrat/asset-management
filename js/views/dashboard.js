@@ -157,7 +157,7 @@ export function renderDashboard() {
           <strong class="${flow.investPnL >= 0 ? 'income' : 'danger'}">${flow.investPnL >= 0 ? '+' : ''}${fmtShort(flow.investPnL)}</strong>
         </div>
       </div>
-      <p class="muted">가장 최근 입력된 ${fmtMonth(sy, sm)} 기준 · 순변동 참고 ${impliedChange >= 0 ? '+' : ''}${fmtShort(impliedChange)} (수입−지출+저축+투자손익)</p>
+      <p class="muted">정산 완료 ${fmtMonth(sy, sm)} 기준 · 순변동 참고 ${impliedChange >= 0 ? '+' : ''}${fmtShort(impliedChange)} (수입−지출+저축+투자손익)</p>
       <div class="summary-row" style="margin-top:10px">
         <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'self'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.self)}</strong></div>
         <div class="mini-card"><span>${esc(getOwnerDisplayLabel(data, 'spouse'))} 수입</span><strong class="income">${fmtShort(ownerSummary.income.spouse)}</strong></div>
@@ -194,12 +194,12 @@ export function bindDashboard() {
     rerender();
   });
   document.getElementById('btn-home-record-due')?.addEventListener('click', async () => {
-    const { showActualForm } = await import('./modals.js');
+    const { showDueActualForms } = await import('./modals.js');
     const cats = getVisibleCategories(state.data);
     const due = cats.find((c) => isRecordDue(state.data, sy, sm, c.id));
     if (due) {
       setMonth(sy, sm);
-      showActualForm(due.id, sy, sm, rerender);
+      await showDueActualForms(sy, sm, rerender);
     } else toast('입력 대기 항목이 없거나 정산일 이전입니다', 'info');
   });
   document.getElementById('btn-go-expense')?.addEventListener('click', () => {
