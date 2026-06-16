@@ -5,16 +5,17 @@ import {
   addCategory, getOwnerDisplayLabel, getSubPayerLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
   getVisibleSavingsItems, hasSubItems, getVisibleSubItems, SAVINGS_ASSET_TYPES,
+  syncInvestAssetAmount, getSavingsCategory, getLoanAssets, LOAN_REPAYMENT_METHODS,
 } from '../store.js';
+import { previewLoanSplit, formatLoanSplitSummary } from '../loan-sync.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
-  getActualAmount, setActualAmount, getCategoryPeriodSummary,
+  getActualAmount, getActualEntry, setActualAmount, getCategoryPeriodSummary,
   getRecordSchedule, RECORD_SCHEDULE_FIXED, RECORD_SCHEDULE_NEXT_MONTH_FIRST_SUNDAY,
   RECORD_SCHEDULES,
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
   getSubActualAmount, setSubActualAmount, getSubItems,
-  addSavingsItemActual, subtractSavingsItemActual,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
@@ -52,12 +53,23 @@ export async function showAssetForm(item, rerender) {
     `<option value="${t.id}" ${item?.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('');
   const ownerOpts = OWNERS.map((o) =>
     `<option value="${o.id}" ${item?.owner === o.id ? 'selected' : ''}>${o.label}</option>`).join('');
+  const repayOpts = LOAN_REPAYMENT_METHODS.map((m) =>
+    `<option value="${m.id}" ${(item?.repaymentMethod || 'equal_payment') === m.id ? 'selected' : ''}>${m.label}</option>`).join('');
+  const isLoan = item?.type === 'loan';
   const res = await openModal({
     title: item ? '항목 수정' : '자산/부채 등록',
     body: `<form id="asset-form" class="form-stack">
-      ${formField('유형', `<select name="type" class="input">${typeOpts}</select>`)}
+      ${formField('유형', `<select name="type" class="input" id="asset-type-select">${typeOpts}</select>`)}
       ${formField('이름', `<input class="input" name="name" required value="${esc(item?.name || '')}" />`)}
-      ${formField('금액', `<input class="input" name="amount" type="number" required min="0" value="${item?.amount ?? ''}" />`)}
+      ${formField('금액', `<input class="input" name="amount" type="number" required min="0" value="${item?.amount ?? ''}" />
+        <span class="field-hint" id="amount-hint">${isLoan ? '현재 대출 잔액(원금)' : ''}</span>`)}
+      <div id="loan-term-fields" class="${isLoan ? '' : 'hidden'}">
+        ${formField('연 이율 (%)', `<input class="input" name="annualRate" type="number" min="0" step="0.01" value="${item?.annualRate ?? ''}" placeholder="예: 3.5" />`)}
+        ${formField('상환 방식', `<select name="repaymentMethod" class="input">${repayOpts}</select>`)}
+        ${formField('대출 기간 (월)', `<input class="input" name="termMonths" type="number" min="1" value="${item?.termMonths ?? ''}" placeholder="예: 360" />`)}
+        ${formField('최초 대출원금', `<input class="input" name="originalPrincipal" type="number" min="0" value="${item?.originalPrincipal ?? item?.amount ?? ''}" />
+          <span class="field-hint">원금균등 상환 시 월 원금 계산에 사용</span>`)}
+      </div>
       ${formField('소유', `<select name="owner" class="input">${ownerOpts}</select>`)}
       <label class="toggle-row"><span>${esc(getOwnerDisplayLabel(state.data, 'spouse'))}에게 비공개</span>
         <input type="checkbox" name="private" ${item?.private ? 'checked' : ''} /></label>
@@ -67,6 +79,18 @@ export async function showAssetForm(item, rerender) {
       { label: '취소', value: null },
       { label: '저장', value: 'save', primary: true },
     ],
+    onOpen: (sheet) => {
+      const typeSel = sheet.querySelector('#asset-type-select');
+      const loanFields = sheet.querySelector('#loan-term-fields');
+      const amountHint = sheet.querySelector('#amount-hint');
+      const toggleLoan = () => {
+        const loan = typeSel?.value === 'loan';
+        loanFields?.classList.toggle('hidden', !loan);
+        if (amountHint) amountHint.textContent = loan ? '현재 대출 잔액(원금)' : '';
+      };
+      typeSel?.addEventListener('change', toggleLoan);
+      toggleLoan();
+    },
   });
   const action = modalValue(res);
   if (!action) return;
@@ -82,6 +106,18 @@ export async function showAssetForm(item, rerender) {
     amount: Number(fd.get('amount')), owner: fd.get('owner'),
     private: !!fd.get('private'), updatedAt: new Date().toISOString(),
   };
+  if (payload.type === 'loan') {
+    payload.annualRate = Number(fd.get('annualRate'));
+    payload.repaymentMethod = fd.get('repaymentMethod') || 'equal_payment';
+    payload.termMonths = Number(fd.get('termMonths')) || null;
+    payload.originalPrincipal = Number(fd.get('originalPrincipal')) || payload.amount;
+  } else if (item) {
+    delete item.annualRate;
+    delete item.repaymentMethod;
+    delete item.termMonths;
+    delete item.originalPrincipal;
+    delete item.repaymentLog;
+  }
   if (item) {
     Object.assign(item, payload);
     item.history = item.history || [];
@@ -123,6 +159,8 @@ export async function showAssetValuationForm(assetId, rerender) {
   item.valuations = item.valuations || [];
   if (action === 'delete') {
     item.valuations = item.valuations.filter((v) => v.ym !== ym);
+    syncInvestAssetAmount(item);
+    item.updatedAt = new Date().toISOString();
     persist();
     toast('삭제되었습니다', 'success');
     rerender();
@@ -142,6 +180,8 @@ export async function showAssetValuationForm(assetId, rerender) {
   if (idx >= 0) item.valuations[idx] = entry;
   else item.valuations.push(entry);
   item.valuations.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+  syncInvestAssetAmount(item);
+  item.updatedAt = entry.at;
   persist();
   toast('기록되었습니다', 'success');
   rerender();
@@ -161,7 +201,23 @@ function incomeOwnerSelect(value, data) {
 
 export async function showSavingsForm(rerender, entryId = null) {
   const existing = entryId ? findSavingsContribution(state.data, entryId) : null;
+  if (existing?.entry?.source === 'budget') {
+    const { entry } = existing;
+    const y = entry.year ?? new Date(entry.date).getFullYear();
+    const m = entry.month ?? new Date(entry.date).getMonth() + 1;
+    toast('지출 탭에서 저축 세부 실적을 수정하세요', 'info');
+    const { setTab, setMonth } = await import('../state.js');
+    setMonth(y, m);
+    setTab('expense');
+    rerender();
+    return;
+  }
+
   const eligible = getSavingsEligibleAssets(state.data);
+  if (!existing) {
+    toast('저축은 지출 탭 → 저축 → 세부 실적 입력으로 기록하세요', 'info');
+    return;
+  }
 
   if (!eligible.length) {
     toast('예금·적금 자산을 먼저 등록해 주세요', 'info');
@@ -201,7 +257,6 @@ export async function showSavingsForm(rerender, entryId = null) {
     const { asset, entry } = existing;
     asset.amount = Math.max(0, (asset.amount || 0) - entry.amount);
     asset.savingsLog = (asset.savingsLog || []).filter((e) => e.id !== entry.id);
-    subtractSavingsItemActual(state.data, entry.date, entry.amount, entry.savingsItemId);
     persist();
     toast('삭제되었습니다', 'success');
     rerender();
@@ -233,9 +288,7 @@ export async function showSavingsForm(rerender, entryId = null) {
     const newItemId = savingsItemId || oldItemId;
     if (oldAsset.id !== asset.id) {
       oldAsset.amount = Math.max(0, (oldAsset.amount || 0) - entry.amount);
-      subtractSavingsItemActual(state.data, entry.date, entry.amount, oldItemId);
       asset.amount = (asset.amount || 0) + amount;
-      addSavingsItemActual(state.data, date, amount, newItemId);
       oldAsset.savingsLog = (oldAsset.savingsLog || []).filter((e) => e.id !== entry.id);
       asset.savingsLog = asset.savingsLog || [];
       Object.assign(entry, {
@@ -244,13 +297,6 @@ export async function showSavingsForm(rerender, entryId = null) {
       asset.savingsLog.push(entry);
     } else {
       oldAsset.amount = Math.max(0, (oldAsset.amount || 0) + delta);
-      if (entry.date !== date || oldItemId !== newItemId) {
-        subtractSavingsItemActual(state.data, entry.date, entry.amount, oldItemId);
-        addSavingsItemActual(state.data, date, amount, newItemId);
-      } else if (delta !== 0) {
-        if (delta > 0) addSavingsItemActual(state.data, date, delta, newItemId);
-        else subtractSavingsItemActual(state.data, date, -delta, newItemId);
-      }
       Object.assign(entry, {
         date, amount, memo, savingsItemId: newItemId, at: new Date().toISOString(),
       });
@@ -261,7 +307,6 @@ export async function showSavingsForm(rerender, entryId = null) {
     asset.savingsLog.push({
       id: uid(), date, amount, memo, savingsItemId, at: new Date().toISOString(),
     });
-    addSavingsItemActual(state.data, date, amount, savingsItemId);
   }
 
   asset.history = asset.history || [];
@@ -602,16 +647,34 @@ export async function showSubActualForm(catId, year, month, rerender) {
   const rows = items.map((item) => {
     const current = getSubActualAmount(state.data, year, month, item.id);
     const payer = getOwnerDisplayLabel(state.data, item.payer || 'joint');
-    return `<label class="savings-actual-row">
-      <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span></span>
+    const loan = item.loanId ? state.data.assets.items.find((x) => x.id === item.loanId) : null;
+    const loanTag = loan
+      ? `<span class="muted"> → ${esc(loan.name)}${loan.annualRate != null ? ` · ${loan.annualRate}%` : ''}</span>`
+      : '';
+    const splitPreview = loan
+      ? `<span class="muted loan-split-preview" data-loan-item="${item.id}"></span>`
+      : '';
+    return `<label class="savings-actual-row" data-item-id="${item.id}" ${loan ? `data-has-loan="1"` : ''}>
+      <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span>${loanTag}</span>
       <input class="input input-amount savings-actual-amt" name="${item.id}" type="number" min="0" step="1000" value="${current ?? ''}" placeholder="0" />
+      ${splitPreview}
     </label>`;
   }).join('');
+  const isSavings = getSavingsCategory(state.data)?.id === catId;
+  const hasLoanLink = items.some((i) => i.loanId);
+  const savingsHint = isSavings
+    ? '<p class="field-hint">입력한 금액은 <strong>연결된 예금·적금·투자 계좌</strong>에 자동 반영됩니다.</p>'
+    : '';
+  const loanHint = hasLoanLink
+    ? '<p class="field-hint">대출 연결 항목은 <strong>원리금 중 원금만 대출 잔액에서 차감</strong>됩니다. (연 이율·상환 방식은 대출 등록 시 설정)</p>'
+    : '';
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="sub-actual-form" class="form-stack">
       <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
       <p class="field-hint">세부 항목별 금액을 입력하세요. 합계가 실적으로 반영됩니다.</p>
+      ${savingsHint}
+      ${loanHint}
       <div class="savings-actual-list">${rows}</div>
       <p class="savings-actual-sum">합계 <strong id="sub-sum-preview">0원</strong></p>
     </form>`,
@@ -619,12 +682,32 @@ export async function showSubActualForm(catId, year, month, rerender) {
     onOpen: (sheet) => {
       const form = sheet.querySelector('#sub-actual-form');
       const preview = sheet.querySelector('#sub-sum-preview');
+      const updateLoanPreviews = () => {
+        form?.querySelectorAll('[data-has-loan]').forEach((row) => {
+          const itemId = row.dataset.itemId;
+          const inp = row.querySelector('.savings-actual-amt');
+          const el = row.querySelector('.loan-split-preview');
+          if (!el || !inp) return;
+          const pay = Number(inp.value) || 0;
+          if (pay <= 0) {
+            el.textContent = '';
+            return;
+          }
+          const split = previewLoanSplit(state.data, itemId, year, month, pay);
+          if (!split) {
+            el.textContent = '대출에 연 이율을 설정하세요';
+            return;
+          }
+          el.textContent = formatLoanSplitSummary(split);
+        });
+      };
       const update = () => {
         let sum = 0;
         form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
           sum += Number(inp.value) || 0;
         });
         if (preview) preview.textContent = fmtMoney(sum);
+        updateLoanPreviews();
       };
       form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
         inp.addEventListener('input', update);
@@ -640,9 +723,27 @@ export async function showSubActualForm(catId, year, month, rerender) {
   }
   persist();
   const after = getCategoryPeriodSummary(state.data, year, month, catId);
-  toast(after.remaining >= 0
-    ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 잔액 ${fmtMoney(after.remaining)}`
-    : `저장됨 · ${fmtMoney(-after.remaining)} 초과`, after.remaining >= 0 ? 'success' : 'error');
+  if (isSavings) {
+    const hasAsset = getSavingsEligibleAssets(state.data).length > 0;
+    toast(hasAsset
+      ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 연결 계좌 잔액에 반영`
+      : `저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자 자산을 등록하면 잔액에 반영됩니다`,
+    hasAsset ? 'success' : 'info');
+  } else if (hasLoanLink) {
+    const missingRate = items.filter((i) => {
+      if (!i.loanId) return false;
+      const loan = state.data.assets.items.find((x) => x.id === i.loanId);
+      return loan && loan.annualRate == null;
+    });
+    toast(missingRate.length
+      ? `저장됨 · 연결 대출에 이율이 없어 잔액 연동이 안 된 항목이 있습니다`
+      : `저장됨 · 합계 ${fmtMoney(after.actual)} · 대출 잔액에 원금 상환 반영`,
+    missingRate.length ? 'info' : 'success');
+  } else {
+    toast(after.remaining >= 0
+      ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 잔액 ${fmtMoney(after.remaining)}`
+      : `저장됨 · ${fmtMoney(-after.remaining)} 초과`, after.remaining >= 0 ? 'success' : 'error');
+  }
   rerender();
 }
 
@@ -658,12 +759,21 @@ export async function showActualForm(catId, year, month, rerender) {
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   if (!cat) return;
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
-  const current = getActualAmount(state.data, year, month, catId);
+  const entry = getActualEntry(state.data, year, month, catId);
+  const current = entry?.amount ?? null;
+  const isMisc = cat.name === '기타';
+  const payerDefault = entry?.payer || cat.payer || 'joint';
+  const payerField = isMisc
+    ? formField('부담자', `<select class="input" name="payer">${['self', 'spouse', 'joint'].map((id) =>
+      `<option value="${id}" ${payerDefault === id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, id))}</option>`
+    ).join('')}</select>`)
+    : '';
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="actual-form" class="form-stack">
       <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
       ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" required value="${current ?? ''}" />`)}
+      ${payerField}
       ${formField('메모', '<input class="input" name="memo" />')}
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
@@ -671,7 +781,8 @@ export async function showActualForm(catId, year, month, rerender) {
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
-  setActualAmount(state.data, year, month, catId, Number(fd.get('amount')) || 0);
+  const payer = isMisc ? fd.get('payer')?.toString() : undefined;
+  setActualAmount(state.data, year, month, catId, Number(fd.get('amount')) || 0, payer);
   persist();
   const after = getCategoryPeriodSummary(state.data, year, month, catId);
   toast(after.remaining >= 0
@@ -805,19 +916,45 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
 function subItemManageRows(items, data) {
   return items.map((item) => {
     const payer = getOwnerDisplayLabel(data, item.payer || 'joint');
+    const loan = item.loanId ? data.assets?.items?.find((x) => x.id === item.loanId) : null;
+    const linked = item.assetId ? data.assets?.items?.find((x) => x.id === item.assetId) : null;
+    const link = loan ? ` · ${esc(loan.name)}` : (linked ? ` · ${esc(linked.name)}` : '');
     return `<div class="cat-manage-row">
-      <span>${esc(item.name)} <span class="muted">· ${esc(payer)}</span></span>
+      <span>${esc(item.name)} <span class="muted">· ${esc(payer)}${link}</span></span>
       <button type="button" class="text-btn" data-sub-edit="${item.id}">편집</button>
     </div>`;
   }).join('');
 }
 
 async function openSubItemEdit(catId, item, rerender) {
+  const cat = state.data.budget.categories.find((c) => c.id === catId);
+  const isSavings = cat?.name === '저축';
+  const eligible = isSavings ? getSavingsEligibleAssets(state.data) : [];
+  const loans = getLoanAssets(state.data);
+  const assetField = isSavings && eligible.length
+    ? formField('연결 계좌', `<select name="assetId" class="input">
+        <option value="">기본 계좌 (${esc(eligible[0]?.name || '')} · ${esc(ASSET_TYPES.find((t) => t.id === eligible[0]?.type)?.label || '')})</option>
+        ${eligible.map((a) => {
+    const type = ASSET_TYPES.find((t) => t.id === a.type);
+    return `<option value="${a.id}" ${item.assetId === a.id ? 'selected' : ''}>${esc(a.name)} (${esc(type?.label || '')})</option>`;
+  }).join('')}
+      </select>
+      <span class="field-hint">지출 실적 입력 시 예금·적금·투자 계좌 잔액에 반영됩니다</span>`)
+    : '';
+  const loanField = loans.length
+    ? formField('연결 대출', `<select name="loanId" class="input">
+        <option value="">없음</option>
+        ${loans.map((l) => `<option value="${l.id}" ${item.loanId === l.id ? 'selected' : ''}>${esc(l.name)}${l.annualRate != null ? ` · ${l.annualRate}%` : ''}</option>`).join('')}
+      </select>
+      <span class="field-hint">주담대·대출 원리금 실적 입력 시 잔액에서 원금만 차감</span>`)
+    : '';
   const editRes = await openModal({
     title: '세부 항목 편집',
     body: `<form id="sub-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(item.name)}" required />`)}
       ${formField('부담자', payerSelect('payer', item.payer || 'joint', state.data))}
+      ${loanField}
+      ${assetField}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${item.hidden ? 'checked' : ''} /></label>
     </form>`,
@@ -829,6 +966,14 @@ async function openSubItemEdit(catId, item, rerender) {
   item.name = efd.get('name');
   item.payer = efd.get('payer') || 'joint';
   item.hidden = !!efd.get('hidden');
+  if (isSavings) {
+    const assetId = efd.get('assetId')?.toString();
+    item.assetId = assetId || null;
+  }
+  if (loans.length) {
+    const loanId = efd.get('loanId')?.toString();
+    item.loanId = loanId || null;
+  }
   persist();
   toast('저장됨', 'success');
   showSubItemsManage(catId, rerender);
@@ -837,13 +982,19 @@ async function openSubItemEdit(catId, item, rerender) {
 export async function showSubItemsManage(catId, rerender) {
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   if (!cat) return;
+  const isSavings = cat.name === '저축';
+  const isHousing = cat.name === '주거';
   const items = getSubItems(state.data, catId);
   const visible = items.filter((i) => !i.hidden);
   const hidden = items.filter((i) => i.hidden);
   const res = await openModal({
     title: `${cat.name} · 세부 항목`,
     body: `<div class="cat-manage-panel">
-      <p class="field-hint">실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.</p>
+      <p class="field-hint">${isSavings
+    ? '지출 실적 입력 시 연결된 예금·적금·투자 계좌에 자동 반영됩니다. 계좌가 여러 개면 항목별로 연결 계좌를 지정하세요.'
+    : isHousing
+      ? '주담대 원리금 항목은 대출을 연결하고, 지출 실적 입력 시 대출 잔액에서 원금만 차감됩니다.'
+      : '실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.'}</p>
       <div class="list-group">${subItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
       ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
         <div class="list-group">${subItemManageRows(hidden, state.data)}</div>` : ''}

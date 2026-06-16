@@ -80,6 +80,19 @@ export function getSubActualAmount(data, year, month, itemId) {
   return entry?.amount ?? null;
 }
 
+let onSavingsSubActualSet = null;
+let onLoanSubActualSet = null;
+
+/** 저축 세부 실적 저장 시 자산 잔액 연동 (store에서 등록) */
+export function setOnSavingsSubActualSet(fn) {
+  onSavingsSubActualSet = fn;
+}
+
+/** 대출 연결 세부 실적 저장 시 대출 잔액 연동 (store에서 등록) */
+export function setOnLoanSubActualSet(fn) {
+  onLoanSubActualSet = fn;
+}
+
 export function setSubActualAmount(data, year, month, catId, itemId, amount) {
   ensureBudgetStructure(data);
   const key = ymKey(year, month);
@@ -92,6 +105,13 @@ export function setSubActualAmount(data, year, month, catId, itemId, amount) {
     data.budget.subActuals[key][itemId] = { amount: val, recordedAt: now() };
   }
   syncSubEnvelopeActual(data, year, month, catId);
+  const savingsCat = getSavingsCategory(data);
+  if (onSavingsSubActualSet && savingsCat && catId === savingsCat.id) {
+    onSavingsSubActualSet(data, year, month, itemId, val);
+  }
+  if (onLoanSubActualSet) {
+    onLoanSubActualSet(data, year, month, itemId, val);
+  }
 }
 
 export function getSubActualsSum(data, year, month, catId) {
@@ -386,14 +406,18 @@ export function getActualAmount(data, year, month, catId) {
   return entry?.amount ?? null;
 }
 
-export function setActualAmount(data, year, month, catId, amount) {
+export function setActualAmount(data, year, month, catId, amount, payer) {
   ensureBudgetStructure(data);
   const key = ymKey(year, month);
   if (!data.budget.actuals[key]) data.budget.actuals[key] = {};
-  data.budget.actuals[key][catId] = {
+  const prev = getActualEntry(data, year, month, catId);
+  const entry = {
     amount: Math.max(0, Number(amount) || 0),
     recordedAt: now(),
   };
+  const resolvedPayer = payer ?? prev?.payer;
+  if (resolvedPayer) entry.payer = resolvedPayer;
+  data.budget.actuals[key][catId] = entry;
 }
 
 /** 이전 달 잔액 이월 — 시작월 이전·시작월에는 이월 없음 */
@@ -547,6 +571,8 @@ export function migrateBudgetModel(data) {
     (yearPlan) => Object.values(yearPlan || {}).some((amt) => Number(amt) > 0),
   );
   const hasActuals = Object.values(b.actuals || {}).some(
+    (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
+  ) || Object.values(b.subActuals || {}).some(
     (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
   );
   if (b.setupDone && !hasPositivePlan && !hasActuals) {

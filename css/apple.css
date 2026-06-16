@@ -562,6 +562,54 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+.mom-badge {
+  display: inline;
+  font-size: var(--text-caption);
+  font-weight: var(--fw-semibold);
+  margin-left: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mom-badge.up { color: var(--success); }
+.mom-badge.down { color: var(--danger); }
+
+.spend-delta-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.spend-delta-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px var(--space-sm);
+  padding: var(--space-md);
+  background: var(--surface);
+  border-radius: var(--squircle-r);
+  border: 0.5px solid var(--separator);
+}
+
+.spend-delta-name {
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-body);
+}
+
+.spend-delta-change {
+  font-weight: var(--fw-bold);
+  font-size: var(--text-body);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.spend-delta-change.up { color: var(--danger); }
+
+.spend-delta-detail {
+  grid-column: 1 / -1;
+  font-size: var(--text-footnote);
+  color: var(--text-secondary);
+}
+
 /* Lists */
 .list-group {
   overflow: hidden;

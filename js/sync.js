@@ -1,4 +1,4 @@
-import { DATA_VERSION, dataFootprint, hasUserFinancialData } from './store.js';
+import { DATA_VERSION, dataFootprint, hasUserFinancialData, countBudgetActualEntries } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
 import {
   encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
@@ -87,15 +87,12 @@ function remotePayloadHasUserData(payload) {
   if (payload.budget?.categories?.length) return true;
   const plan = payload.budget?.monthlyPlan;
   if (plan && Object.keys(plan).length > 0) return true;
+  if (countBudgetActualEntries(payload) > 0) return true;
   return false;
 }
 
 export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
   if (!remotePayload) return { data: local, rejectedEmptyRemote: false };
-  const localMerged = local._syncMeta?.lastMergedAt || 0;
-  if (remoteUpdatedAt && remoteUpdatedAt <= localMerged) {
-    return { data: local, rejectedEmptyRemote: false };
-  }
 
   if (hasUserFinancialData(local) && !remotePayloadHasUserData(remotePayload)) {
     return { data: local, rejectedEmptyRemote: true };
@@ -106,7 +103,15 @@ export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
   if (hasUserFinancialData(local) && dataFootprint(merged) < dataFootprint(local)) {
     return { data: local, rejectedEmptyRemote: true };
   }
-  merged._syncMeta = { ...(local._syncMeta || {}), lastMergedAt: remoteUpdatedAt || Date.now() };
+  if (countBudgetActualEntries(merged) < countBudgetActualEntries(local)) {
+    return { data: local, rejectedEmptyRemote: true };
+  }
+  const prevMerged = local._syncMeta?.lastMergedAt || 0;
+  merged._syncMeta = {
+    ...(local._syncMeta || {}),
+    lastMergedAt: Math.max(prevMerged, remoteUpdatedAt || 0),
+    lastRemoteAt: remoteUpdatedAt || Date.now(),
+  };
   return { data: merged, rejectedEmptyRemote: false };
 }
 
@@ -114,7 +119,14 @@ export function ensureHouseholdId(data) {
   if (!data.auth.householdId && data.auth.inviteCode) {
     data.auth.householdId = data.auth.inviteCode;
   }
-  return data.auth.householdId;
+  const hid = data.auth.householdId?.toString().trim().toUpperCase();
+  if (hid) {
+    data.auth.householdId = hid;
+    if (data.auth.inviteCode) {
+      data.auth.inviteCode = data.auth.inviteCode.toString().trim().toUpperCase();
+    }
+  }
+  return data.auth.householdId || null;
 }
 
 export function isSyncEnabled() {
@@ -222,30 +234,57 @@ export async function pullFromCloud(data) {
 }
 
 export async function pushToCloud(data) {
-  if (!enabled || !db || applyingRemote) return;
+  if (!enabled || !db || applyingRemote) return { ok: false, reason: 'off' };
   const hid = ensureHouseholdId(data);
-  if (!hid) return;
+  if (!hid) return { ok: false, reason: 'no-code' };
 
-  if (!hasCloudPassphraseSession()) return;
-  if (!hasUserFinancialData(data)) return;
+  if (!hasCloudPassphraseSession()) return { ok: false, reason: 'no-pass' };
+  if (!hasUserFinancialData(data)) return { ok: false, reason: 'empty' };
 
   try {
     const { doc, setDoc } = firestoreApi;
     const packed = await packCloudDoc(data, hid);
-    if (!packed) return;
+    if (!packed) return { ok: false, reason: 'pack-failed' };
     const updatedAt = Date.now();
     lastPushAt = updatedAt;
     await setDoc(doc(db, 'households', hid), { ...packed, updatedAt }, { merge: true });
-    data._syncMeta = { ...(data._syncMeta || {}), lastPushedAt: updatedAt, lastMergedAt: updatedAt };
+    data._syncMeta = {
+      ...(data._syncMeta || {}),
+      autoSync: true,
+      lastPushedAt: updatedAt,
+      lastMergedAt: Math.max(data._syncMeta?.lastMergedAt || 0, updatedAt),
+      lastPushError: null,
+    };
+    return { ok: true, updatedAt };
   } catch (e) {
     console.warn('Push failed', e);
+    data._syncMeta = { ...(data._syncMeta || {}), lastPushError: String(e?.message || e) };
+    return { ok: false, reason: 'error', error: e };
   }
 }
 
 export function scheduleSyncPush(data) {
   if (!enabled) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => pushToCloud(data), 800);
+  pushTimer = setTimeout(() => {
+    pushToCloud(data);
+  }, 800);
+}
+
+export function getSyncDiagnostics(data) {
+  const hid = ensureHouseholdId(data);
+  const meta = data?._syncMeta || {};
+  return {
+    enabled,
+    liveBound: !!unsubscribe,
+    householdId: hid,
+    hasPass: hasCloudPassphraseSession(),
+    autoSync: !!meta.autoSync,
+    lastPushedAt: meta.lastPushedAt || null,
+    lastMergedAt: meta.lastMergedAt || null,
+    lastRemoteAt: meta.lastRemoteAt || null,
+    lastPushError: meta.lastPushError || null,
+  };
 }
 
 export function joinHousehold(data, code) {

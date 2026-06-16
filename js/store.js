@@ -2,10 +2,27 @@ import { deepMerge } from './merge.js';
 import { uid, todayISO, ymKey } from './format.js';
 import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
-  getVisibleSavingsItems, getSavingsCategory, getActualAmount, getSubActualAmount,
-  getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES,
+  getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
+  getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
+  setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
+import {
+  syncSavingsSubActualToAsset, reconcileAllSavingsBudgetSync,
+} from './savings-sync.js';
+import {
+  syncLoanSubActualToAsset, reconcileAllLoanBudgetSync, ensureLoanFields,
+} from './loan-sync.js';
+import { LOAN_REPAYMENT_METHODS } from './loan-amort.js';
+import {
+  countBudgetActualEntries,
+  mergeBudgetMonthMaps,
+} from './budget-data.js';
+
+setOnSavingsSubActualSet(syncSavingsSubActualToAsset);
+setOnLoanSubActualSet(syncLoanSubActualToAsset);
+
+export { LOAN_REPAYMENT_METHODS };
 
 export const DATA_VERSION = 1;
 export const KEY = 'couple-asset-app-v1';
@@ -80,14 +97,18 @@ export function getIncomeCategories() {
   return INCOME_CATEGORIES;
 }
 
-/** 저축 실행으로 돈을 넣을 수 있는 자산 (예금·적금) */
-export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings']);
+/** 저축 세부 실적 연동 가능 자산 (예금·적금·투자) */
+export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest']);
 
 export function getSavingsEligibleAssets(data) {
   return (data.assets?.items || []).filter(
     (i) => SAVINGS_ASSET_TYPES.has(i.type)
       && ASSET_TYPES.find((t) => t.id === i.type)?.group === 'asset',
   );
+}
+
+export function getLoanAssets(data) {
+  return (data.assets?.items || []).filter((i) => i.type === 'loan');
 }
 
 export function listSavingsContributions(data) {
@@ -112,11 +133,77 @@ function ymStr(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
-function prevYm(year, month) {
+export function prevYm(year, month) {
   let y = year;
   let m = month - 1;
   if (m < 1) { m = 12; y -= 1; }
   return { year: y, month: m, ym: ymStr(y, m) };
+}
+
+function monthIndex(year, month) {
+  return year * 12 + month;
+}
+
+/** 홈 요약에 쓸 가장 최근 데이터가 있는 달 */
+export function getHomeSummaryMonth(data) {
+  const indices = new Map();
+
+  function addMonth(year, month) {
+    if (!year || !month) return;
+    indices.set(monthIndex(year, month), { year, month });
+  }
+
+  for (const [key, actuals] of Object.entries(data.budget?.actuals || {})) {
+    const sum = Object.values(actuals).reduce((s, e) => s + (Number(e?.amount) || 0), 0);
+    if (sum > 0) {
+      const [y, m] = key.split('-').map(Number);
+      addMonth(y, m);
+    }
+  }
+
+  for (const [key, sub] of Object.entries(data.budget?.subActuals || {})) {
+    const sum = Object.values(sub).reduce((s, e) => s + (Number(e?.amount) || 0), 0);
+    if (sum > 0) {
+      const [y, m] = key.split('-').map(Number);
+      addMonth(y, m);
+    }
+  }
+
+  for (const tx of data.transactions || []) {
+    if (tx.type !== 'income') continue;
+    const d = new Date(tx.date);
+    if (!Number.isNaN(d.getTime())) addMonth(d.getFullYear(), d.getMonth() + 1);
+  }
+
+  for (const s of data.assets?.snapshots || []) {
+    addMonth(s.year, s.month);
+  }
+
+  for (const item of data.assets?.items || []) {
+    for (const v of item.valuations || []) {
+      if (!v.ym) continue;
+      const [y, m] = v.ym.split('-').map(Number);
+      addMonth(y, m);
+    }
+  }
+
+  if (!indices.size) {
+    const now = new Date();
+    return prevYm(now.getFullYear(), now.getMonth() + 1);
+  }
+
+  const maxIdx = Math.max(...indices.keys());
+  return indices.get(maxIdx);
+}
+
+export function getSnapshotAtMonth(data, year, month) {
+  return data.assets?.snapshots?.find((s) => s.year === year && s.month === month) ?? null;
+}
+
+export function getPreviousSnapshot(data, year, month) {
+  const snaps = [...(data.assets?.snapshots || [])]
+    .sort((a, b) => a.year - b.year || a.month - b.month);
+  return snaps.filter((s) => s.year < year || (s.year === year && s.month < month)).pop() ?? null;
 }
 
 /** 지출 탭에 입력한 카테고리별 실적 합계 (봉투 예산 기준) */
@@ -137,6 +224,8 @@ export function getMonthCashflowSummary(data, year, month) {
 }
 
 export function getMonthSavingsTotal(data, year, month) {
+  const cat = getSavingsCategory(data);
+  if (cat) return getSubActualsSum(data, year, month, cat.id);
   let total = 0;
   for (const asset of data.assets?.items || []) {
     for (const entry of asset.savingsLog || []) {
@@ -149,6 +238,44 @@ export function getMonthSavingsTotal(data, year, month) {
   return total;
 }
 
+export function getLatestValuation(item) {
+  const vals = item.valuations || [];
+  if (!vals.length) return null;
+  return vals[vals.length - 1];
+}
+
+/** 투자 자산은 최신 평가금액, 그 외는 등록 금액 */
+export function getEffectiveAssetAmount(item) {
+  if (item.type === 'invest') {
+    const latest = getLatestValuation(item);
+    if (latest) return Number(latest.amount) || 0;
+  }
+  return Number(item.amount) || 0;
+}
+
+function valuationBaselineAmount(item, prevYmStr, curYm) {
+  const vals = item.valuations || [];
+  const prevVal = vals.find((v) => v.ym === prevYmStr);
+  if (prevVal) return Number(prevVal.amount);
+  const older = vals.filter((v) => v.ym < curYm);
+  if (older.length) return Number(older[older.length - 1].amount);
+  return Number(item.history?.[0]?.amount ?? item.amount) || 0;
+}
+
+export function syncInvestAssetAmount(item) {
+  const latest = getLatestValuation(item);
+  if (latest) item.amount = Number(latest.amount) || 0;
+  else item.amount = Number(item.history?.[0]?.amount ?? item.amount) || 0;
+}
+
+export function syncInvestAssetAmounts(data) {
+  for (const item of data.assets?.items || []) {
+    if (item.type === 'invest' && (item.valuations || []).length) {
+      syncInvestAssetAmount(item);
+    }
+  }
+}
+
 export function getInvestmentPnLForMonth(data, year, month) {
   const curYm = ymStr(year, month);
   const prev = prevYm(year, month);
@@ -159,9 +286,10 @@ export function getInvestmentPnLForMonth(data, year, month) {
   for (const it of items) {
     const vals = it.valuations || [];
     const curVal = vals.find((v) => v.ym === curYm);
-    const prevVal = vals.find((v) => v.ym === prev.ym);
-    if (!curVal || !prevVal) continue;
-    const delta = Number(curVal.amount) - Number(prevVal.amount);
+    if (!curVal) continue;
+    const previous = valuationBaselineAmount(it, prev.ym, curYm);
+    const current = Number(curVal.amount);
+    const delta = current - previous;
     if (!Number.isFinite(delta)) continue;
     pnl += delta;
     perAsset.push({
@@ -169,8 +297,8 @@ export function getInvestmentPnLForMonth(data, year, month) {
       name: it.name,
       ym: curYm,
       prevYm: prev.ym,
-      current: Number(curVal.amount),
-      previous: Number(prevVal.amount),
+      current,
+      previous,
       delta,
     });
   }
@@ -251,7 +379,9 @@ export function dataFootprint(data) {
   return (data.assets?.items?.length || 0)
     + (data.goals?.length || 0)
     + (data.transactions?.length || 0)
-    + (data.assets?.items || []).reduce((s, a) => s + (a.savingsLog?.length || 0), 0);
+    + (data.assets?.items || []).reduce((s, a) => s + (a.savingsLog?.length || 0), 0)
+    + (data.assets?.items || []).reduce((s, a) => s + (a.repaymentLog?.length || 0), 0)
+    + countBudgetActualEntries(data);
 }
 
 export function saveSafetyBackup(data) {
@@ -303,6 +433,51 @@ export function hasSafetyBackup() {
   }
 }
 
+/** 백업에 실적이 더 많으면 세부·항목 실적을 자동 복구 */
+function recoverBudgetActualsFromSafety(data) {
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY);
+    if (!raw) return data;
+    const backup = JSON.parse(raw);
+    const curCount = countBudgetActualEntries(data);
+    const bakCount = countBudgetActualEntries(backup);
+    if (bakCount <= curCount) return data;
+
+    ensureBudgetStructure(data);
+    data.budget.subActuals = mergeBudgetMonthMaps(
+      data.budget.subActuals,
+      backup.budget?.subActuals,
+    );
+    data.budget.actuals = mergeBudgetMonthMaps(
+      data.budget.actuals,
+      backup.budget?.actuals,
+    );
+    if (backup.budget?.setupDone) data.budget.setupDone = true;
+
+    for (const cat of data.budget.categories || []) {
+      if (!hasSubItems(data, cat.id)) continue;
+      for (const key of Object.keys(data.budget.subActuals || {})) {
+        const m = key.match(/^(\d{4})-(\d{2})$/);
+        if (!m) continue;
+        syncSubEnvelopeActual(data, Number(m[1]), Number(m[2]), cat.id);
+      }
+    }
+    save(data);
+  } catch {
+    /* quota / parse */
+  }
+  return data;
+}
+
+function normalizeAuthHousehold(data) {
+  const hid = data.auth?.householdId?.toString().trim().toUpperCase();
+  if (!hid) return;
+  data.auth.householdId = hid;
+  if (data.auth.inviteCode) {
+    data.auth.inviteCode = data.auth.inviteCode.toString().trim().toUpperCase();
+  }
+}
+
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
@@ -313,9 +488,16 @@ export function load() {
     migrateBudgetModel(data);
     ensureAppSettings(data);
     ensureAppLockAuth(data);
+    normalizeAuthHousehold(data);
     data = tryRestoreSafetyBackup(data);
     ensureAppSettings(data);
     ensureAppLockAuth(data);
+    normalizeAuthHousehold(data);
+    syncInvestAssetAmounts(data);
+    reconcileAllSavingsBudgetSync(data);
+    for (const item of data.assets?.items || []) ensureLoanFields(item);
+    reconcileAllLoanBudgetSync(data);
+    data = recoverBudgetActualsFromSafety(data);
     return data;
   } catch {
     return structuredClone(DEFAULT);
@@ -344,8 +526,9 @@ export function computeNetWorth(data, ownerFilter = 'all') {
     if (ownerFilter !== 'all' && item.owner !== ownerFilter) continue;
     const type = ASSET_TYPES.find((t) => t.id === item.type);
     if (!type) continue;
-    if (type.group === 'asset') assets += item.amount;
-    else liabilities += item.amount;
+    const amount = getEffectiveAssetAmount(item);
+    if (type.group === 'asset') assets += amount;
+    else liabilities += amount;
   }
   return { assets, liabilities, net: assets - liabilities };
 }
@@ -403,6 +586,28 @@ export function getCategorySpend(data, year, month) {
     map[t.categoryId] = (map[t.categoryId] || 0) + t.amount;
   }
   return map;
+}
+
+/** 카테고리별 지출 전월 대비 증가 (저축·세부항목 카테고리 제외) */
+export function getCategorySpendComparison(data, year, month, limit = 5) {
+  const prev = prevYm(year, month);
+  const curSpend = getCategorySpend(data, year, month);
+  const prevSpend = getCategorySpend(data, prev.year, prev.month);
+  const savingsCat = getSavingsCategory(data);
+  const excludeId = savingsCat?.id;
+
+  const rows = [];
+  for (const cat of getVisibleCategories(data)) {
+    if (cat.id === excludeId || cat.name === '저축') continue;
+    if (hasSubItems(data, cat.id)) continue;
+    const current = curSpend[cat.id] || 0;
+    const previous = prevSpend[cat.id] || 0;
+    const delta = current - previous;
+    if (delta > 0) {
+      rows.push({ catId: cat.id, name: cat.name, current, previous, delta });
+    }
+  }
+  return rows.sort((a, b) => b.delta - a.delta).slice(0, limit);
 }
 
 export function createSnapshot(data, year, month) {
@@ -471,13 +676,17 @@ export function getOwnerMonthlySummary(data, year, month) {
       }
       continue;
     }
-    const amt = getActualAmount(data, year, month, cat.id);
+    const entry = getActualEntry(data, year, month, cat.id);
+    const amt = entry?.amount;
     if (amt == null || amt <= 0) continue;
-    addExpense(cat.payer || 'joint', amt);
+    const payer = (cat.name === '기타' && entry.payer) ? entry.payer : (cat.payer || 'joint');
+    addExpense(payer, amt);
   }
 
   return { income, expense };
 }
+
+export { countBudgetActualEntries } from './budget-data.js';
 
 export {
   getVisibleSavingsItems, getSavingsCategory, getVisibleSubItems, hasSubItems,
