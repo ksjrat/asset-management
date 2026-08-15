@@ -1,5 +1,9 @@
 import { state } from '../state.js';
-import { getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary, getSubPayerLabel, hasSubItems } from '../store.js';
+import {
+  getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary,
+  getSubPayerLabel, hasSubItems,
+  getMonthSavingsTotal, getCumulativeSavingsTotal, getCumulativeBudgetSavings,
+} from '../store.js';
 import {
   getCategoryPeriodSummary,
   getPeriodTotals,
@@ -47,6 +51,46 @@ export function renderBudget() {
   const totals = getPeriodTotals(data, y, m, cats);
   const start = getBudgetStart(data);
   const beforeStart = isBeforeBudgetStart(data, y, m);
+
+  // 당월 순수 절약액: 이월 제외, 실적 입력된 항목만, 저축 카테고리 제외
+  const monthSaved = cats.reduce((sum, c) => {
+    if (c.name === '저축') return sum;
+    const s = getCategoryPeriodSummary(data, y, m, c.id);
+    if (!s.hasActual) return sum;
+    const pureSaving = s.monthlyPlanned - s.actual; // 이월 빼고 순수 예산 대비
+    return sum + (pureSaving > 0 ? pureSaving : 0);
+  }, 0);
+  const monthSavings = getMonthSavingsTotal(data, y, m);
+  const cumSaved = getCumulativeBudgetSavings(data);
+  const cumSavings = getCumulativeSavingsTotal(data);
+
+  const savingsStatsCard = !beforeStart && data.budget?.setupDone ? `
+    <section class="section">
+      <div class="section-head"><h2>절약 & 저축 현황</h2></div>
+      <div class="summary-row summary-row--quad">
+        <div class="mini-card">
+          <span>이번 달 절약</span>
+          <strong class="${monthSaved >= 0 ? 'income' : 'danger'}">${fmtShort(monthSaved)}</strong>
+          <span class="mini-card-sub">예산 미사용액</span>
+        </div>
+        <div class="mini-card">
+          <span>이번 달 저축</span>
+          <strong class="income">${fmtShort(monthSavings)}</strong>
+          <span class="mini-card-sub">저축 실적</span>
+        </div>
+        <div class="mini-card">
+          <span>누적 절약</span>
+          <strong class="${cumSaved >= 0 ? 'income' : 'danger'}">${fmtShort(cumSaved)}</strong>
+          <span class="mini-card-sub">관리 시작 이후</span>
+        </div>
+        <div class="mini-card">
+          <span>누적 저축</span>
+          <strong class="income">${fmtShort(cumSavings)}</strong>
+          <span class="mini-card-sub">관리 시작 이후</span>
+        </div>
+      </div>
+    </section>` : '';
+
   const preStartBanner = beforeStart && start
     ? `<p class="tip-banner">${fmtMonth(start.year, start.month)}부터 예산을 관리합니다. 이 달은 집계되지 않습니다.</p>`
     : '';
@@ -119,6 +163,8 @@ export function renderBudget() {
       <p class="hero-sub">이월 반영 ${fmtShort(totals.rolloverIn)} · 실적 ${fmtShort(totals.actual)}</p>
     </section>
 
+    ${savingsStatsCard}
+
     <section class="section">
       <div class="section-head"><h2>이번 달 부담자별 사용</h2></div>
       ${ownerUsageRows(data, y, m)}
@@ -156,7 +202,7 @@ export function bindBudget() {
 
   document.getElementById('btn-categories')?.addEventListener('click', () => showCategoryManage(rerender));
   document.getElementById('btn-sub-items')?.addEventListener('click', () => showSubItemsCategoryPicker(rerender));
-  document.getElementById('btn-edit-monthly')?.addEventListener('click', () => showMonthlyBudgetForm(y, rerender));
+  document.getElementById('btn-edit-monthly')?.addEventListener('click', () => showMonthlyBudgetForm(y, m, rerender));
   document.getElementById('btn-setup-again')?.addEventListener('click', () => {
     state.data.budget.setupDone = false;
     state.setupStep = 1;

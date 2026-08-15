@@ -102,6 +102,19 @@ export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
         if (primary) tryFinish(primary.value ?? primary.label);
       });
     }
+    // 모달 시트 내 터치는 overlay로 전파 차단 → 스크롤 중 실수로 닫히지 않도록
+    sheet.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: true });
+
+    // overlay 배경 클릭(터치) 시에만 닫힘
+    let touchStartedOnOverlay = false;
+    overlay.addEventListener('touchstart', (e) => {
+      touchStartedOnOverlay = e.target === overlay;
+    }, { passive: true });
+    overlay.addEventListener('touchend', (e) => {
+      if (touchStartedOnOverlay && e.target === overlay) finish(null);
+      touchStartedOnOverlay = false;
+    });
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) finish(null);
     });

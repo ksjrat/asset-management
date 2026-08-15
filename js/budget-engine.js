@@ -44,29 +44,33 @@ export function findSubItemCategoryId(data, itemId) {
   return null;
 }
 
-export function getSubMonthlyPlanAmount(data, year, itemId) {
+export function getSubMonthlyPlanAmount(data, year, month, itemId) {
   ensureBudgetStructure(data);
-  return data.budget.subMonthlyPlan[String(year)]?.[itemId] ?? 0;
+  const key = ymKey(year, month);
+  // 월별 키 우선, 없으면 구버전 연도 키 폴백
+  return data.budget.subMonthlyPlan[key]?.[itemId]
+    ?? data.budget.subMonthlyPlan[String(year)]?.[itemId]
+    ?? 0;
 }
 
-export function setSubMonthlyPlanAmount(data, year, catId, itemId, amount) {
+export function setSubMonthlyPlanAmount(data, year, month, catId, itemId, amount) {
   ensureBudgetStructure(data);
-  const y = String(year);
-  if (!data.budget.subMonthlyPlan[y]) data.budget.subMonthlyPlan[y] = {};
-  data.budget.subMonthlyPlan[y][itemId] = Math.max(0, Number(amount) || 0);
-  syncSubEnvelopeMonthlyPlan(data, year, catId);
+  const key = ymKey(year, month);
+  if (!data.budget.subMonthlyPlan[key]) data.budget.subMonthlyPlan[key] = {};
+  data.budget.subMonthlyPlan[key][itemId] = Math.max(0, Number(amount) || 0);
+  syncSubEnvelopeMonthlyPlan(data, year, month, catId);
 }
 
-export function getSubMonthlyPlanTotal(data, year, catId) {
+export function getSubMonthlyPlanTotal(data, year, month, catId) {
   return getVisibleSubItems(data, catId).reduce(
-    (s, i) => s + getSubMonthlyPlanAmount(data, year, i.id), 0,
+    (s, i) => s + getSubMonthlyPlanAmount(data, year, month, i.id), 0,
   );
 }
 
-export function syncSubEnvelopeMonthlyPlan(data, year, catId) {
-  const y = String(year);
-  if (!data.budget.monthlyPlan[y]) data.budget.monthlyPlan[y] = {};
-  data.budget.monthlyPlan[y][catId] = getSubMonthlyPlanTotal(data, year, catId);
+export function syncSubEnvelopeMonthlyPlan(data, year, month, catId) {
+  const key = ymKey(year, month);
+  if (!data.budget.monthlyPlan[key]) data.budget.monthlyPlan[key] = {};
+  data.budget.monthlyPlan[key][catId] = getSubMonthlyPlanTotal(data, year, month, catId);
 }
 
 export function getSubActualEntry(data, year, month, itemId) {
@@ -181,18 +185,18 @@ export function getVisibleSavingsItems(data) {
   return cat ? getVisibleSubItems(data, cat.id) : [];
 }
 
-export function getSavingsMonthlyPlanAmount(data, year, itemId) {
-  return getSubMonthlyPlanAmount(data, year, itemId);
+export function getSavingsMonthlyPlanAmount(data, year, month, itemId) {
+  return getSubMonthlyPlanAmount(data, year, month, itemId);
 }
 
-export function setSavingsMonthlyPlanAmount(data, year, itemId, amount) {
+export function setSavingsMonthlyPlanAmount(data, year, month, itemId, amount) {
   const catId = findSubItemCategoryId(data, itemId) || getSavingsCategory(data)?.id;
-  if (catId) setSubMonthlyPlanAmount(data, year, catId, itemId, amount);
+  if (catId) setSubMonthlyPlanAmount(data, year, month, catId, itemId, amount);
 }
 
-export function syncSavingsEnvelopeMonthlyPlan(data, year) {
+export function syncSavingsEnvelopeMonthlyPlan(data, year, month) {
   const cat = getSavingsCategory(data);
-  if (cat) syncSubEnvelopeMonthlyPlan(data, year, cat.id);
+  if (cat) syncSubEnvelopeMonthlyPlan(data, year, month, cat.id);
 }
 
 export function getSavingsActualAmount(data, year, month, itemId) {
@@ -379,20 +383,24 @@ export function isSavingsCategoryId(data, catId) {
   return isSubdividedCategoryId(data, catId);
 }
 
-export function getMonthlyPlanAmount(data, year, catId) {
+export function getMonthlyPlanAmount(data, year, month, catId) {
   ensureBudgetStructure(data);
   if (hasSubItems(data, catId)) {
-    return getSubMonthlyPlanTotal(data, year, catId);
+    return getSubMonthlyPlanTotal(data, year, month, catId);
   }
-  return data.budget.monthlyPlan[String(year)]?.[catId] ?? 0;
+  const key = ymKey(year, month);
+  // 월별 키 우선, 없으면 구버전 연도 키 폴백
+  return data.budget.monthlyPlan[key]?.[catId]
+    ?? data.budget.monthlyPlan[String(year)]?.[catId]
+    ?? 0;
 }
 
-export function setMonthlyPlanAmount(data, year, catId, amount) {
+export function setMonthlyPlanAmount(data, year, month, catId, amount) {
   ensureBudgetStructure(data);
   if (hasSubItems(data, catId)) return;
-  const y = String(year);
-  if (!data.budget.monthlyPlan[y]) data.budget.monthlyPlan[y] = {};
-  data.budget.monthlyPlan[y][catId] = Math.max(0, Number(amount) || 0);
+  const key = ymKey(year, month);
+  if (!data.budget.monthlyPlan[key]) data.budget.monthlyPlan[key] = {};
+  data.budget.monthlyPlan[key][catId] = Math.max(0, Number(amount) || 0);
 }
 
 export function getActualEntry(data, year, month, catId) {
@@ -449,7 +457,7 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
     };
   }
 
-  const monthlyPlanned = getMonthlyPlanAmount(data, year, catId);
+  const monthlyPlanned = getMonthlyPlanAmount(data, year, month, catId);
   const rolloverIn = getRolloverIn(data, year, month, catId);
   const available = monthlyPlanned + rolloverIn;
   const entry = getActualEntry(data, year, month, catId);
@@ -522,15 +530,21 @@ export function isMonthSettlementComplete(data, year, month, categories) {
 export function migrateBudgetModel(data) {
   ensureBudgetStructure(data);
   const b = data.budget;
-  const y = new Date().getFullYear();
-  const yKey = String(y);
+  const now2 = new Date();
+  const y = now2.getFullYear();
+  const curMonth = now2.getMonth() + 1;
+  const yKey = ymKey(y, curMonth);
 
   if (b.annual) {
     for (const [year, cats] of Object.entries(b.annual)) {
-      if (!b.monthlyPlan[year]) b.monthlyPlan[year] = {};
-      for (const [catId, amt] of Object.entries(cats)) {
-        if (amt > 0 && !b.monthlyPlan[year][catId]) {
-          b.monthlyPlan[year][catId] = Math.round(Number(amt) / 12);
+      // 구버전 연간 데이터 → 해당 연도 모든 월에 배포
+      for (let m = 1; m <= 12; m++) {
+        const mKey = ymKey(Number(year), m);
+        if (!b.monthlyPlan[mKey]) b.monthlyPlan[mKey] = {};
+        for (const [catId, amt] of Object.entries(cats)) {
+          if (amt > 0 && !b.monthlyPlan[mKey][catId]) {
+            b.monthlyPlan[mKey][catId] = Math.round(Number(amt) / 12);
+          }
         }
       }
     }
@@ -540,16 +554,50 @@ export function migrateBudgetModel(data) {
   if (b.monthly && typeof b.monthly === 'object') {
     for (const [key, cats] of Object.entries(b.monthly)) {
       if (!/^\d{4}-\d{2}$/.test(key)) continue;
-      const { year } = parseYm(key);
-      const ys = String(year);
-      if (!b.monthlyPlan[ys]) b.monthlyPlan[ys] = {};
+      if (!b.monthlyPlan[key]) b.monthlyPlan[key] = {};
       for (const [catId, amt] of Object.entries(cats)) {
         if (amt > 0) {
-          b.monthlyPlan[ys][catId] = Math.max(b.monthlyPlan[ys][catId] || 0, Number(amt));
+          b.monthlyPlan[key][catId] = Math.max(b.monthlyPlan[key][catId] || 0, Number(amt));
         }
       }
     }
     delete b.monthly;
+  }
+
+  // 구버전 연도 키(예: "2025") → 월별 키(예: "2025-01"~"2025-12")로 변환
+  for (const key of Object.keys(b.monthlyPlan || {})) {
+    if (/^\d{4}$/.test(key)) {
+      const yearNum = Number(key);
+      const yearData = b.monthlyPlan[key];
+      for (let m = 1; m <= 12; m++) {
+        const mKey = ymKey(yearNum, m);
+        if (!b.monthlyPlan[mKey]) b.monthlyPlan[mKey] = {};
+        for (const [catId, amt] of Object.entries(yearData)) {
+          if (!(catId in b.monthlyPlan[mKey])) {
+            b.monthlyPlan[mKey][catId] = Number(amt) || 0;
+          }
+        }
+      }
+      delete b.monthlyPlan[key];
+    }
+  }
+
+  // 구버전 subMonthlyPlan 연도 키 → 월별 키 변환
+  for (const key of Object.keys(b.subMonthlyPlan || {})) {
+    if (/^\d{4}$/.test(key)) {
+      const yearNum = Number(key);
+      const yearData = b.subMonthlyPlan[key];
+      for (let m = 1; m <= 12; m++) {
+        const mKey = ymKey(yearNum, m);
+        if (!b.subMonthlyPlan[mKey]) b.subMonthlyPlan[mKey] = {};
+        for (const [itemId, amt] of Object.entries(yearData)) {
+          if (!(itemId in b.subMonthlyPlan[mKey])) {
+            b.subMonthlyPlan[mKey][itemId] = Number(amt) || 0;
+          }
+        }
+      }
+      delete b.subMonthlyPlan[key];
+    }
   }
 
   if (!b.monthlyPlan[yKey]) b.monthlyPlan[yKey] = {};
@@ -576,7 +624,7 @@ export function migrateBudgetModel(data) {
       if (!b.subActuals[key]) b.subActuals[key] = {};
       if (miscId) b.subActuals[key][miscId] = { amount: entry.amount, recordedAt: entry.recordedAt || now() };
     }
-    syncSubEnvelopeMonthlyPlan(data, y, savingsCat.id);
+    syncSubEnvelopeMonthlyPlan(data, y, curMonth, savingsCat.id);
   }
 
   const hasPositivePlan = Object.values(b.monthlyPlan || {}).some(

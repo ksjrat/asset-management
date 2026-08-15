@@ -16,8 +16,7 @@ import {
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
   getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue,
-} from '../budget-engine.js';
-import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
+} from '../budget-engine.js';import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
 import { validateGoalInput, projectGoalImpact } from '../validators.js';
 
@@ -581,7 +580,7 @@ export async function showRecordScheduleForm(rerender) {
   rerender();
 }
 
-export async function showMonthlyBudgetForm(year, rerender) {
+export async function showMonthlyBudgetForm(year, month, rerender) {
   const cats = getVisibleCategories(state.data);
   const fields = cats.map((c) => {
     const payerLabel = hasSubItems(state.data, c.id)
@@ -590,11 +589,11 @@ export async function showMonthlyBudgetForm(year, rerender) {
     if (hasSubItems(state.data, c.id)) {
       const subItems = getVisibleSubItems(state.data, c.id);
       const subRows = subItems.map((item) => {
-        const monthly = getSubMonthlyPlanAmount(state.data, year, item.id);
+        const monthly = getSubMonthlyPlanAmount(state.data, year, month, item.id);
         return `<label class="savings-budget-row savings-budget-row--payer">
           <span>${esc(item.name)}</span>
           ${payerSelect(`sub-payer-${item.id}`, item.payer || 'joint', state.data)}
-          <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+          <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="1" value="${monthly || ''}" />
         </label>`;
       }).join('');
       return `<div class="savings-budget-group">
@@ -603,16 +602,16 @@ export async function showMonthlyBudgetForm(year, rerender) {
         <p class="field-hint">세부 항목 합계가 월 예산으로 반영됩니다</p>
       </div>`;
     }
-    const monthly = getMonthlyPlanAmount(state.data, year, c.id);
+    const monthly = getMonthlyPlanAmount(state.data, year, month, c.id);
     return formField(
       `${c.name} (월) · ${payerLabel}`,
-      `<input class="input input-amount" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" />
+      `<input class="input input-amount" name="${c.id}" type="number" min="0" step="1" value="${monthly || ''}" />
        <span class="field-hint">연 ${fmtMoney(monthly * 12)}</span>`,
     );
   }).join('');
   const res = await openModal({
-    title: `${year}년 월간 예산`,
-    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">세부 항목이 있는 카테고리는 항목별 예산·부담자를 지정합니다.</p>${fields}</form>`,
+    title: `${year}년 ${month}월 예산`,
+    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">이 달의 예산을 설정합니다. 다른 달에는 영향을 주지 않습니다.</p>${fields}</form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
@@ -622,14 +621,14 @@ export async function showMonthlyBudgetForm(year, rerender) {
     if (hasSubItems(state.data, c.id)) {
       for (const item of getVisibleSubItems(state.data, c.id)) {
         item.payer = fd.get(`sub-payer-${item.id}`) || 'joint';
-        setSubMonthlyPlanAmount(state.data, year, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
+        setSubMonthlyPlanAmount(state.data, year, month, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
       }
     } else {
-      setMonthlyPlanAmount(state.data, year, c.id, Number(fd.get(c.id)) || 0);
+      setMonthlyPlanAmount(state.data, year, month, c.id, Number(fd.get(c.id)) || 0);
     }
   }
   for (const c of cats) {
-    if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, year, c.id);
+    if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, year, month, c.id);
   }
   persist();
   toast('월간 예산이 저장되었습니다', 'success');
@@ -645,6 +644,18 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
     return false;
   }
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
+
+  // 이전 달 계산
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevValues = {};
+  let hasPrevData = false;
+  for (const item of items) {
+    const prev = getSubActualAmount(state.data, prevYear, prevMonth, item.id);
+    prevValues[item.id] = prev;
+    if (prev != null && prev > 0) hasPrevData = true;
+  }
+
   const rows = items.map((item) => {
     const current = getSubActualAmount(state.data, year, month, item.id);
     const payer = getOwnerDisplayLabel(state.data, item.payer || 'joint');
@@ -655,11 +666,18 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
     const splitPreview = loan
       ? `<span class="muted loan-split-preview" data-loan-item="${item.id}"></span>`
       : '';
-    return `<label class="savings-actual-row" data-item-id="${item.id}" ${loan ? `data-has-loan="1"` : ''}>
-      <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span>${loanTag}</span>
-      <input class="input input-amount savings-actual-amt" name="${item.id}" type="number" min="0" step="1000" value="${current ?? ''}" placeholder="0" />
+    const prevVal = prevValues[item.id];
+    const prevHint = prevVal != null && prevVal > 0
+      ? `<span class="prev-val-hint" data-prev-val="${prevVal}" data-prev-for="${item.id}">전월 ${fmtMoney(prevVal)}</span>`
+      : '';
+    return `<div class="savings-actual-row" data-item-id="${item.id}" ${loan ? `data-has-loan="1"` : ''}>
+      <span class="savings-actual-name">${esc(item.name)} <span class="muted savings-actual-payer">${esc(payer)}</span>${loanTag}${prevHint}</span>
+      <div class="savings-actual-input-row">
+        <input class="input input-amount savings-actual-amt" name="${item.id}" type="number" min="0" step="1" value="${current ?? ''}" placeholder="0" />
+        <button type="button" class="btn-add-amount" data-add-for="${item.id}" title="금액 더하기">+</button>
+      </div>
       ${splitPreview}
-    </label>`;
+    </div>`;
   }).join('');
   const isSavings = getSavingsCategory(state.data)?.id === catId;
   const hasLoanLink = items.some((i) => i.loanId);
@@ -669,6 +687,10 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
   const loanHint = hasLoanLink
     ? '<p class="field-hint">대출 연결 항목은 <strong>원리금 중 원금만 대출 잔액에서 차감</strong>됩니다. (연 이율·상환 방식은 대출 등록 시 설정)</p>'
     : '';
+  const prevMonthLabel = `${prevYear}년 ${prevMonth}월`;
+  const prevFillBtn = hasPrevData
+    ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-fill-prev-month">📋 ${prevMonthLabel} 값 불러오기</button>`
+    : '';
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="sub-actual-form" class="form-stack">
@@ -676,6 +698,7 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
       <p class="field-hint">세부 항목별 금액을 입력하세요. 합계가 실적으로 반영됩니다.</p>
       ${savingsHint}
       ${loanHint}
+      ${prevFillBtn}
       <div class="savings-actual-list">${rows}</div>
       <p class="savings-actual-sum">합계 <strong id="sub-sum-preview">0원</strong></p>
     </form>`,
@@ -713,6 +736,44 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
       form?.querySelectorAll('.savings-actual-amt').forEach((inp) => {
         inp.addEventListener('input', update);
       });
+      // + 버튼: 금액을 입력받아 기존값에 누적
+      sheet.querySelectorAll('.btn-add-amount').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const itemId = btn.dataset.addFor;
+          const inp = form?.querySelector(`[name="${itemId}"]`);
+          if (!inp) return;
+          const addStr = window.prompt('추가할 금액을 입력하세요 (원):');
+          if (addStr === null) return;
+          const addVal = Number(addStr.replace(/,/g, '')) || 0;
+          if (addVal <= 0) return;
+          const prev = Number(inp.value) || 0;
+          inp.value = prev + addVal;
+          inp.dispatchEvent(new Event('input'));
+        });
+      });
+      // 전월 값 힌트 클릭 → 해당 항목 입력란에 전월 값 채우기
+      sheet.querySelectorAll('.prev-val-hint').forEach((hint) => {
+        hint.addEventListener('click', () => {
+          const itemId = hint.dataset.prevFor;
+          const val = hint.dataset.prevVal;
+          const inp = form?.querySelector(`[name="${itemId}"]`);
+          if (!inp) return;
+          inp.value = val;
+          inp.dispatchEvent(new Event('input'));
+        });
+      });
+      // 전월 전체 불러오기 버튼
+      sheet.querySelector('#btn-fill-prev-month')?.addEventListener('click', () => {
+        for (const item of items) {
+          const prevVal = prevValues[item.id];
+          if (prevVal == null || prevVal <= 0) continue;
+          const inp = form?.querySelector(`[name="${item.id}"]`);
+          if (inp) {
+            inp.value = prevVal;
+            inp.dispatchEvent(new Event('input'));
+          }
+        }
+      });
       update();
     },
   });
@@ -725,11 +786,22 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
   persist();
   const after = getCategoryPeriodSummary(state.data, year, month, catId);
   if (isSavings) {
-    const hasAsset = getSavingsEligibleAssets(state.data).length > 0;
-    toast(hasAsset
-      ? `저장됨 · 합계 ${fmtMoney(after.actual)} · 연결 계좌 잔액에 반영`
-      : `저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자 자산을 등록하면 잔액에 반영됩니다`,
-    hasAsset ? 'success' : 'info');
+    const eligible = getSavingsEligibleAssets(state.data);
+    if (!eligible.length) {
+      toast(`저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자 자산을 등록하면 잔액에 자동 반영됩니다`, 'info');
+    } else {
+      // 항목별 연결 자산 없는 경우 확인
+      const { getSavingsAssetForSubItem } = await import('../savings-sync.js');
+      const noAssetItems = items.filter((i) => {
+        const val = Number(fd.get(i.id)) || 0;
+        return val > 0 && !getSavingsAssetForSubItem(state.data, i.id);
+      });
+      if (noAssetItems.length) {
+        toast(`저장됨 · 합계 ${fmtMoney(after.actual)} · ⚠️ ${noAssetItems.map((i) => i.name).join(', ')} 항목은 연결 자산 없어 반영 안 됨`, 'info');
+      } else {
+        toast(`저장됨 · 합계 ${fmtMoney(after.actual)} · 연결 계좌 잔액에 반영`, 'success');
+      }
+    }
   } else if (hasLoanLink) {
     const missingRate = items.filter((i) => {
       if (!i.loanId) return false;
@@ -771,15 +843,35 @@ export async function showActualForm(catId, year, month, rerender, options = {})
       `<option value="${id}" ${payerDefault === id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, id))}</option>`
     ).join('')}</select>`)
     : '';
+
+  // 이전 달 값 계산
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevEntry = getActualEntry(state.data, prevYear, prevMonth, catId);
+  const prevAmount = prevEntry?.amount ?? null;
+  const prevHint = prevAmount != null && prevAmount > 0
+    ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-fill-prev-single">📋 전월 값 불러오기 (${fmtMoney(prevAmount)})</button>`
+    : '';
+
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="actual-form" class="form-stack">
       <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
-      ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" required value="${current ?? ''}" />`)}
+      ${prevHint}
+      ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" step="1" required value="${current ?? ''}" />`)}
       ${payerField}
       ${formField('메모', '<input class="input" name="memo" />')}
     </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
+    onOpen: (sheet) => {
+      sheet.querySelector('#btn-fill-prev-single')?.addEventListener('click', () => {
+        const inp = sheet.querySelector('[name="amount"]');
+        if (inp) {
+          inp.value = prevAmount;
+          inp.dispatchEvent(new Event('input'));
+        }
+      });
+    },
   });
   if (modalValue(res) !== 'save') return false;
   const fd = modalForm(res);
@@ -812,8 +904,8 @@ export async function showDueActualForms(year, month, rerender) {
 export async function showBudgetForm(y, m, rerender) {
   const cats = getVisibleCategories(state.data);
   const fields = cats.map((c) => {
-    const monthly = getMonthlyPlanAmount(state.data, y, c.id);
-    return formField(c.name, `<input class="input input-amount" name="${c.id}" type="number" min="0" value="${monthly || 0}" />`);
+    const monthly = getMonthlyPlanAmount(state.data, y, m, c.id);
+    return formField(c.name, `<input class="input input-amount" name="${c.id}" type="number" min="0" step="1" value="${monthly || 0}" />`);
   }).join('');
   const res = await openModal({
     title: `${fmtMonth(y, m)} 월간 예산`,
@@ -823,7 +915,7 @@ export async function showBudgetForm(y, m, rerender) {
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
-  for (const c of cats) setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+  for (const c of cats) setMonthlyPlanAmount(state.data, y, m, c.id, Number(fd.get(c.id)) || 0);
   persist(); toast('월간 예산이 저장되었습니다', 'success'); rerender();
 }
 

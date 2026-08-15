@@ -616,11 +616,40 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .savings-actual-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
 .savings-actual-row {
   display: grid;
-  grid-template-columns: 1fr 120px;
-  align-items: center;
+  grid-template-columns: 1fr auto;
+  align-items: start;
   gap: 10px;
 }
-.savings-actual-name { font-size: 0.9rem; }
+.savings-actual-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.savings-actual-input-row .input { flex: 1; min-width: 0; width: 100px; }
+.btn-add-amount {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.btn-add-amount:active { background: var(--primary); color: #fff; }
+.prev-val-hint {
+  font-size: 0.78rem;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+}
+.prev-val-hint:hover { opacity: 0.75; }
+.savings-actual-name { font-size: 0.9rem; padding-top: 6px; }
 .savings-actual-sum { text-align: right; margin-top: 12px; font-size: 0.95rem; }
 .savings-budget-group { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .savings-budget-row {
@@ -766,6 +795,7 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .mini-card strong { font-size: 0.95rem; }
 .mini-card strong.income { color: var(--success); }
 .mini-card strong.danger { color: var(--danger); }
+.mini-card-sub { display: block; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
 
 .mom-badge {
   display: inline-block;

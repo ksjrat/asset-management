@@ -63,20 +63,22 @@ function renderStep1() {
 }
 
 function renderStep2() {
-  const y = new Date().getFullYear();
+  const now2 = new Date();
+  const y = now2.getFullYear();
+  const m = now2.getMonth() + 1;
   const cats = getVisibleCategories(state.data);
   const rows = cats.map((c) => {
     if (hasSubItems(state.data, c.id)) {
       const subItems = getVisibleSubItems(state.data, c.id);
       const subRows = subItems.map((item) => {
-        const monthly = getSubMonthlyPlanAmount(state.data, y, item.id);
+        const monthly = getSubMonthlyPlanAmount(state.data, y, m, item.id);
         const payerSelect = OWNERS.map((o) =>
           `<option value="${o.id}" ${(item.payer || 'joint') === o.id ? 'selected' : ''}>${esc(getOwnerDisplayLabel(state.data, o.id))}</option>`).join('');
         return `<label class="setup-budget-row setup-budget-row--sub setup-budget-row--sav">
           <span class="setup-budget-name">${esc(item.name)}</span>
           <select class="input input-sm" name="sub-payer-${item.id}">${payerSelect}</select>
           <div class="setup-budget-inputs">
-            <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+            <input class="input input-amount" name="sub-${item.id}" type="number" min="0" step="1" value="${monthly || ''}" placeholder="월간" />
           </div>
         </label>`;
       }).join('');
@@ -85,19 +87,19 @@ function renderStep2() {
         ${subRows}
       </div>`;
     }
-    const monthly = getMonthlyPlanAmount(state.data, y, c.id);
+    const monthly = getMonthlyPlanAmount(state.data, y, m, c.id);
     return `
       <label class="setup-budget-row">
         <span class="setup-budget-name">${esc(c.name)}</span>
         <div class="setup-budget-inputs">
-          <input class="input input-amount" name="${c.id}" type="number" min="0" step="10000" value="${monthly || ''}" placeholder="월간" />
+          <input class="input input-amount" name="${c.id}" type="number" min="0" step="1" value="${monthly || ''}" placeholder="월간" />
           <span class="setup-budget-monthly">연 ${fmtMoney(monthly * 12)}</span>
         </div>
       </label>`;
   }).join('');
   return `
     ${stepHeader(2)}
-    <p class="field-hint">${y}년 기준 · 세부 항목이 있는 카테고리는 항목별 예산·부담자를 지정합니다.</p>
+    <p class="field-hint">${y}년 ${m}월 기준 · 세부 항목이 있는 카테고리는 항목별 예산·부담자를 지정합니다.</p>
     <form id="setup-monthly-form" class="form-stack">${rows}</form>`;
 }
 
@@ -189,7 +191,9 @@ export function renderSetup() {
 
 export function bindSetup() {
   const rerender = () => import('./index.js').then((m) => m.renderApp());
-  const y = new Date().getFullYear();
+  const now2 = new Date();
+  const y = now2.getFullYear();
+  const m = now2.getMonth() + 1;
 
   document.getElementById('setup-add-cat')?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -267,17 +271,17 @@ export function bindSetup() {
           if (hasSubItems(state.data, c.id)) {
             for (const item of getVisibleSubItems(state.data, c.id)) {
               item.payer = fd.get(`sub-payer-${item.id}`) || 'joint';
-              setSubMonthlyPlanAmount(state.data, y, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
+              setSubMonthlyPlanAmount(state.data, y, m, c.id, item.id, Number(fd.get(`sub-${item.id}`)) || 0);
             }
           } else {
-            setMonthlyPlanAmount(state.data, y, c.id, Number(fd.get(c.id)) || 0);
+            setMonthlyPlanAmount(state.data, y, m, c.id, Number(fd.get(c.id)) || 0);
           }
         }
         for (const c of cats) {
-          if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, y, c.id);
+          if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, y, m, c.id);
         }
       }
-      const hasAny = cats.some((c) => getMonthlyPlanAmount(state.data, y, c.id) > 0);
+      const hasAny = cats.some((c) => getMonthlyPlanAmount(state.data, y, m, c.id) > 0);
       if (!hasAny) {
         toast('월간 예산을 1개 이상 입력해 주세요', 'error');
         return;

@@ -227,6 +227,48 @@ export function getMonthSavingsTotal(data, year, month) {
   return total;
 }
 
+/** 예산 관리 시작 이후 전체 월의 누적 저축 합계 */
+export function getCumulativeSavingsTotal(data) {
+  const cat = getSavingsCategory(data);
+  if (!cat || !data.budget?.subActuals) return 0;
+  let total = 0;
+  for (const bucket of Object.values(data.budget.subActuals)) {
+    for (const entry of Object.values(bucket || {})) {
+      total += Number(entry?.amount) || 0;
+    }
+  }
+  return total;
+}
+
+/** 예산 관리 시작 이후 전체 월의 누적 절약액 (월 예산 - 실적, 양수만 합산) */
+export function getCumulativeBudgetSavings(data) {
+  if (!data.budget?.setupDone) return 0;
+  const cats = getVisibleCategories(data);
+  const start = getBudgetStart(data);
+  if (!start) return 0;
+  // subActuals + actuals 에 기록된 모든 월 수집
+  const keys = new Set([
+    ...Object.keys(data.budget.actuals || {}),
+    ...Object.keys(data.budget.subActuals || {}),
+  ]);
+  let total = 0;
+  for (const key of keys) {
+    const m2 = key.match(/^(\d{4})-(\d{2})$/);
+    if (!m2) continue;
+    const yr = Number(m2[1]);
+    const mo = Number(m2[2]);
+    if (isBeforeBudgetStart(data, yr, mo)) continue;
+    for (const c of cats) {
+      const s = getCategoryPeriodSummary(data, yr, mo, c.id);
+      if (s.hasActual && s.remaining > 0) {
+        // 저축 카테고리는 절약액에서 제외 (이미 저축으로 잡힘)
+        if (c.name !== '저축') total += s.remaining;
+      }
+    }
+  }
+  return total;
+}
+
 export function getLatestValuation(item) {
   const vals = item.valuations || [];
   if (!vals.length) return null;
@@ -549,11 +591,11 @@ export function monthsBetween(startISO, endISO) {
   return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()));
 }
 
-export function getMonthBudget(data, year, _month) {
+export function getMonthBudget(data, year, month) {
   ensureBudgetStructure(data);
   const map = {};
   for (const cat of getVisibleCategories(data)) {
-    map[cat.id] = getMonthlyPlanAmount(data, year, cat.id);
+    map[cat.id] = getMonthlyPlanAmount(data, year, month, cat.id);
   }
   return map;
 }
