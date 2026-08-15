@@ -17,7 +17,7 @@ import {
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
   getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue,
 } from '../budget-engine.js';import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
-import { openModal, toast, formField, esc, modalValue, modalForm } from '../ui.js';
+import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal } from '../ui.js';
 import { validateGoalInput, projectGoalImpact } from '../validators.js';
 
 function bindGoalImpactPreview(form, current = 0) {
@@ -636,6 +636,7 @@ export async function showMonthlyBudgetForm(year, month, rerender) {
 }
 
 export async function showSubActualForm(catId, year, month, rerender, options = {}) {
+  closeActiveModal();
   const skipRerender = options.skipRerender ?? false;
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   const items = getVisibleSubItems(state.data, catId);
@@ -827,6 +828,7 @@ export async function showSavingsActualForm(year, month, rerender) {
 }
 
 export async function showActualForm(catId, year, month, rerender, options = {}) {
+  closeActiveModal();
   const skipRerender = options.skipRerender ?? false;
   if (hasSubItems(state.data, catId)) {
     return showSubActualForm(catId, year, month, rerender, options);
@@ -1036,7 +1038,7 @@ function subItemManageRows(items, data) {
   }).join('');
 }
 
-async function openSubItemEdit(catId, item, rerender) {
+function buildSubItemEditForm(catId, item) {
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   const isSavings = cat?.name === '저축';
   const eligible = isSavings ? getSavingsEligibleAssets(state.data) : [];
@@ -1058,35 +1060,69 @@ async function openSubItemEdit(catId, item, rerender) {
       </select>
       <span class="field-hint">주담대·대출 원리금 실적 입력 시 잔액에서 원금만 차감</span>`)
     : '';
-  const editRes = await openModal({
-    title: '세부 항목 편집',
-    body: `<form id="sub-form" class="form-stack">
+  return `<form id="sub-form" class="form-stack">
       ${formField('이름', `<input class="input" name="name" value="${esc(item.name)}" required />`)}
       ${formField('부담자', payerSelect('payer', item.payer || 'joint', state.data))}
       ${loanField}
       ${assetField}
       <label class="toggle-row"><span>숨김</span>
         <input type="checkbox" name="hidden" ${item.hidden ? 'checked' : ''} /></label>
-    </form>`,
-    actions: [{ label: '저장', value: 'save', primary: true }],
-  });
-  if (modalValue(editRes) !== 'save') return;
-  const efd = modalForm(editRes);
-  if (!efd) return;
-  item.name = efd.get('name');
-  item.payer = efd.get('payer') || 'joint';
-  item.hidden = !!efd.get('hidden');
+    </form>`;
+}
+
+function applySubItemEdit(catId, item, formData) {
+  const cat = state.data.budget.categories.find((c) => c.id === catId);
+  const isSavings = cat?.name === '저축';
+  const loans = getLoanAssets(state.data);
+  item.name = formData.name;
+  item.payer = formData.payer || 'joint';
+  item.hidden = !!formData.hidden;
   if (isSavings) {
-    const assetId = efd.get('assetId')?.toString();
+    const assetId = formData.assetId?.toString();
     item.assetId = assetId || null;
   }
   if (loans.length) {
-    const loanId = efd.get('loanId')?.toString();
+    const loanId = formData.loanId?.toString();
     item.loanId = loanId || null;
   }
-  persist();
-  toast('저장됨', 'success');
-  showSubItemsManage(catId, rerender);
+}
+
+function subItemsManageListBody(cat, isSavings, isHousing, visible, hidden) {
+  return `<div class="cat-manage-panel" id="sub-manage-panel">
+    <p class="field-hint">${isSavings
+    ? '지출 실적 입력 시 연결된 예금·적금·투자 계좌에 자동 반영됩니다. 계좌가 여러 개면 항목별로 연결 계좌를 지정하세요.'
+    : isHousing
+      ? '주담대 원리금 항목은 대출을 연결하고, 지출 실적 입력 시 대출 잔액에서 원금만 차감됩니다.'
+      : '실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.'}</p>
+    <div class="list-group">${subItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
+    ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
+      <div class="list-group">${subItemManageRows(hidden, state.data)}</div>` : ''}
+  </div>`;
+}
+
+function bindSubItemEditInSheet(sheet, catId, item, ctx) {
+  setModalContent(sheet, { title: '세부 항목 편집', body: buildSubItemEditForm(catId, item) });
+  setModalActions(sheet, [
+    { label: '목록', value: 'back' },
+    { label: '저장', value: 'save', primary: true },
+  ], (action, formData) => {
+    if (action === 'back') {
+      ctx.showList();
+      return;
+    }
+    if (action !== 'save' || !formData) return;
+    const name = formData.name?.toString().trim();
+    if (!name) {
+      toast('이름을 입력하세요', 'error');
+      return;
+    }
+    applySubItemEdit(catId, item, formData);
+    persist();
+    toast('저장됨', 'success');
+    ctx.showList();
+  });
+  const firstInput = sheet.querySelector('#sub-form input, #sub-form select');
+  if (firstInput) setTimeout(() => firstInput.focus(), 80);
 }
 
 export async function showSubItemsManage(catId, rerender) {
@@ -1094,34 +1130,41 @@ export async function showSubItemsManage(catId, rerender) {
   if (!cat) return;
   const isSavings = cat.name === '저축';
   const isHousing = cat.name === '주거';
-  const items = getSubItems(state.data, catId);
-  const visible = items.filter((i) => !i.hidden);
-  const hidden = items.filter((i) => i.hidden);
+
   const res = await openModal({
     title: `${cat.name} · 세부 항목`,
-    body: `<div class="cat-manage-panel">
-      <p class="field-hint">${isSavings
-    ? '지출 실적 입력 시 연결된 예금·적금·투자 계좌에 자동 반영됩니다. 계좌가 여러 개면 항목별로 연결 계좌를 지정하세요.'
-    : isHousing
-      ? '주담대 원리금 항목은 대출을 연결하고, 지출 실적 입력 시 대출 잔액에서 원금만 차감됩니다.'
-      : '실적 입력 시 세부 항목별로 금액·부담자를 기록합니다.'}</p>
-      <div class="list-group">${subItemManageRows(visible, state.data) || '<p class="muted">항목이 없습니다</p>'}</div>
-      ${hidden.length ? `<p class="muted cat-manage-section-label">숨긴 항목 ${hidden.length}개</p>
-        <div class="list-group">${subItemManageRows(hidden, state.data)}</div>` : ''}
-    </div>`,
-    actions: [
-      { label: '항목 추가', value: 'add' },
-      { label: '닫기', value: null, primary: true },
-    ],
+    body: '<div class="cat-manage-panel" id="sub-manage-panel"></div>',
+    actions: [{ label: '닫기', value: null, primary: true }],
     onOpen: (sheet) => {
-      sheet.querySelectorAll('[data-sub-edit]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const item = items.find((i) => i.id === btn.dataset.subEdit);
-          if (item) openSubItemEdit(catId, item, rerender);
-        });
-      });
+      const ctx = {
+        showList() {
+          const items = getSubItems(state.data, catId);
+          const visible = items.filter((i) => !i.hidden);
+          const hidden = items.filter((i) => i.hidden);
+          setModalContent(sheet, {
+            title: `${cat.name} · 세부 항목`,
+            body: subItemsManageListBody(cat, isSavings, isHousing, visible, hidden),
+          });
+          setModalActions(sheet, [
+            { label: '항목 추가', value: 'add' },
+            { label: '닫기', value: null, primary: true },
+          ], (action) => {
+            if (action === 'add') sheet._finishModal?.('add');
+            else sheet._finishModal?.(null);
+          });
+          sheet.querySelectorAll('[data-sub-edit]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const itemsNow = getSubItems(state.data, catId);
+              const target = itemsNow.find((i) => i.id === btn.dataset.subEdit);
+              if (target) bindSubItemEditInSheet(sheet, catId, target, ctx);
+            });
+          });
+        },
+      };
+      ctx.showList();
     },
   });
+
   if (modalValue(res) === 'add') {
     const addRes = await openModal({
       title: '세부 항목 추가',

@@ -633,14 +633,14 @@ export function getCategoryBudgetOveruse(data, year, month, limit = 5) {
     if (cat.id === excludeId || cat.name === '저축') continue;
     const s = getCategoryPeriodSummary(data, year, month, cat.id);
     if (!s.hasActual || s.actual <= 0) continue;
-    const usedPct = s.available > 0 ? s.actual / s.available : 1;
+    const usedPct = s.monthlyPlanned > 0 ? s.actual / s.monthlyPlanned : 1;
     rows.push({
       catId: cat.id,
       name: cat.name,
       actual: s.actual,
-      available: s.available,
+      available: s.monthlyPlanned,
       usedPct,
-      overAmount: s.actual - s.available,
+      overAmount: s.monthDelta ?? 0,
     });
   }
   return rows.sort((a, b) => {

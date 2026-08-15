@@ -3,6 +3,7 @@ import { fmtAmountHint } from './format.js';
 let modalEl;
 let toastTimer;
 let activeOverlay = null;
+let activeFinish = null;
 
 const AMOUNT_INPUT_SELECTOR = [
   'input.input-amount',
@@ -30,6 +31,63 @@ function setModalFormError(sheet, message) {
     body.prepend(el);
   }
   el.textContent = message;
+}
+
+export function setModalContent(sheet, { title, body }) {
+  if (!sheet) return;
+  if (title != null) {
+    const titleEl = sheet.querySelector('.modal-title');
+    if (titleEl) titleEl.textContent = title;
+  }
+  if (body != null) {
+    const bodyEl = sheet.querySelector('.modal-body');
+    if (bodyEl) bodyEl.innerHTML = body;
+  }
+}
+
+export function setModalActions(sheet, actions, onAction, beforeFinish) {
+  const actionsEl = sheet?.querySelector('.modal-actions');
+  if (!actionsEl) return;
+  actionsEl.innerHTML = '';
+  const snapshotForm = () => {
+    const form = sheet.querySelector('form');
+    if (form) return Object.fromEntries(new FormData(form).entries());
+    const body = sheet.querySelector('.modal-body');
+    if (!body) return null;
+    const fields = body.querySelectorAll('input[name], select[name], textarea[name]');
+    if (!fields.length) return null;
+    const entries = [];
+    for (const el of fields) {
+      if (el.type === 'checkbox') {
+        if (el.checked) entries.push([el.name, el.value || 'on']);
+      } else if (el.type === 'radio') {
+        if (el.checked) entries.push([el.name, el.value]);
+      } else {
+        entries.push([el.name, el.value]);
+      }
+    }
+    return Object.fromEntries(entries);
+  };
+  for (const act of actions) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `btn ${act.primary ? 'btn-primary' : act.danger ? 'btn-danger' : 'btn-ghost'}`;
+    btn.textContent = act.label;
+    btn.addEventListener('click', () => {
+      const form = snapshotForm();
+      if (beforeFinish) {
+        const err = beforeFinish(act.value ?? act.label, form);
+        if (err) {
+          setModalFormError(sheet, err);
+          (sheet.querySelector('input[name="pass"]') || sheet.querySelector('input'))?.focus();
+          return;
+        }
+      }
+      setModalFormError(sheet, '');
+      onAction(act.value ?? act.label, form);
+    });
+    actionsEl.appendChild(btn);
+  }
 }
 
 export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
@@ -131,11 +189,13 @@ export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
 
     modalEl.appendChild(overlay);
     activeOverlay = overlay;
+    activeFinish = finish;
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => overlay.classList.add('open'));
     const firstInput = sheet.querySelector('input, select, textarea');
     if (firstInput) setTimeout(() => firstInput.focus(), 120);
     requestAnimationFrame(() => {
+      sheet._finishModal = finish;
       if (onOpen) onOpen(sheet);
       bindAmountPreviewsIn(sheet);
     });
@@ -145,8 +205,17 @@ export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
 function closeModal(overlay) {
   overlay.classList.remove('open');
   document.body.classList.remove('modal-open');
-  activeOverlay = null;
+  if (activeOverlay === overlay) {
+    activeOverlay = null;
+    activeFinish = null;
+  }
   setTimeout(() => overlay.remove(), 220);
+}
+
+export function closeActiveModal() {
+  if (!activeOverlay || activeOverlay.dataset.closing) return;
+  const finish = activeFinish;
+  if (finish) finish(null);
 }
 
 const TOAST_ICON = { success: '✓', error: '✕', info: 'ℹ' };

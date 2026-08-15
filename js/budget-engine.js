@@ -453,6 +453,8 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
       remaining: 0,
       hasActual,
       usedPct: 0,
+      monthDelta: null,
+      monthUsedPct: 0,
       beforeStart: true,
     };
   }
@@ -465,6 +467,8 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
   const actual = hasActual ? entry.amount : 0;
   const remaining = available - actual;
   const usedPct = available > 0 ? actual / available : (actual > 0 ? 1.2 : 0);
+  const monthDelta = hasActual ? actual - monthlyPlanned : null;
+  const monthUsedPct = monthlyPlanned > 0 ? actual / monthlyPlanned : (actual > 0 ? 1.2 : 0);
   return {
     monthlyPlanned,
     rolloverIn,
@@ -473,6 +477,8 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
     remaining,
     hasActual,
     usedPct,
+    monthDelta,
+    monthUsedPct,
     beforeStart: false,
   };
 }
@@ -483,6 +489,7 @@ export function getPeriodTotals(data, year, month, categories) {
   let actual = 0;
   let rolloverIn = 0;
   let remaining = 0;
+  let monthDelta = 0;
   let dueCount = 0;
   for (const c of categories) {
     const s = getCategoryPeriodSummary(data, year, month, c.id);
@@ -491,9 +498,10 @@ export function getPeriodTotals(data, year, month, categories) {
     actual += s.actual;
     rolloverIn += s.rolloverIn;
     remaining += s.remaining;
+    if (s.monthDelta != null) monthDelta += s.monthDelta;
     if (isRecordDue(data, year, month, c.id)) dueCount++;
   }
-  return { planned, available, actual, rolloverIn, remaining, dueCount };
+  return { planned, available, actual, rolloverIn, remaining, monthDelta, dueCount };
 }
 
 /** 해당 월·항목 실적 입력 가능 여부 (정산일 이후 또는 과거 월) */

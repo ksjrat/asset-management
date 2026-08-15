@@ -26,6 +26,13 @@ import {
   showSubItemsCategoryPicker,
 } from './modals.js';
 
+function formatMonthDelta(delta) {
+  if (delta == null) return { text: '—', cls: 'muted' };
+  if (delta > 0) return { text: `+${fmtShort(delta)} 초과`, cls: 'danger' };
+  if (delta < 0) return { text: `${fmtShort(-delta)} 절약`, cls: 'income' };
+  return { text: '예산 내', cls: 'muted' };
+}
+
 function ownerUsageRows(data, year, month) {
   const { income, expense } = getOwnerMonthlySummary(data, year, month);
   const max = Math.max(income.self, income.spouse, expense.self, expense.spouse, expense.joint, 1);
@@ -101,13 +108,18 @@ export function renderBudget() {
 
   const ownerSummary = getOwnerMonthlySummary(data, y, m);
 
+  const monthDeltaFmt = cats.some((c) => getCategoryPeriodSummary(data, y, m, c.id).hasActual)
+    ? formatMonthDelta(totals.monthDelta)
+    : { text: '—', cls: 'muted' };
+
   const catRows = cats.map((c) => {
     const s = getCategoryPeriodSummary(data, y, m, c.id);
     const opensLabel = formatRecordOpensLabel(data, c, y, m);
     const due = isRecordDue(data, y, m, c.id);
     const canEdit = !s.beforeStart && canRecordActual(data, y, m, c.id);
-    const pct = s.available > 0 ? s.actual / s.available : 0;
-    const statusClass = !s.hasActual ? 'pending' : pct > 1 ? 'over' : pct >= 0.9 ? 'warn' : 'ok';
+    const monthPct = s.monthlyPlanned > 0 ? s.actual / s.monthlyPlanned : 0;
+    const statusClass = !s.hasActual ? 'pending' : monthPct > 1 ? 'over' : monthPct >= 0.9 ? 'warn' : 'ok';
+    const monthDeltaFmt = formatMonthDelta(s.monthDelta);
     const subdivided = hasSubItems(data, c.id);
     const sub = subdivided ? getSubSummary(data, y, m, c.id) : null;
     const payerLabel = subdivided
@@ -128,7 +140,7 @@ export function renderBudget() {
           </div>
           <div class="budget-envelope-badges">
             ${due ? '<span class="badge badge-proposed">입력 대기</span>' : ''}
-            ${s.hasActual ? `<span class="badge badge-active">${fmtPct(pct)}</span>` : ''}
+            ${s.hasActual ? `<span class="badge badge-active">${fmtPct(monthPct)}</span>` : ''}
           </div>
         </div>
         <div class="budget-envelope-grid">
@@ -136,9 +148,11 @@ export function renderBudget() {
           <div><span class="lbl">이월</span><span class="${s.rolloverIn >= 0 ? 'income' : 'danger'}">${s.rolloverIn >= 0 ? '+' : ''}${fmtShort(s.rolloverIn)}</span></div>
           <div><span class="lbl">사용 가능</span><strong>${fmtShort(s.available)}</strong></div>
           <div><span class="lbl">실적</span><strong class="${s.hasActual ? '' : 'muted'}">${s.hasActual ? fmtShort(s.actual) : '—'}</strong></div>
+          <div><span class="lbl">당월 차이</span><strong class="${monthDeltaFmt.cls}">${monthDeltaFmt.text}</strong></div>
         </div>
         ${sub ? `<p class="budget-savings-hint muted">${sub.filledCount}/${sub.itemCount}개 항목 입력 · 합계 ${fmtShort(sub.total)}</p>` : ''}
-        ${budgetBar(s.actual, s.available, '#1a5c44')}
+        ${budgetBar(s.actual, s.monthlyPlanned, '#1a5c44')}
+        <p class="budget-bar-caption muted">월 예산 기준 · 이월 포함 잔액 ${fmtShort(s.remaining)}</p>
         <div class="budget-envelope-foot">
           <span class="${s.remaining >= 0 ? 'income' : 'danger'}">잔액 ${fmtShort(s.remaining)}</span>
           ${s.remaining > 0 && s.hasActual ? '<span class="muted">→ 다음 달 이월</span>' : ''}
@@ -154,13 +168,14 @@ export function renderBudget() {
 
     <section class="summary-row">
       <div class="mini-card"><span>월 예산 합계</span><strong>${fmtShort(totals.planned)}</strong></div>
+      <div class="mini-card"><span>당월 초과/절약</span><strong class="${monthDeltaFmt.cls}">${monthDeltaFmt.text}</strong></div>
       <div class="mini-card"><span>이월 포함</span><strong>${fmtShort(totals.available)}</strong></div>
       <div class="mini-card"><span>실적 합계</span><strong class="${totals.actual > totals.available ? 'danger' : ''}">${fmtShort(totals.actual)}</strong></div>
     </section>
     <section class="hero-card small rollover-card">
       <p class="hero-label">이번 달 잔액 (다음 달 이월 예정)</p>
       <p class="hero-value ${totals.remaining >= 0 ? 'up' : 'down'}">${fmtShort(totals.remaining)}</p>
-      <p class="hero-sub">이월 반영 ${fmtShort(totals.rolloverIn)} · 실적 ${fmtShort(totals.actual)}</p>
+      <p class="hero-sub">당월 ${monthDeltaFmt.text} · 전월 이월 ${fmtShort(totals.rolloverIn)} · 실적 ${fmtShort(totals.actual)}</p>
     </section>
 
     ${savingsStatsCard}

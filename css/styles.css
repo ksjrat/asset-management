@@ -1694,12 +1694,13 @@ body.modal-open { overflow: hidden; }
 .budget-envelope-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .budget-envelope-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   font-size: 0.82rem;
   margin-bottom: 10px;
 }
 .budget-envelope-grid .lbl { display: block; font-size: 0.68rem; color: var(--muted); }
+.budget-bar-caption { font-size: 0.72rem; margin: 4px 0 0; }
 .budget-envelope-foot {
   display: flex;
   align-items: center;
