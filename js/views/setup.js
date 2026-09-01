@@ -123,7 +123,7 @@ function renderStep3() {
           <select class="input" name="startMonth">${monthOpts}</select>
         </div>
       </label>
-      <p class="field-hint"><strong>${fmtMonth(start.year, start.month)}</strong>부터 예산·이월을 관리합니다. 그 이전 달(예: 1~4월)은 이월되지 않습니다.</p>
+      <p class="field-hint"><strong>${fmtMonth(start.year, start.month)}</strong>부터 예산을 관리합니다. 그 이전 달(예: 1~4월)은 집계되지 않습니다.</p>
     </form>`;
 }
 
@@ -164,7 +164,7 @@ function renderStep4() {
         <ol class="setup-flow-list">
           <li>정산 시점 이후 → 항목별 <strong>실제 사용액</strong> 입력</li>
           <li>월간 예산과 비교 → 초과·절약 확인</li>
-          <li>남은 금액 → <strong>다음 달로 이월</strong> (시작 월 이후만)</li>
+          <li>매달 <strong>월간 예산</strong>을 필요에 따라 조정할 수 있습니다</li>
         </ol>
       </div>
     </form>`;

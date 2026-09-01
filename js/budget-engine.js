@@ -428,17 +428,36 @@ export function setActualAmount(data, year, month, catId, amount, payer) {
   data.budget.actuals[key][catId] = entry;
 }
 
-/** 이전 달 잔액 이월 — 시작월 이전·시작월에는 이월 없음 */
-export function getRolloverIn(data, year, month, catId) {
-  const start = getBudgetStart(data);
-  const cur = monthIndex(year, month);
-  if (start && cur <= monthIndex(start.year, start.month)) return 0;
+/** @deprecated 이월 기능 제거 — 항상 0 */
+export function getRolloverIn(_data, _year, _month, _catId) {
+  return 0;
+}
 
-  const prevYear = month === 1 ? year - 1 : year;
-  const prevMonth = month === 1 ? 12 : month - 1;
-  if (start && monthIndex(prevYear, prevMonth) < monthIndex(start.year, start.month)) return 0;
-
-  return getCategoryPeriodSummary(data, prevYear, prevMonth, catId).remaining;
+export function deleteSubItem(data, catId, itemId) {
+  ensureBudgetStructure(data);
+  const items = subItemsList(data, catId);
+  const idx = items.findIndex((i) => i.id === itemId);
+  if (idx < 0) return false;
+  items.splice(idx, 1);
+  for (const bucket of Object.values(data.budget.subActuals || {})) {
+    delete bucket[itemId];
+  }
+  for (const bucket of Object.values(data.budget.subMonthlyPlan || {})) {
+    delete bucket[itemId];
+  }
+  const keys = new Set([
+    ...Object.keys(data.budget.subActuals || {}),
+    ...Object.keys(data.budget.subMonthlyPlan || {}),
+    ...Object.keys(data.budget.actuals || {}),
+    ...Object.keys(data.budget.monthlyPlan || {}),
+  ]);
+  for (const key of keys) {
+    const parsed = parseYm(key);
+    if (!parsed) continue;
+    syncSubEnvelopeMonthlyPlan(data, parsed.year, parsed.month, catId);
+    syncSubEnvelopeActual(data, parsed.year, parsed.month, catId);
+  }
+  return true;
 }
 
 export function getCategoryPeriodSummary(data, year, month, catId) {
@@ -460,12 +479,12 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
   }
 
   const monthlyPlanned = getMonthlyPlanAmount(data, year, month, catId);
-  const rolloverIn = getRolloverIn(data, year, month, catId);
-  const available = monthlyPlanned + rolloverIn;
+  const rolloverIn = 0;
+  const available = monthlyPlanned;
   const entry = getActualEntry(data, year, month, catId);
   const hasActual = entry != null;
   const actual = hasActual ? entry.amount : 0;
-  const remaining = available - actual;
+  const remaining = monthlyPlanned - actual;
   const usedPct = available > 0 ? actual / available : (actual > 0 ? 1.2 : 0);
   const monthDelta = hasActual ? actual - monthlyPlanned : null;
   const monthUsedPct = monthlyPlanned > 0 ? actual / monthlyPlanned : (actual > 0 ? 1.2 : 0);

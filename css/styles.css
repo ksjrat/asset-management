@@ -1710,6 +1710,38 @@ body.modal-open { overflow: hidden; }
   margin-top: 8px;
   font-size: 0.85rem;
 }
+.budget-envelope-grid--4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.month-history-list { margin-top: 12px; }
+.month-history {
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: 12px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.month-history-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.month-history-summary::-webkit-details-marker { display: none; }
+.month-history-label { font-weight: 600; }
+.month-history-totals { font-size: 0.82rem; text-align: right; }
+.month-history-body { border-top: 1px solid var(--border, rgba(0,0,0,0.06)); }
+.month-history-more {
+  margin: 8px 0 0;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .rollover-card { margin-bottom: 12px; }
 
 @media (prefers-reduced-motion: reduce) {

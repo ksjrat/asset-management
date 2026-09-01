@@ -232,7 +232,12 @@ export function getCumulativeSavingsTotal(data) {
   const cat = getSavingsCategory(data);
   if (!cat || !data.budget?.subActuals) return 0;
   let total = 0;
-  for (const bucket of Object.values(data.budget.subActuals)) {
+  for (const [key, bucket] of Object.entries(data.budget.subActuals)) {
+    const m2 = key.match(/^(\d{4})-(\d{2})$/);
+    if (!m2) continue;
+    const yr = Number(m2[1]);
+    const mo = Number(m2[2]);
+    if (isBeforeBudgetStart(data, yr, mo)) continue;
     for (const entry of Object.values(bucket || {})) {
       total += Number(entry?.amount) || 0;
     }
@@ -246,7 +251,6 @@ export function getCumulativeBudgetSavings(data) {
   const cats = getVisibleCategories(data);
   const start = getBudgetStart(data);
   if (!start) return 0;
-  // subActuals + actuals 에 기록된 모든 월 수집
   const keys = new Set([
     ...Object.keys(data.budget.actuals || {}),
     ...Object.keys(data.budget.subActuals || {}),
@@ -259,11 +263,11 @@ export function getCumulativeBudgetSavings(data) {
     const mo = Number(m2[2]);
     if (isBeforeBudgetStart(data, yr, mo)) continue;
     for (const c of cats) {
+      if (c.name === '저축') continue;
       const s = getCategoryPeriodSummary(data, yr, mo, c.id);
-      if (s.hasActual && s.remaining > 0) {
-        // 저축 카테고리는 절약액에서 제외 (이미 저축으로 잡힘)
-        if (c.name !== '저축') total += s.remaining;
-      }
+      if (!s.hasActual) continue;
+      const pureSaving = s.monthlyPlanned - s.actual;
+      if (pureSaving > 0) total += pureSaving;
     }
   }
   return total;
@@ -275,9 +279,11 @@ export function getLatestValuation(item) {
   return vals[vals.length - 1];
 }
 
-/** 투자 자산은 최신 평가금액, 그 외는 등록 금액 */
+const APPRAISED_ASSET_TYPES = new Set(['invest', 'realestate']);
+
+/** 투자·부동산은 최신 평가금액, 그 외는 등록 금액 */
 export function getEffectiveAssetAmount(item) {
-  if (item.type === 'invest') {
+  if (APPRAISED_ASSET_TYPES.has(item.type)) {
     const latest = getLatestValuation(item);
     if (latest) return Number(latest.amount) || 0;
   }
@@ -293,18 +299,28 @@ function valuationBaselineAmount(item, prevYmStr, curYm) {
   return Number(item.history?.[0]?.amount ?? item.amount) || 0;
 }
 
-export function syncInvestAssetAmount(item) {
+export function syncAppraisedAssetAmount(item) {
   const latest = getLatestValuation(item);
   if (latest) item.amount = Number(latest.amount) || 0;
   else item.amount = Number(item.history?.[0]?.amount ?? item.amount) || 0;
 }
 
-export function syncInvestAssetAmounts(data) {
+/** @deprecated syncAppraisedAssetAmount 사용 */
+export function syncInvestAssetAmount(item) {
+  syncAppraisedAssetAmount(item);
+}
+
+export function syncAppraisedAssetAmounts(data) {
   for (const item of data.assets?.items || []) {
-    if (item.type === 'invest' && (item.valuations || []).length) {
-      syncInvestAssetAmount(item);
+    if (APPRAISED_ASSET_TYPES.has(item.type) && (item.valuations || []).length) {
+      syncAppraisedAssetAmount(item);
     }
   }
+}
+
+/** @deprecated syncAppraisedAssetAmounts 사용 */
+export function syncInvestAssetAmounts(data) {
+  syncAppraisedAssetAmounts(data);
 }
 
 export function getInvestmentPnLForMonth(data, year, month) {
@@ -529,7 +545,7 @@ export function load() {
     ensureMemos(data);
     ensureAppLockAuth(data);
     normalizeAuthHousehold(data);
-    syncInvestAssetAmounts(data);
+    syncAppraisedAssetAmounts(data);
     reconcileAllSavingsBudgetSync(data);
     for (const item of data.assets?.items || []) ensureLoanFields(item);
     reconcileAllLoanBudgetSync(data);

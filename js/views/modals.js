@@ -5,7 +5,7 @@ import {
   addCategory, getOwnerDisplayLabel, getSubPayerLabel,
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
   getVisibleSavingsItems, hasSubItems, getVisibleSubItems, SAVINGS_ASSET_TYPES,
-  syncInvestAssetAmount, getSavingsCategory, getLoanAssets, LOAN_REPAYMENT_METHODS,
+  syncAppraisedAssetAmount, getSavingsCategory, getLoanAssets, LOAN_REPAYMENT_METHODS,
 } from '../store.js';
 import { previewLoanSplit, formatLoanSplitSummary } from '../loan-sync.js';
 import {
@@ -15,9 +15,10 @@ import {
   RECORD_SCHEDULES,
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
-  getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue,
-} from '../budget-engine.js';import { fmtMonth, fmtMoney, todayISO, uid } from '../format.js';
-import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal } from '../ui.js';
+  getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue, deleteSubItem,
+} from '../budget-engine.js';
+import { fmtMonth, fmtMoney, todayISO, uid, ymKey } from '../format.js';
+import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal, confirmDialog } from '../ui.js';
 import { validateGoalInput, projectGoalImpact } from '../validators.js';
 
 function bindGoalImpactPreview(form, current = 0) {
@@ -130,10 +131,10 @@ export async function showAssetForm(item, rerender) {
   persist(); toast('저장되었습니다', 'success'); rerender();
 }
 
-export async function showAssetValuationForm(assetId, rerender) {
+export async function showAssetAppraisalForm(assetId, rerender) {
   const item = state.data.assets.items.find((x) => x.id === assetId);
   if (!item) return;
-
+  const typeLabel = item.type === 'realestate' ? '부동산' : '투자';
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
@@ -141,9 +142,9 @@ export async function showAssetValuationForm(assetId, rerender) {
   const existing = (item.valuations || []).find((v) => v.ym === ym);
 
   const res = await openModal({
-    title: '투자 평가금액 기록',
+    title: `${typeLabel} 평가금액 기록`,
     body: `<form id="asset-val-form" class="form-stack">
-      <p class="field-hint">투자 자산의 <strong>${esc(ym)}</strong> 평가금액을 기록합니다. (월별 1회)</p>
+      <p class="field-hint"><strong>${esc(item.name)}</strong> · <strong>${esc(ym)}</strong> 평가금액 (월별 1회)</p>
       ${formField('평가금액', `<input class="input" name="amount" type="number" required min="0" value="${existing?.amount ?? ''}" />`)}
     </form>`,
     actions: [
@@ -158,7 +159,7 @@ export async function showAssetValuationForm(assetId, rerender) {
   item.valuations = item.valuations || [];
   if (action === 'delete') {
     item.valuations = item.valuations.filter((v) => v.ym !== ym);
-    syncInvestAssetAmount(item);
+    syncAppraisedAssetAmount(item);
     item.updatedAt = new Date().toISOString();
     persist();
     toast('삭제되었습니다', 'success');
@@ -179,12 +180,15 @@ export async function showAssetValuationForm(assetId, rerender) {
   if (idx >= 0) item.valuations[idx] = entry;
   else item.valuations.push(entry);
   item.valuations.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
-  syncInvestAssetAmount(item);
+  syncAppraisedAssetAmount(item);
   item.updatedAt = entry.at;
   persist();
   toast('기록되었습니다', 'success');
   rerender();
 }
+
+/** @deprecated showAssetAppraisalForm 사용 */
+export const showAssetValuationForm = showAssetAppraisalForm;
 
 function payerSelect(name, value, data) {
   const opts = OWNERS.map((o) =>
@@ -508,7 +512,7 @@ export async function showBudgetStartForm(rerender) {
   const res = await openModal({
     title: '가계부 시작 월',
     body: `<form id="budget-start-form" class="form-stack">
-      <p class="field-hint">이 달부터 예산·이월을 관리합니다. 그 이전 달은 이월되지 않습니다.</p>
+      <p class="field-hint">이 달부터 예산을 관리합니다. 그 이전 달은 집계되지 않습니다.</p>
       <label class="field">
         <span class="field-label">시작 월</span>
         <div class="setup-start-row">
@@ -582,6 +586,7 @@ export async function showRecordScheduleForm(rerender) {
 
 export async function showMonthlyBudgetForm(year, month, rerender) {
   const cats = getVisibleCategories(state.data);
+  const hasActuals = cats.some((c) => getCategoryPeriodSummary(state.data, year, month, c.id).hasActual);
   const fields = cats.map((c) => {
     const payerLabel = hasSubItems(state.data, c.id)
       ? getSubPayerLabel(state.data, c.id)
@@ -611,12 +616,20 @@ export async function showMonthlyBudgetForm(year, month, rerender) {
   }).join('');
   const res = await openModal({
     title: `${year}년 ${month}월 예산`,
-    body: `<form id="monthly-plan-form" class="form-stack"><p class="field-hint">이 달의 예산을 설정합니다. 다른 달에는 영향을 주지 않습니다.</p>${fields}</form>`,
+    body: `<form id="monthly-plan-form" class="form-stack">
+      <p class="field-hint">이 달의 예산을 설정합니다. 저장 시 해당 월 절약·잔액이 새 예산 기준으로 반영됩니다.</p>
+      ${hasActuals ? '<p class="field-hint" id="monthly-plan-preview">실적이 입력된 항목이 있습니다. 저장 후 절약액이 재계산됩니다.</p>' : ''}
+      ${fields}
+      <label class="toggle-row"><span>이후 미설정 월에도 동일 적용</span>
+        <input type="checkbox" name="copyForward" /></label>
+      <span class="field-hint">같은 연도에서 아직 예산이 없는 미래 월에만 복사합니다.</span>
+    </form>`,
     actions: [{ label: '취소', value: null }, { label: '저장', value: 'save', primary: true }],
   });
   if (modalValue(res) !== 'save') return;
   const fd = modalForm(res);
   if (!fd) return;
+  const copyForward = !!fd.get('copyForward');
   for (const c of cats) {
     if (hasSubItems(state.data, c.id)) {
       for (const item of getVisibleSubItems(state.data, c.id)) {
@@ -630,8 +643,38 @@ export async function showMonthlyBudgetForm(year, month, rerender) {
   for (const c of cats) {
     if (hasSubItems(state.data, c.id)) syncSubEnvelopeMonthlyPlan(state.data, year, month, c.id);
   }
+  if (copyForward) {
+    for (let mo = month + 1; mo <= 12; mo++) {
+      const key = ymKey(year, mo);
+      const hasPlan = !!(state.data.budget.monthlyPlan[key] && Object.keys(state.data.budget.monthlyPlan[key]).length)
+        || !!(state.data.budget.subMonthlyPlan[key] && Object.keys(state.data.budget.subMonthlyPlan[key]).length);
+      if (hasPlan) continue;
+      for (const c of cats) {
+        if (hasSubItems(state.data, c.id)) {
+          for (const item of getVisibleSubItems(state.data, c.id)) {
+            const amt = getSubMonthlyPlanAmount(state.data, year, month, item.id);
+            setSubMonthlyPlanAmount(state.data, year, mo, c.id, item.id, amt);
+          }
+          syncSubEnvelopeMonthlyPlan(state.data, year, mo, c.id);
+        } else {
+          setMonthlyPlanAmount(state.data, year, mo, c.id, getMonthlyPlanAmount(state.data, year, month, c.id));
+        }
+      }
+    }
+  }
   persist();
-  toast('월간 예산이 저장되었습니다', 'success');
+  let previewSaving = 0;
+  for (const c of cats) {
+    if (c.name === '저축') continue;
+    const s = getCategoryPeriodSummary(state.data, year, month, c.id);
+    if (!s.hasActual) continue;
+    const pure = s.monthlyPlanned - s.actual;
+    if (pure > 0) previewSaving += pure;
+  }
+  const msg = hasActuals && previewSaving > 0
+    ? `${month}월 예산 저장 · 변경 후 절약 ${fmtMoney(previewSaving)}`
+    : `${month}월 예산이 저장되었습니다. 해당 월 절약·잔액이 새 예산 기준으로 반영됩니다.`;
+  toast(msg, 'success');
   rerender();
 }
 
@@ -695,7 +738,7 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="sub-actual-form" class="form-stack">
-      <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
+      <p class="field-hint">월 예산 ${fmtMoney(s.monthlyPlanned)}</p>
       <p class="field-hint">세부 항목별 금액을 입력하세요. 합계가 실적으로 반영됩니다.</p>
       ${savingsHint}
       ${loanHint}
@@ -858,7 +901,7 @@ export async function showActualForm(catId, year, month, rerender, options = {})
   const res = await openModal({
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="actual-form" class="form-stack">
-      <p class="field-hint">사용 가능 ${fmtMoney(s.available)} (월 예산 ${fmtMoney(s.monthlyPlanned)} + 이월 ${fmtMoney(s.rolloverIn)})</p>
+      <p class="field-hint">월 예산 ${fmtMoney(s.monthlyPlanned)}</p>
       ${prevHint}
       ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" step="1" required value="${current ?? ''}" />`)}
       ${payerField}
@@ -883,7 +926,7 @@ export async function showActualForm(catId, year, month, rerender, options = {})
   persist();
   const after = getCategoryPeriodSummary(state.data, year, month, catId);
   toast(after.remaining >= 0
-    ? `저장됨 · 잔액 ${fmtMoney(after.remaining)}이 다음 달로 이월됩니다`
+    ? `저장됨 · 잔액 ${fmtMoney(after.remaining)}`
     : `저장됨 · ${fmtMoney(-after.remaining)} 초과 사용`, after.remaining >= 0 ? 'success' : 'error');
   if (!skipRerender) rerender();
   return true;
@@ -1006,11 +1049,15 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
   sheet.querySelectorAll('[data-cat-edit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const cat = allCats.find((c) => c.id === btn.dataset.catEdit);
-      if (cat) await openCategoryEdit(cat, rerender);
+      if (cat) {
+        closeActiveModal();
+        await openCategoryEdit(cat, rerender);
+      }
     });
   });
   sheet.querySelectorAll('[data-sub-manage]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      closeActiveModal();
       showSubItemsManage(btn.dataset.subManage, rerender);
     });
   });
@@ -1103,10 +1150,20 @@ function subItemsManageListBody(cat, isSavings, isHousing, visible, hidden) {
 function bindSubItemEditInSheet(sheet, catId, item, ctx) {
   setModalContent(sheet, { title: '세부 항목 편집', body: buildSubItemEditForm(catId, item) });
   setModalActions(sheet, [
+    { label: '삭제', value: 'delete', danger: true },
     { label: '목록', value: 'back' },
     { label: '저장', value: 'save', primary: true },
-  ], (action, formData) => {
+  ], async (action, formData) => {
     if (action === 'back') {
+      ctx.showList();
+      return;
+    }
+    if (action === 'delete') {
+      const ok = await confirmDialog('세부 항목 삭제', '실적·예산 기록도 함께 삭제됩니다. 계속할까요?');
+      if (modalValue(ok) !== true) return;
+      deleteSubItem(state.data, catId, item.id);
+      persist();
+      toast('삭제되었습니다', 'success');
       ctx.showList();
       return;
     }

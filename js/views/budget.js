@@ -15,7 +15,7 @@ import {
   isBeforeBudgetStart,
   getSubSummary,
 } from '../budget-engine.js';
-import { fmtShort, fmtPct, fmtMonth } from '../format.js';
+import { fmtShort, fmtPct, fmtMonth, fmtMoney } from '../format.js';
 import { esc, emptyState } from '../ui.js';
 import { budgetBar } from '../charts.js';
 import {
@@ -59,12 +59,12 @@ export function renderBudget() {
   const start = getBudgetStart(data);
   const beforeStart = isBeforeBudgetStart(data, y, m);
 
-  // 당월 순수 절약액: 이월 제외, 실적 입력된 항목만, 저축 카테고리 제외
+  // 당월 절약액: 실적 입력된 항목만, 저축 카테고리 제외
   const monthSaved = cats.reduce((sum, c) => {
     if (c.name === '저축') return sum;
     const s = getCategoryPeriodSummary(data, y, m, c.id);
     if (!s.hasActual) return sum;
-    const pureSaving = s.monthlyPlanned - s.actual; // 이월 빼고 순수 예산 대비
+    const pureSaving = s.monthlyPlanned - s.actual;
     return sum + (pureSaving > 0 ? pureSaving : 0);
   }, 0);
   const monthSavings = getMonthSavingsTotal(data, y, m);
@@ -78,22 +78,22 @@ export function renderBudget() {
         <div class="mini-card">
           <span>이번 달 절약</span>
           <strong class="${monthSaved >= 0 ? 'income' : 'danger'}">${fmtShort(monthSaved)}</strong>
-          <span class="mini-card-sub">예산 미사용액</span>
+          <span class="mini-card-sub">월 예산 − 실적 (${fmtMoney(monthSaved)})</span>
         </div>
         <div class="mini-card">
           <span>이번 달 저축</span>
           <strong class="income">${fmtShort(monthSavings)}</strong>
-          <span class="mini-card-sub">저축 실적</span>
+          <span class="mini-card-sub">저축 세부 실적</span>
         </div>
         <div class="mini-card">
           <span>누적 절약</span>
           <strong class="${cumSaved >= 0 ? 'income' : 'danger'}">${fmtShort(cumSaved)}</strong>
-          <span class="mini-card-sub">관리 시작 이후</span>
+          <span class="mini-card-sub">각 달 월 예산 − 실적 합계</span>
         </div>
         <div class="mini-card">
           <span>누적 저축</span>
           <strong class="income">${fmtShort(cumSavings)}</strong>
-          <span class="mini-card-sub">관리 시작 이후</span>
+          <span class="mini-card-sub">저축 세부 실적 합계</span>
         </div>
       </div>
     </section>` : '';
@@ -143,19 +143,16 @@ export function renderBudget() {
             ${s.hasActual ? `<span class="badge badge-active">${fmtPct(monthPct)}</span>` : ''}
           </div>
         </div>
-        <div class="budget-envelope-grid">
+        <div class="budget-envelope-grid budget-envelope-grid--4">
           <div><span class="lbl">월 예산</span><span>${fmtShort(s.monthlyPlanned)}</span></div>
-          <div><span class="lbl">이월</span><span class="${s.rolloverIn >= 0 ? 'income' : 'danger'}">${s.rolloverIn >= 0 ? '+' : ''}${fmtShort(s.rolloverIn)}</span></div>
-          <div><span class="lbl">사용 가능</span><strong>${fmtShort(s.available)}</strong></div>
           <div><span class="lbl">실적</span><strong class="${s.hasActual ? '' : 'muted'}">${s.hasActual ? fmtShort(s.actual) : '—'}</strong></div>
           <div><span class="lbl">당월 차이</span><strong class="${monthDeltaFmt.cls}">${monthDeltaFmt.text}</strong></div>
+          <div><span class="lbl">잔액</span><strong class="${s.remaining >= 0 ? 'income' : 'danger'}">${fmtShort(s.remaining)}</strong></div>
         </div>
         ${sub ? `<p class="budget-savings-hint muted">${sub.filledCount}/${sub.itemCount}개 항목 입력 · 합계 ${fmtShort(sub.total)}</p>` : ''}
         ${budgetBar(s.actual, s.monthlyPlanned, '#1a5c44')}
-        <p class="budget-bar-caption muted">월 예산 기준 · 이월 포함 잔액 ${fmtShort(s.remaining)}</p>
+        <p class="budget-bar-caption muted">월 예산 대비 사용 ${fmtShort(s.actual)} / ${fmtShort(s.monthlyPlanned)}</p>
         <div class="budget-envelope-foot">
-          <span class="${s.remaining >= 0 ? 'income' : 'danger'}">잔액 ${fmtShort(s.remaining)}</span>
-          ${s.remaining > 0 && s.hasActual ? '<span class="muted">→ 다음 달 이월</span>' : ''}
           ${canEdit ? recordBtn : s.beforeStart ? '<span class="muted">관리 시작 전</span>' : '<span class="muted">입력 시점 이후</span>'}
         </div>
       </div>`;
@@ -169,13 +166,8 @@ export function renderBudget() {
     <section class="summary-row">
       <div class="mini-card"><span>월 예산 합계</span><strong>${fmtShort(totals.planned)}</strong></div>
       <div class="mini-card"><span>당월 초과/절약</span><strong class="${monthDeltaFmt.cls}">${monthDeltaFmt.text}</strong></div>
-      <div class="mini-card"><span>이월 포함</span><strong>${fmtShort(totals.available)}</strong></div>
-      <div class="mini-card"><span>실적 합계</span><strong class="${totals.actual > totals.available ? 'danger' : ''}">${fmtShort(totals.actual)}</strong></div>
-    </section>
-    <section class="hero-card small rollover-card">
-      <p class="hero-label">이번 달 잔액 (다음 달 이월 예정)</p>
-      <p class="hero-value ${totals.remaining >= 0 ? 'up' : 'down'}">${fmtShort(totals.remaining)}</p>
-      <p class="hero-sub">당월 ${monthDeltaFmt.text} · 전월 이월 ${fmtShort(totals.rolloverIn)} · 실적 ${fmtShort(totals.actual)}</p>
+      <div class="mini-card"><span>실적 합계</span><strong class="${totals.actual > totals.planned ? 'danger' : ''}">${fmtShort(totals.actual)}</strong></div>
+      <div class="mini-card"><span>잔액 합계</span><strong class="${totals.remaining >= 0 ? 'income' : 'danger'}">${fmtShort(totals.remaining)}</strong></div>
     </section>
 
     ${savingsStatsCard}
@@ -205,8 +197,8 @@ export function renderBudget() {
       <div class="section-head"><h2>이용 방법</h2></div>
       <ol class="setup-flow-list compact">
         <li>항목별 <strong>월간 예산</strong>을 설정합니다</li>
-        <li>시작 월 이후, 전월 잔액이 이번 달 <strong>이월</strong>로 더해집니다</li>
         <li>설정한 시점 이후 항목별 <strong>실적</strong>을 입력하세요</li>
+        <li>월 예산과 실적 차이가 <strong>절약</strong>으로 집계됩니다</li>
       </ol>
     </section>`;
 }

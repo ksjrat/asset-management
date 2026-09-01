@@ -160,17 +160,32 @@ export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
         if (primary) tryFinish(primary.value ?? primary.label);
       });
     }
-    // 모달 시트 내 터치는 overlay로 전파 차단 → 스크롤 중 실수로 닫히지 않도록
-    sheet.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
-    sheet.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: true });
+    // 모달 시트·본문 터치는 overlay로 전파 차단 (apple.css에서 스크롤은 .modal-body)
+    const stopTouch = (e) => { e.stopPropagation(); };
+    for (const el of [sheet, sheet.querySelector('.modal-body')].filter(Boolean)) {
+      el.addEventListener('touchstart', stopTouch, { passive: true });
+      el.addEventListener('touchmove', stopTouch, { passive: true });
+      el.addEventListener('touchend', stopTouch, { passive: true });
+    }
 
-    // overlay 배경 클릭(터치) 시에만 닫힘
+    // overlay 배경 탭 시에만 닫힘 (스크롤 rubber-band 오인 방지)
     let touchStartedOnOverlay = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
     overlay.addEventListener('touchstart', (e) => {
       touchStartedOnOverlay = e.target === overlay;
+      if (touchStartedOnOverlay && e.changedTouches?.[0]) {
+        touchStartX = e.changedTouches[0].clientX;
+        touchStartY = e.changedTouches[0].clientY;
+      }
     }, { passive: true });
     overlay.addEventListener('touchend', (e) => {
-      if (touchStartedOnOverlay && e.target === overlay) finish(null);
+      if (touchStartedOnOverlay && e.target === overlay) {
+        const t = e.changedTouches?.[0];
+        const dx = t ? Math.abs(t.clientX - touchStartX) : 0;
+        const dy = t ? Math.abs(t.clientY - touchStartY) : 0;
+        if (dx < 10 && dy < 10) finish(null);
+      }
       touchStartedOnOverlay = false;
     });
     overlay.addEventListener('click', (e) => {
