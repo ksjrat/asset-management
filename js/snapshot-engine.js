@@ -84,13 +84,14 @@ function applyValuationsThroughMonth(data, throughYm) {
 }
 
 /** 특정 월 말 기준 순자산 (저축·대출 원금 반영 replay) */
-export function computeNetWorthAtMonth(data, year, month, computeNetWorth) {
+export function computeNetWorthAtMonth(data, year, month, computeNetWorthFn) {
   const sim = structuredClone(data);
   resetAssetsForSimulation(sim);
   reconcileSavingsThroughMonth(sim, year, month);
   reconcileLoansThroughMonth(sim, year, month);
-  applyValuationsThroughMonth(sim, ymKey(year, month));
-  return computeNetWorth(sim);
+  const throughYm = ymKey(year, month);
+  applyValuationsThroughMonth(sim, throughYm);
+  return computeNetWorthFn(sim, throughYm);
 }
 
 export function monthHasBudgetEntry(data, year, month) {
@@ -179,7 +180,9 @@ export function rebuildAutoSnapshots(data, computeNetWorth) {
     (data.assets.snapshots || []).map((s) => [`${s.year}-${s.month}`, s]),
   );
   const newSnaps = months.map(({ year, month }) => {
-    const nw = computeNetWorthAtMonth(data, year, month, computeNetWorth);
+    const nw = computeNetWorthAtMonth(
+      data, year, month, (d, throughYm) => computeNetWorth(d, 'all', throughYm),
+    );
     const key = `${year}-${month}`;
     const prev = prevByKey.get(key);
     return {

@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v72';
+const CACHE = 'couple-asset-v74';
 const ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,12 @@ const ASSETS = [
   './js/views/modals.js',
   './js/validators.js',
   './js/budget-engine.js',
+  './js/budget-data.js',
+  './js/snapshot-engine.js',
+  './js/savings-sync.js',
+  './js/loan-sync.js',
+  './js/loan-amort.js',
+  './js/app-lock.js',
   './js/icons.js',
   './js/views/setup.js',
   './js/sync.js',

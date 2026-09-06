@@ -1,7 +1,7 @@
 import { initUI } from './ui.js';
 import { renderApp } from './views/index.js';
 import { state, leaveStartScreen, persist, persistAuthFlags } from './state.js';
-import { load, hasUserFinancialData } from './store.js';
+import { load, hasUserFinancialData, getNetWorthDiagnosis } from './store.js';
 import { isAppPinConfigured } from './app-lock.js';
 import { setupCloudSync } from './sync-service.js';
 import { initPwaInstall } from './pwa-install.js';
@@ -31,6 +31,10 @@ async function bootstrap() {
   setupCloudSync().then((ok) => {
     if (ok) import('./views/index.js').then((m) => m.renderApp());
   });
+
+  /** 개발·진단: 콘솔에서 getNetWorthDiagnosis(2026, 5) */
+  window.getNetWorthDiagnosis = (year, month, ownerFilter = 'all') =>
+    getNetWorthDiagnosis(state.data, year, month, ownerFilter);
 }
 
 function isLocalDevHost() {

@@ -67,7 +67,7 @@ function plotX(index, count, plotLeft, plotWidth) {
   return plotLeft + (index / (count - 1)) * plotWidth;
 }
 
-export function lineChart(points, { width = 340, height = 200, color = '#1e4d3a' } = {}) {
+export function lineChart(points, { width = 340, height = 200, color = '#1e4d3a', yMin = null, yMax = null } = {}) {
   if (!points.length) {
     return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" aria-hidden="true">
       <text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#6b7a72" font-size="12">데이터 없음</text>
@@ -75,7 +75,14 @@ export function lineChart(points, { width = 340, height = 200, color = '#1e4d3a'
   }
 
   const vals = points.map((p) => p.value);
-  const { min, max, step } = computeYDomain(vals);
+  let { min, max, step } = computeYDomain(vals);
+  if (yMin != null && Number.isFinite(yMin)) min = Math.min(min, yMin);
+  if (yMax != null && Number.isFinite(yMax)) max = Math.max(max, yMax);
+  if (min !== max || yMin != null) {
+    step = niceStep(max - min);
+    min = Math.floor(min / step) * step;
+    max = Math.ceil(max / step) * step;
+  }
   const plotLeft = AXIS.left;
   const plotTop = AXIS.top;
   const plotWidth = width - AXIS.left - AXIS.right;

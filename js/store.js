@@ -285,6 +285,14 @@ export function getMonthSavedAmount(data, year, month) {
   return getMonthSavedBreakdown(data, year, month).total;
 }
 
+/** 저축+주택 원금 / 해당 월 수익 (0~1, 수익 없으면 null) */
+export function getMonthSavingsRateVsIncome(data, year, month) {
+  const { savings, principal } = getMonthSavedBreakdown(data, year, month);
+  const income = getMonthCashflowSummary(data, year, month).income;
+  if (!income || income <= 0) return null;
+  return (savings + principal) / income;
+}
+
 function monthHasSavedInputs(data, year, month) {
   const b = getMonthSavedBreakdown(data, year, month);
   return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetBalance !== 0;
@@ -350,9 +358,29 @@ export function getMonthlySavedSeries(data, limit = 12) {
   return rows.slice(-limit);
 }
 
+/** 관리 시작 0원부터 월별 누적 모은 금액 (차트용) */
+export function getMonthlyCumulativeSavedSeries(data, limit = 999) {
+  const rows = [];
+  let cumulative = 0;
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    const breakdown = getMonthSavedBreakdown(data, y, m);
+    cumulative += breakdown.total;
+    rows.push({
+      year: y,
+      month: m,
+      monthSaved: breakdown.total,
+      cumulative,
+      ...breakdown,
+    });
+  });
+  return rows.slice(-limit);
+}
+
 /** 월별 총자산 (말잔, 차트용) */
 export function getMonthlyAssetSeries(data, ownerFilter = 'all', limit = 12) {
-  const nwAt = (y, m) => computeNetWorthAtMonth(data, y, m, (d) => computeNetWorth(d, ownerFilter));
+  const nwAt = (y, m) => computeNetWorthAtMonth(
+    data, y, m, (d, throughYm) => computeNetWorth(d, ownerFilter, throughYm),
+  );
   const rows = [];
   eachBudgetMonthUpToNow(data, (y, m) => {
     rows.push({ year: y, month: m, assets: nwAt(y, m).assets });
@@ -362,7 +390,9 @@ export function getMonthlyAssetSeries(data, ownerFilter = 'all', limit = 12) {
 
 /** 월별 총자산 변화 (전월 대비) */
 export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 12) {
-  const nwAt = (y, m) => computeNetWorthAtMonth(data, y, m, (d) => computeNetWorth(d, ownerFilter));
+  const nwAt = (y, m) => computeNetWorthAtMonth(
+    data, y, m, (d, throughYm) => computeNetWorth(d, ownerFilter, throughYm),
+  );
   const rows = [];
   eachBudgetMonthUpToNow(data, (y, m) => {
     const { assets } = nwAt(y, m);
@@ -456,11 +486,16 @@ export function getLatestValuation(item) {
 
 const APPRAISED_ASSET_TYPES = new Set(['invest', 'realestate']);
 
-/** 투자·부동산은 최신 평가금액, 그 외는 등록 금액 */
-export function getEffectiveAssetAmount(item) {
+/** 투자·부동산은 평가금액(throughYm 있으면 해당 월말까지), 그 외는 등록 금액 */
+export function getEffectiveAssetAmount(item, throughYm = null) {
   if (APPRAISED_ASSET_TYPES.has(item.type)) {
-    const latest = getLatestValuation(item);
-    if (latest) return Number(latest.amount) || 0;
+    if (throughYm) {
+      const atMonth = valuationAtMonthEnd(item, throughYm);
+      if ((item.valuations || []).some((v) => v.ym <= throughYm)) return atMonth;
+    } else {
+      const latest = getLatestValuation(item);
+      if (latest) return Number(latest.amount) || 0;
+    }
   }
   return Number(item.amount) || 0;
 }
@@ -771,18 +806,63 @@ export function getHiddenCategories(data) {
   return data.budget.categories.filter((c) => !visibleIds.has(c.id));
 }
 
-export function computeNetWorth(data, ownerFilter = 'all') {
+export function computeNetWorth(data, ownerFilter = 'all', throughYm = null) {
   let assets = 0;
   let liabilities = 0;
   for (const item of data.assets.items) {
     if (ownerFilter !== 'all' && item.owner !== ownerFilter) continue;
     const type = ASSET_TYPES.find((t) => t.id === item.type);
     if (!type) continue;
-    const amount = getEffectiveAssetAmount(item);
+    const amount = getEffectiveAssetAmount(item, throughYm);
     if (type.group === 'asset') assets += amount;
     else liabilities += amount;
   }
   return { assets, liabilities, net: assets - liabilities };
+}
+
+function assetBaseBeforeBudgetSync(item) {
+  if (item.type === 'loan') {
+    const base = item.originalPrincipal ?? item.history?.find((h) => h.source !== 'budget-sync')?.amount
+      ?? item.history?.[0]?.amount ?? item.amount;
+    return Math.max(0, Number(base) || 0);
+  }
+  const h = (item.history || []).find((x) => x.source !== 'budget-sync') || item.history?.[0];
+  return h ? Math.max(0, Number(h.amount) || 0) : Math.max(0, Number(item.amount) || 0);
+}
+
+/** 홈 vs 월말 replay 차이 진단 (브라우저 콘솔·스크립트용) */
+export function getNetWorthDiagnosis(data, year, month, ownerFilter = 'all') {
+  const throughYm = ymKey(year, month);
+  const current = computeNetWorth(data, ownerFilter);
+  const atMonth = computeNetWorthAtMonth(
+    data, year, month, (d, ym) => computeNetWorth(d, ownerFilter, ym),
+  );
+  const items = (data.assets?.items || []).flatMap((item) => {
+    if (ownerFilter !== 'all' && item.owner !== ownerFilter) return [];
+    const type = ASSET_TYPES.find((t) => t.id === item.type);
+    if (!type) return [];
+    const cur = getEffectiveAssetAmount(item);
+    const at = getEffectiveAssetAmount(item, throughYm);
+    return [{
+      id: item.id,
+      name: item.name,
+      type: type.label,
+      group: type.group,
+      baseBeforeBudgetSync: assetBaseBeforeBudgetSync(item),
+      currentEffective: cur,
+      monthEndEffective: at,
+      mismatch: cur !== at,
+    }];
+  });
+  return {
+    budgetStart: getBudgetStart(data),
+    year,
+    month,
+    current,
+    monthEndReplay: atMonth,
+    assetGap: current.assets - atMonth.assets,
+    items,
+  };
 }
 
 /** 저축·대출 원금 반영 월별 순자산 자동 기록 */
@@ -885,7 +965,9 @@ export function getCategoryBudgetOveruse(data, year, month, limit = 5) {
 }
 
 export function createSnapshot(data, year, month) {
-  const { assets, liabilities, net } = computeNetWorthAtMonth(data, year, month, computeNetWorth);
+  const { assets, liabilities, net } = computeNetWorthAtMonth(
+    data, year, month, (d, throughYm) => computeNetWorth(d, 'all', throughYm),
+  );
   const snap = { id: uid(), year, month, assets, liabilities, net, source: 'manual', createdAt: now(), updatedAt: now() };
   const idx = data.assets.snapshots.findIndex((s) => s.year === year && s.month === month);
   if (idx >= 0) data.assets.snapshots[idx] = snap;

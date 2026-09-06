@@ -1,0 +1,48 @@
+{
+  "budget": {
+    "setupDone": true,
+    "startYear": 2026,
+    "startMonth": 5,
+    "categories": [{ "id": "c1", "name": "저축", "hidden": false }],
+    "subItemsByCategory": {
+      "c1": [{ "id": "s1", "name": "적금", "assetId": "a1" }]
+    },
+    "subActuals": {
+      "2026-05": { "s1": 1000000 },
+      "2026-06": { "s1": 2940000 }
+    }
+  },
+  "assets": {
+    "items": [
+      {
+        "id": "a1",
+        "name": "적금통장",
+        "type": "savings",
+        "owner": "joint",
+        "amount": 871160565,
+        "history": [{ "amount": 870160565, "source": "manual" }],
+        "savingsLog": [
+          { "id": "budget-sync-s1-2026-05", "amount": 1000000, "source": "budget", "year": 2026, "month": 5 },
+          { "id": "budget-sync-s1-2026-06", "amount": 2940000, "source": "budget", "year": 2026, "month": 6 }
+        ]
+      },
+      {
+        "id": "a2",
+        "name": "주식",
+        "type": "invest",
+        "owner": "joint",
+        "amount": 200000000,
+        "history": [{ "amount": 150000000, "source": "manual" }],
+        "valuations": [
+          { "ym": "2026-05", "amount": 160000000, "source": "manual" },
+          { "ym": "2026-08", "amount": 200000000, "source": "manual" }
+        ]
+      }
+    ],
+    "snapshots": []
+  },
+  "transactions": [],
+  "settings": {},
+  "goals": [],
+  "auth": {}
+}
