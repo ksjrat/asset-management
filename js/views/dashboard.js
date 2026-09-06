@@ -9,7 +9,7 @@ import {
   setHomeOwnerFilter,
   getMonthSavedBreakdown,
   getCumulativeSavedAmount,
-  getMonthlySavedSeries,
+  getMonthlyAssetChangeSeries,
   monthHasUserBudgetActuals,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
@@ -41,17 +41,17 @@ export function renderDashboard() {
   const prevSaved = getMonthSavedBreakdown(data, prev.year, prev.month);
   const cumSaved = getCumulativeSavedAmount(data);
   const savedDelta = saved.total - prevSaved.total;
-  const savedSeries = getMonthlySavedSeries(data, 999);
-  const chartRows = savedSeries.slice(-12);
-  const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.total }));
-  const latestSaved = chartRows.length ? chartRows[chartRows.length - 1].total : 0;
-  const monthlySavedList = savedSeries.length ? `
+  const assetSeries = getMonthlyAssetChangeSeries(data, ownerFilter, 999);
+  const chartRows = assetSeries.slice(-12);
+  const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.change }));
+  const latestAssetChange = chartRows.length ? chartRows[chartRows.length - 1].change : 0;
+  const monthlyAssetList = assetSeries.length ? `
       <div class="spend-delta-list saved-month-list">
-        ${[...savedSeries].reverse().map((r) => `
+        ${[...assetSeries].reverse().map((r) => `
           <div class="spend-delta-row">
             <span class="spend-delta-name">${esc(fmtMonth(r.year, r.month))}</span>
-            <span class="spend-delta-detail muted">저축 ${fmtShort(r.savings)} · 원금 ${fmtShort(r.principal)} · 예산 ${r.budgetBalance >= 0 ? '+' : ''}${fmtShort(r.budgetBalance)}</span>
-            <span class="spend-delta-change ${r.total >= 0 ? '' : 'up'}">${r.total >= 0 ? '+' : ''}${fmtMoney(r.total)}</span>
+            <span class="spend-delta-detail muted">총자산 ${fmtShort(r.assets)}</span>
+            <span class="spend-delta-change ${r.change >= 0 ? '' : 'up'}">${r.change >= 0 ? '+' : ''}${fmtMoney(r.change)}</span>
           </div>`).join('')}
       </div>` : '';
 

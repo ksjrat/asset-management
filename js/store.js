@@ -215,7 +215,7 @@ export function getMonthCashflowSummary(data, year, month) {
   return { income, expense, savings, investPnL };
 }
 
-/** 해당 월 예산 절약 (월 예산−실적 양수만, 저축·주거 제외) */
+/** 해당 월 예산 절약 (월 예산−실적 양수만, 저축·주거 제외) — 참고용 */
 export function getMonthBudgetSavings(data, year, month) {
   if (!data.budget?.setupDone || isBeforeBudgetStart(data, year, month)) return 0;
   const cats = getVisibleCategories(data);
@@ -407,12 +407,12 @@ export function getCumulativeSavingsTotal(data) {
   return total;
 }
 
-/** 예산 관리 시작 이후 전체 월의 누적 절약액 (월 예산 - 실적, 양수만 합산) */
+/** 예산 관리 시작 이후 누적 예산 절약·초과 (저축 제외 · 월별 순잔액 합) */
 export function getCumulativeBudgetSavings(data) {
   if (!data.budget?.setupDone) return 0;
   let total = 0;
   eachBudgetMonthUpToNow(data, (y, m) => {
-    total += getMonthBudgetSavings(data, y, m);
+    total += getMonthBudgetBalance(data, y, m);
   });
   return total;
 }

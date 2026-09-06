@@ -109,8 +109,8 @@ export function renderBudget() {
         </div>
         <div class="mini-card">
           <span>누적 절약</span>
-          <strong class="${cumSaved >= 0 ? 'income' : 'danger'}">${fmtShort(cumSaved)}</strong>
-          <span class="mini-card-sub">각 달 월 예산 − 실적 합계</span>
+          <strong class="${cumSaved >= 0 ? 'income' : 'danger'}">${cumSaved >= 0 ? '+' : ''}${fmtShort(cumSaved)}</strong>
+          <span class="mini-card-sub">예산 절약·초과 순합 (저축·원금 제외)</span>
         </div>
         <div class="mini-card">
           <span>누적 저축</span>
