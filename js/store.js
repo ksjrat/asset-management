@@ -354,6 +354,30 @@ export function getEffectiveAssetAmount(item) {
   return Number(item.amount) || 0;
 }
 
+/** 투자·부동산 평가 손익에 쓸 「사용자 평가」인지 (저축 자동·0원 제외) */
+export function isUserAppraisalValuation(v) {
+  if (!v || Number(v.amount) <= 0) return false;
+  if (v.source === 'budget-sync') return false;
+  return true;
+}
+
+/** amount 0인 평가 찌꺼기 제거 (0원 저장 시 −전월잔액 손익 오류 방지) */
+export function pruneZeroValuations(data) {
+  for (const item of data.assets?.items || []) {
+    if (!item.valuations?.length) continue;
+    item.valuations = item.valuations.filter((v) => Number(v.amount) > 0);
+  }
+}
+
+function valuationAtMonthEnd(item, ym) {
+  const vals = (item.valuations || []).filter((v) => v.ym <= ym);
+  if (!vals.length) {
+    return Number(item.history?.[0]?.amount ?? item.amount) || 0;
+  }
+  vals.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+  return Number(vals[vals.length - 1].amount) || 0;
+}
+
 function valuationBaselineAmount(item, prevYmStr, curYm) {
   const vals = item.valuations || [];
   const prevVal = vals.find((v) => v.ym === prevYmStr);
@@ -390,15 +414,15 @@ export function syncInvestAssetAmounts(data) {
 export function getInvestmentPnLForMonth(data, year, month) {
   const curYm = ymStr(year, month);
   const prev = prevYm(year, month);
-  const items = (data.assets?.items || []).filter((i) => i.type === 'invest');
+  const items = (data.assets?.items || []).filter((i) => APPRAISED_ASSET_TYPES.has(i.type));
   const perAsset = [];
   let pnl = 0;
 
   for (const it of items) {
     const vals = it.valuations || [];
     const curVal = vals.find((v) => v.ym === curYm);
-    if (!curVal) continue;
-    const previous = valuationBaselineAmount(it, prev.ym, curYm);
+    if (!isUserAppraisalValuation(curVal)) continue;
+    const previous = valuationAtMonthEnd(it, prev.ym);
     const current = Number(curVal.amount);
     const delta = current - previous;
     if (!Number.isFinite(delta)) continue;
@@ -613,6 +637,7 @@ export function load() {
     reconcileAllSavingsBudgetSync(data);
     for (const item of data.assets?.items || []) ensureLoanFields(item);
     reconcileAllLoanBudgetSync(data);
+    pruneZeroValuations(data);
     data = recoverBudgetActualsFromSafety(data);
     return data;
   } catch {
@@ -621,6 +646,7 @@ export function load() {
 }
 
 export function save(data) {
+  pruneZeroValuations(data);
   data.version = DATA_VERSION;
   localStorage.setItem(KEY, JSON.stringify(data));
   saveSafetyBackup(data);

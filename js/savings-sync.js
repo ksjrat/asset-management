@@ -73,17 +73,25 @@ function applyAppraisedSavingsDelta(asset, year, month, delta) {
   const ym = ymKey(year, month);
   asset.valuations = asset.valuations || [];
   const existing = asset.valuations.find((v) => v.ym === ym);
+  if (existing?.source === 'manual') return;
   if (existing) {
-    existing.amount = Math.max(0, Number(existing.amount) + delta);
+    const next = Math.max(0, Number(existing.amount) + delta);
+    if (next <= 0) {
+      asset.valuations = asset.valuations.filter((v) => v.ym !== ym);
+      return;
+    }
+    existing.amount = next;
     existing.at = new Date().toISOString();
-    existing.source = existing.source || 'budget-sync';
+    existing.source = 'budget-sync';
     return;
   }
   const latest = asset.valuations.length ? asset.valuations[asset.valuations.length - 1] : null;
   const base = latest ? Number(latest.amount) : Math.max(0, (asset.amount || 0) - delta);
+  const next = Math.max(0, base + delta);
+  if (next <= 0) return;
   asset.valuations.push({
     ym,
-    amount: Math.max(0, base + delta),
+    amount: next,
     at: new Date().toISOString(),
     source: 'budget-sync',
   });

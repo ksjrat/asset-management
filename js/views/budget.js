@@ -107,7 +107,7 @@ export function renderBudget() {
         <div class="mini-card">
           <span>이번 달 투자 수입</span>
           <strong class="${monthInvest >= 0 ? 'income' : 'danger'}">${monthInvest >= 0 ? '+' : ''}${fmtShort(monthInvest)}</strong>
-          <span class="mini-card-sub">투자·부동산 평가 전월 대비</span>
+          <span class="mini-card-sub">자산 탭에서 직접 기록한 평가 손익</span>
         </div>
         <div class="mini-card">
           <span>누적 모은 금액</span>

@@ -174,8 +174,17 @@ export async function showAssetAppraisalForm(assetId, rerender) {
     toast('평가금액을 올바르게 입력하세요', 'error');
     return;
   }
+  if (amount === 0) {
+    item.valuations = item.valuations.filter((v) => v.ym !== ym);
+    syncAppraisedAssetAmount(item);
+    item.updatedAt = new Date().toISOString();
+    persist();
+    toast('평가 기록을 제거했습니다', 'success');
+    rerender();
+    return;
+  }
 
-  const entry = { ym, amount, at: new Date().toISOString() };
+  const entry = { ym, amount, at: new Date().toISOString(), source: 'manual' };
   const idx = item.valuations.findIndex((v) => v.ym === ym);
   if (idx >= 0) item.valuations[idx] = entry;
   else item.valuations.push(entry);
