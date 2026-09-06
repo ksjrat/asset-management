@@ -6,7 +6,7 @@ import {
   getVisibleSubItems,
 } from './budget-engine.js';
 
-const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest']);
+const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest', 'realestate']);
 
 function getSavingsEligibleAssets(data) {
   return (data.assets?.items || []).filter((i) => SAVINGS_ASSET_TYPES.has(i.type));
@@ -67,8 +67,8 @@ function prevSyncedAmount(data, asset, itemId, year, month) {
   return legacySyncedAmount(data, itemId, year, month);
 }
 
-/** 투자 자산: 저축 실적 반영 시 당월 평가금액도 함께 조정 (순자산에 반영되도록) */
-function applyInvestSavingsDelta(asset, year, month, delta) {
+/** 투자·부동산: 저축 실적 반영 시 당월 평가금액도 함께 조정 (순자산에 반영되도록) */
+function applyAppraisedSavingsDelta(asset, year, month, delta) {
   if (!delta) return;
   const ym = ymKey(year, month);
   asset.valuations = asset.valuations || [];
@@ -76,6 +76,7 @@ function applyInvestSavingsDelta(asset, year, month, delta) {
   if (existing) {
     existing.amount = Math.max(0, Number(existing.amount) + delta);
     existing.at = new Date().toISOString();
+    existing.source = existing.source || 'budget-sync';
     return;
   }
   const latest = asset.valuations.length ? asset.valuations[asset.valuations.length - 1] : null;
@@ -87,6 +88,11 @@ function applyInvestSavingsDelta(asset, year, month, delta) {
     source: 'budget-sync',
   });
   asset.valuations.sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+}
+
+/** @deprecated applyAppraisedSavingsDelta 사용 */
+function applyInvestSavingsDelta(asset, year, month, delta) {
+  applyAppraisedSavingsDelta(asset, year, month, delta);
 }
 
 export function syncSavingsSubActualToAsset(data, year, month, itemId, newAmount) {
@@ -125,8 +131,8 @@ export function syncSavingsSubActualToAsset(data, year, month, itemId, newAmount
 
   if (delta !== 0) {
     asset.amount = Math.max(0, (asset.amount || 0) + delta);
-    if (asset.type === 'invest') {
-      applyInvestSavingsDelta(asset, year, month, delta);
+    if (asset.type === 'invest' || asset.type === 'realestate') {
+      applyAppraisedSavingsDelta(asset, year, month, delta);
     }
     asset.history = asset.history || [];
     asset.history.push({

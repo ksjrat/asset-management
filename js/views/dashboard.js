@@ -1,16 +1,15 @@
 import { state, persist, setTab, setMonth } from '../state.js';
 import {
   computeNetWorth,
-  createSnapshot,
   getVisibleHomeOwnerFilters,
-  getMonthCashflowSummary,
   getVisibleCategories,
   getHomeSummaryMonth,
-  getSnapshotAtMonth,
-  getPreviousSnapshot,
   getCategoryBudgetOveruse,
   prevYm,
   setHomeOwnerFilter,
+  getMonthSavedBreakdown,
+  getCumulativeSavedAmount,
+  getMonthlySavedSeries,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
 import { lineChart, legend, budgetBar } from '../charts.js';
@@ -37,25 +36,12 @@ export function renderDashboard() {
   const ownerFilter = state.ownerFilter;
   const nw = computeNetWorth(data, ownerFilter);
 
-  const snaps = [...data.assets.snapshots]
-    .sort((a, b) => a.year - b.year || a.month - b.month).slice(-6);
-  if (!snaps.length && data.assets.items.length) {
-    createSnapshot(data, sy, sm);
-    persist();
-  }
-  const chartPts = snaps.map((s) => ({ label: `${s.month}월`, value: s.net }));
-
-  const summarySnap = getSnapshotAtMonth(data, sy, sm);
-  const prevSnap = getPreviousSnapshot(data, sy, sm);
-  let nwDelta = null;
-  let nwDeltaPct = 0;
-  if (summarySnap && prevSnap) {
-    nwDelta = summarySnap.net - prevSnap.net;
-    nwDeltaPct = prevSnap.net ? nwDelta / Math.abs(prevSnap.net) : 0;
-  } else if (prevSnap) {
-    nwDelta = nw.net - prevSnap.net;
-    nwDeltaPct = prevSnap.net ? nwDelta / Math.abs(prevSnap.net) : 0;
-  }
+  const saved = getMonthSavedBreakdown(data, sy, sm);
+  const prevSaved = getMonthSavedBreakdown(data, prev.year, prev.month);
+  const cumSaved = getCumulativeSavedAmount(data);
+  const savedDelta = saved.total - prevSaved.total;
+  const chartRows = getMonthlySavedSeries(data, 12);
+  const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.total }));
 
   const ownerChipRow = visibleOwnerFilters.length > 1
     ? `<div class="chip-row">${visibleOwnerFilters.map((o) =>
@@ -63,8 +49,6 @@ export function renderDashboard() {
     ).join('')}</div>`
     : '';
 
-  const flow = getMonthCashflowSummary(data, sy, sm);
-  const prevFlow = getMonthCashflowSummary(data, prev.year, prev.month);
   const cats = getVisibleCategories(data);
   const budgetTotals = data.budget?.setupDone
     ? getPeriodTotals(data, sy, sm, cats)
@@ -115,9 +99,9 @@ export function renderDashboard() {
       </div>
     </section>` : '';
 
-  const heroSub = nwDelta != null
-    ? `${fmtMonth(sy, sm)} 순자산 ${nwDelta >= 0 ? '+' : ''}${fmtShort(nwDelta)} (${fmtPct(nwDeltaPct)})`
-    : '첫 기록 — 스냅샷으로 추이를 쌓아보세요';
+  const heroSub = chartRows.length
+    ? `${fmtMonth(sy, sm)} ${saved.total >= 0 ? '+' : ''}${fmtShort(saved.total)} ${momBadge(savedDelta)}`
+    : '수입·저축·주택 원금·투자 수입·예산 실적을 입력하면 집계됩니다';
 
   return `
     ${needsLinkAttention() ? '<button type="button" class="tip-banner" id="btn-link-setup">📱 PC·폰·배우자 연동 마무리 · 연동 도우미</button>' : ''}
@@ -125,35 +109,43 @@ export function renderDashboard() {
     ${dueBanner}
 
     <section class="hero-card">
-      <p class="hero-label">순자산 · 현재</p>
-      <p class="hero-value">${fmtMoney(nw.net)}</p>
-      <p class="hero-sub ${nwDelta != null && nwDelta >= 0 ? 'up' : nwDelta != null ? 'down' : ''}">
+      <p class="hero-label">관리 시작 이래 모은 금액</p>
+      <p class="hero-value">${fmtMoney(cumSaved)}</p>
+      <p class="hero-sub ${saved.total >= 0 ? 'up' : saved.total < 0 ? 'down' : ''}">
         ${heroSub}
       </p>
-      <div class="hero-row">
-        <div><span class="mini-label">총자산</span><span class="mini-val">${fmtShort(nw.assets)}</span></div>
-        <div><span class="mini-label">총부채</span><span class="mini-val danger">${fmtShort(nw.liabilities)}</span></div>
-      </div>
+      <p class="muted" style="font-size:12px;margin-top:6px">순자산 ${fmtMoney(nw.net)} · 총자산 ${fmtShort(nw.assets)} · 부채 ${fmtShort(nw.liabilities)}</p>
     </section>
 
     <section class="section">
-      <p class="month-label">${fmtMonth(sy, sm)} 정산</p>
+      <div class="section-head"><h2>${fmtMonth(sy, sm)} 모은 금액</h2></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">수입 + 저축 + 주택 대출 원금 + 투자 수입 − 예산 실적</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
-          <span>수입 ${momBadge(flow.income - prevFlow.income)}</span>
-          <strong class="income">${fmtShort(flow.income)}</strong>
+          <span>수입</span>
+          <strong class="income">${fmtShort(saved.income)}</strong>
         </div>
         <div class="mini-card">
-          <span>예산 실적 ${momBadge(flow.expense - prevFlow.expense, true)}</span>
-          <strong class="danger">${fmtShort(flow.expense)}</strong>
+          <span>저축</span>
+          <strong class="income">${fmtShort(saved.savings)}</strong>
         </div>
         <div class="mini-card">
-          <span>저축 실적 ${momBadge(flow.savings - prevFlow.savings)}</span>
-          <strong class="income">${fmtShort(flow.savings)}</strong>
+          <span>주택 원금</span>
+          <strong class="income">${fmtShort(saved.principal)}</strong>
         </div>
         <div class="mini-card">
-          <span>투자 손익 ${momBadge(flow.investPnL - prevFlow.investPnL)}</span>
-          <strong class="${flow.investPnL >= 0 ? 'income' : 'danger'}">${flow.investPnL >= 0 ? '+' : ''}${fmtShort(flow.investPnL)}</strong>
+          <span>투자 수입</span>
+          <strong class="${saved.investIncome >= 0 ? 'income' : 'danger'}">${saved.investIncome >= 0 ? '+' : ''}${fmtShort(saved.investIncome)}</strong>
+        </div>
+      </div>
+      <div class="summary-row" style="margin-top:10px">
+        <div class="mini-card">
+          <span>예산 실적</span>
+          <strong class="danger">−${fmtShort(saved.budgetActual)}</strong>
+        </div>
+        <div class="mini-card">
+          <span>이번 달 합계</span>
+          <strong class="${saved.total >= 0 ? 'income' : 'danger'}">${saved.total >= 0 ? '+' : ''}${fmtMoney(saved.total)}</strong>
         </div>
       </div>
     </section>
@@ -165,10 +157,9 @@ export function renderDashboard() {
     ${ownerChipRow}
 
     <section class="section">
-      <div class="section-head"><h2>자산 변동 추이</h2>
-        <button type="button" class="text-btn" id="btn-snapshot">${fmtMonth(sy, sm)} 스냅샷 저장</button></div>
-      ${lineChart(chartPts)}
-      ${legend([{ label: '순자산', value: nw.net, color: '#1e4d3a' }])}
+      <div class="section-head"><h2>월별 모은 금액</h2></div>
+      ${chartPts.length ? lineChart(chartPts) : '<p class="muted">입력된 달이 쌓이면 추이가 표시됩니다.</p>'}
+      ${chartPts.length ? legend([{ label: '모은 금액', value: saved.total, color: '#1e4d3a' }]) : ''}
     </section>`;
 }
 
@@ -201,12 +192,6 @@ export function bindDashboard() {
   document.getElementById('btn-go-expense')?.addEventListener('click', () => {
     setMonth(sy, sm);
     setTab('expense');
-    rerender();
-  });
-  document.getElementById('btn-snapshot')?.addEventListener('click', () => {
-    createSnapshot(state.data, sy, sm);
-    persist();
-    toast(`${fmtMonth(sy, sm)} 스냅샷이 저장되었습니다`, 'success');
     rerender();
   });
 }

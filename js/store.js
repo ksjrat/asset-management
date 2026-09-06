@@ -5,7 +5,7 @@ import {
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
   setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
-  getBudgetStart, isBeforeBudgetStart, isMonthSettlementComplete, getCategoryPeriodSummary,
+  getBudgetStart, isBeforeBudgetStart, getCategoryPeriodSummary,
 } from './budget-engine.js';
 import { ensureAppLockAuth } from './app-lock.js';
 import {
@@ -13,15 +13,16 @@ import {
 } from './savings-sync.js';
 import {
   syncLoanSubActualToAsset, reconcileAllLoanBudgetSync, ensureLoanFields,
+  getMonthHousingPrincipalTotal,
 } from './loan-sync.js';
 import { LOAN_REPAYMENT_METHODS } from './loan-amort.js';
 import {
   countBudgetActualEntries,
   mergeBudgetMonthMaps,
 } from './budget-data.js';
+import { rebuildAutoSnapshots, monthHasBudgetEntry, computeNetWorthAtMonth } from './snapshot-engine.js';
 
-setOnSavingsSubActualSet(syncSavingsSubActualToAsset);
-setOnLoanSubActualSet(syncLoanSubActualToAsset);
+export { monthHasBudgetEntry };
 
 export { LOAN_REPAYMENT_METHODS };
 
@@ -115,8 +116,8 @@ export function getIncomeCategories() {
   return INCOME_CATEGORIES;
 }
 
-/** 저축 세부 실적 연동 가능 자산 (예금·적금·투자) */
-export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest']);
+/** 저축 세부 실적 연동 가능 자산 (예금·적금·투자·부동산) */
+export const SAVINGS_ASSET_TYPES = new Set(['deposit', 'savings', 'invest', 'realestate']);
 
 export function getSavingsEligibleAssets(data) {
   return (data.assets?.items || []).filter(
@@ -158,7 +159,7 @@ export function prevYm(year, month) {
   return { year: y, month: m, ym: ymStr(y, m) };
 }
 
-/** 홈 요약에 쓸 가장 최근 정산 완료 달 (정산일 경과 + 모든 항목 실적 입력) */
+/** 홈 요약에 쓸 가장 최근 입력 월 (미입력 달은 건너뜀) */
 export function getHomeSummaryMonth(data) {
   const now = new Date();
   const endY = now.getFullYear();
@@ -170,12 +171,11 @@ export function getHomeSummaryMonth(data) {
   const start = getBudgetStart(data);
   if (!start) return fallback();
 
-  const cats = getVisibleCategories(data);
   let latest = null;
   let y = start.year;
   let m = start.month;
   while (y < endY || (y === endY && m <= endM)) {
-    if (isMonthSettlementComplete(data, y, m, cats)) {
+    if (monthHasBudgetEntry(data, y, m)) {
       latest = { year: y, month: m };
     }
     m += 1;
@@ -210,6 +210,70 @@ export function getMonthCashflowSummary(data, year, month) {
   const savings = getMonthSavingsTotal(data, year, month);
   const investPnL = getInvestmentPnLForMonth(data, year, month).pnl;
   return { income, expense, savings, investPnL };
+}
+
+/** 이번 달 모은 금액 = 수입 + 저축 + 주택 대출 원금 + 투자 수입 − 예산 실적 */
+export function getMonthSavedBreakdown(data, year, month) {
+  const flow = getMonthCashflowSummary(data, year, month);
+  const principal = getMonthHousingPrincipalTotal(data, year, month);
+  const investIncome = flow.investPnL;
+  const total = flow.income + flow.savings + principal + investIncome - flow.expense;
+  return {
+    income: flow.income,
+    savings: flow.savings,
+    principal,
+    investIncome,
+    budgetActual: flow.expense,
+    total,
+  };
+}
+
+export function getMonthSavedAmount(data, year, month) {
+  return getMonthSavedBreakdown(data, year, month).total;
+}
+
+function monthHasSavedInputs(data, year, month) {
+  const b = getMonthSavedBreakdown(data, year, month);
+  return b.income > 0 || b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetActual > 0;
+}
+
+/** 예산 시작월부터 집계 가능한 모든 달 순회 */
+export function eachBudgetMonthUpToNow(data, fn) {
+  const start = getBudgetStart(data);
+  if (!start) return;
+  const now = new Date();
+  const endY = now.getFullYear();
+  const endM = now.getMonth() + 1;
+  let y = start.year;
+  let m = start.month;
+  while (y < endY || (y === endY && m <= endM)) {
+    if (!isBeforeBudgetStart(data, y, m)) fn(y, m);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+}
+
+/** 관리 시작 이래 누적 모은 금액 */
+export function getCumulativeSavedAmount(data) {
+  if (!data.budget?.setupDone) return 0;
+  let total = 0;
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    if (monthHasSavedInputs(data, y, m)) {
+      total += getMonthSavedAmount(data, y, m);
+    }
+  });
+  return total;
+}
+
+/** 월별 모은 금액 추이 (차트용) */
+export function getMonthlySavedSeries(data, limit = 12) {
+  const rows = [];
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    if (monthHasSavedInputs(data, y, m)) {
+      rows.push({ year: y, month: m, ...getMonthSavedBreakdown(data, y, m) });
+    }
+  });
+  return rows.slice(-limit);
 }
 
 export function getMonthSavingsTotal(data, year, month) {
@@ -585,6 +649,22 @@ export function computeNetWorth(data, ownerFilter = 'all') {
   return { assets, liabilities, net: assets - liabilities };
 }
 
+/** 저축·대출 원금 반영 월별 순자산 자동 기록 */
+export function refreshAutoSnapshots(data) {
+  return rebuildAutoSnapshots(data, computeNetWorth);
+}
+
+function onSavingsBudgetSync(data, year, month, itemId, amount) {
+  syncSavingsSubActualToAsset(data, year, month, itemId, amount);
+}
+
+function onLoanBudgetSync(data, year, month, itemId, amount) {
+  syncLoanSubActualToAsset(data, year, month, itemId, amount);
+}
+
+setOnSavingsSubActualSet(onSavingsBudgetSync);
+setOnLoanSubActualSet(onLoanBudgetSync);
+
 export function computeGoalProgress(goal) {
   const current = goal.contributions?.reduce((s, c) => s + c.amount, 0) ?? goal.currentAmount ?? 0;
   const rate = goal.targetAmount > 0 ? current / goal.targetAmount : 0;
@@ -668,8 +748,8 @@ export function getCategoryBudgetOveruse(data, year, month, limit = 5) {
 }
 
 export function createSnapshot(data, year, month) {
-  const { assets, liabilities, net } = computeNetWorth(data);
-  const snap = { id: uid(), year, month, assets, liabilities, net, createdAt: now() };
+  const { assets, liabilities, net } = computeNetWorthAtMonth(data, year, month, computeNetWorth);
+  const snap = { id: uid(), year, month, assets, liabilities, net, source: 'manual', createdAt: now(), updatedAt: now() };
   const idx = data.assets.snapshots.findIndex((s) => s.year === year && s.month === month);
   if (idx >= 0) data.assets.snapshots[idx] = snap;
   else data.assets.snapshots.push(snap);

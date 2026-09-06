@@ -832,7 +832,7 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
   if (isSavings) {
     const eligible = getSavingsEligibleAssets(state.data);
     if (!eligible.length) {
-      toast(`저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자 자산을 등록하면 잔액에 자동 반영됩니다`, 'info');
+      toast(`저장됨 · 합계 ${fmtMoney(after.actual)} · 예금·적금·투자·부동산 자산을 등록하면 잔액에 자동 반영됩니다`, 'info');
     } else {
       // 항목별 연결 자산 없는 경우 확인
       const { getSavingsAssetForSubItem } = await import('../savings-sync.js');

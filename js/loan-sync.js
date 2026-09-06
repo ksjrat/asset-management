@@ -3,6 +3,7 @@ import {
   findSubItemCategoryId,
   getSubItems,
   getSubActualAmount,
+  getVisibleSubItems,
 } from './budget-engine.js';
 import { splitLoanPayment, formatLoanSplitSummary } from './loan-amort.js';
 
@@ -131,3 +132,26 @@ export function ensureLoanFields(item) {
 }
 
 export { formatLoanSplitSummary };
+
+/** 주거(주택) 대출 세부 실적의 당월 원금 상환 합계 */
+export function getMonthHousingPrincipalTotal(data, year, month) {
+  const housingCat = data.budget?.categories?.find((c) => c.name === '주거');
+  if (!housingCat) return 0;
+  let total = 0;
+  for (const item of getVisibleSubItems(data, housingCat.id)) {
+    if (!item.loanId) continue;
+    const loan = data.assets?.items?.find((x) => x.id === item.loanId && x.type === 'loan');
+    if (!loan) continue;
+    const entry = findBudgetLoanLogEntry(loan, item.id, year, month);
+    if (entry) {
+      total += Number(entry.principal) || 0;
+      continue;
+    }
+    const payment = getSubActualAmount(data, year, month, item.id) || 0;
+    if (payment > 0) {
+      const preview = previewLoanSplit(data, item.id, year, month, payment);
+      if (preview) total += Number(preview.principal) || 0;
+    }
+  }
+  return total;
+}
