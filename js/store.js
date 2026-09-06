@@ -230,42 +230,45 @@ export function getMonthBudgetSavings(data, year, month) {
   return total;
 }
 
-/** 생활 지출 (저축 카테고리·주택 대출 원금 제외) */
-export function getMonthLifestyleSpending(data, year, month) {
+/** 예산 초과 지출 (저축 제외 · 카테고리별 max(0, 실적−월예산) 합) */
+export function getMonthBudgetOverrun(data, year, month) {
   if (!data.budget?.setupDone || isBeforeBudgetStart(data, year, month)) return 0;
   const cats = getVisibleCategories(data);
-  const principal = getMonthHousingPrincipalTotal(data, year, month);
   let total = 0;
   for (const c of cats) {
     if (c.name === '저축') continue;
     const s = getCategoryPeriodSummary(data, year, month, c.id);
     if (!s.hasActual) continue;
-    if (c.name === '주거') {
-      total += Math.max(0, s.actual - principal);
-    } else {
-      total += s.actual;
-    }
+    const over = Math.max(0, s.actual - s.monthlyPlanned);
+    if (over > 0) total += over;
   }
   return total;
 }
 
-/** 이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 − 생활 지출 */
+/** @deprecated getMonthBudgetOverrun 사용 */
+export function getMonthLifestyleSpending(data, year, month) {
+  return getMonthBudgetOverrun(data, year, month);
+}
+
+/** 이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 − 예산 초과 */
 export function getMonthSavedBreakdown(data, year, month) {
   if (isBeforeBudgetStart(data, year, month)) {
-    return { savings: 0, principal: 0, investIncome: 0, lifestyleSpending: 0, total: 0 };
+    return { savings: 0, principal: 0, investIncome: 0, budgetOverrun: 0, total: 0 };
   }
   const savings = getMonthSavingsTotal(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
-  const lifestyleSpending = getMonthLifestyleSpending(data, year, month);
+  const budgetOverrun = getMonthBudgetOverrun(data, year, month);
   const investIncome = monthHasUserBudgetActuals(data, year, month)
     ? getInvestmentPnLForMonth(data, year, month).pnl
     : 0;
-  const total = savings + principal + investIncome - lifestyleSpending;
+  const total = savings + principal + investIncome - budgetOverrun;
   return {
     savings,
     principal,
     investIncome,
-    lifestyleSpending,
+    budgetOverrun,
+    /** @deprecated budgetOverrun */
+    lifestyleSpending: budgetOverrun,
     total,
   };
 }
@@ -276,7 +279,7 @@ export function getMonthSavedAmount(data, year, month) {
 
 function monthHasSavedInputs(data, year, month) {
   const b = getMonthSavedBreakdown(data, year, month);
-  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.lifestyleSpending > 0;
+  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetOverrun > 0;
 }
 
 /** 예산 시작월부터 집계 가능한 모든 달 순회 */
