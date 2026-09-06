@@ -1,3 +1,5 @@
+import { readBudgetAmount } from './budget-engine.js';
+
 /** 해당 월에 사용자가 입력한 예산 실적(카테고리·세부)이 있는지 */
 export function monthHasUserBudgetActuals(data, year, month) {
   if (!data?.budget?.setupDone) return false;
@@ -14,12 +16,12 @@ export function countBudgetActualEntries(data) {
   let n = 0;
   for (const month of Object.values(data?.budget?.actuals || {})) {
     for (const e of Object.values(month || {})) {
-      if (Number(e?.amount) > 0) n += 1;
+      if (readBudgetAmount(e) > 0) n += 1;
     }
   }
   for (const month of Object.values(data?.budget?.subActuals || {})) {
     for (const e of Object.values(month || {})) {
-      if (Number(e?.amount) > 0) n += 1;
+      if (readBudgetAmount(e) > 0) n += 1;
     }
   }
   return n;
@@ -36,7 +38,7 @@ export function mergeBudgetMonthMaps(local = {}, remote = {}) {
     if (!remoteMonth || typeof remoteMonth !== 'object') continue;
     const merged = { ...(out[ym] || {}) };
     for (const [id, entry] of Object.entries(remoteMonth)) {
-      if (!entry || Number(entry.amount) <= 0) continue;
+      if (!entry || readBudgetAmount(entry) <= 0) continue;
       const localEntry = merged[id];
       if (!localEntry) {
         merged[id] = entry;

@@ -8,6 +8,66 @@ function now() {
   return new Date().toISOString();
 }
 
+/** 구버전 plain number · { amount } 혼재 실적 읽기 */
+export function readBudgetAmount(entry) {
+  if (entry == null) return 0;
+  if (typeof entry === 'number') return Math.max(0, entry);
+  if (typeof entry === 'object' && entry.amount != null) return Math.max(0, Number(entry.amount) || 0);
+  return 0;
+}
+
+function normalizeBudgetEntry(entry) {
+  const amount = readBudgetAmount(entry);
+  if (amount <= 0) return null;
+  if (typeof entry === 'object' && entry?.amount != null) {
+    return { ...entry, amount };
+  }
+  return { amount, recordedAt: now() };
+}
+
+/** subActuals·actuals 월 키(2025-8→2025-08) 및 항목 형식 정규화 */
+export function normalizeBudgetMonthMap(map) {
+  if (!map || typeof map !== 'object') return;
+  const normalized = {};
+  for (const [key, bucket] of Object.entries(map)) {
+    const m = String(key).match(/^(\d{4})-(\d{1,2})$/);
+    if (!m || !bucket || typeof bucket !== 'object') continue;
+    const nKey = ymKey(Number(m[1]), Number(m[2]));
+    if (!normalized[nKey]) normalized[nKey] = {};
+    for (const [id, entry] of Object.entries(bucket)) {
+      const norm = normalizeBudgetEntry(entry);
+      if (norm) normalized[nKey][id] = norm;
+    }
+  }
+  for (const k of Object.keys(map)) delete map[k];
+  Object.assign(map, normalized);
+}
+
+/** 저축 세부 항목이 다른 카테고리 id 아래 orphaned 되었을 때 현재 저축 id로 병합 */
+function reconcileSavingsSubItemsCategory(data) {
+  const savingsCat = savingsCategoryRef(data);
+  if (!savingsCat) return;
+  const b = data.budget;
+  const targetId = savingsCat.id;
+  if (!b.subItemsByCategory[targetId]) b.subItemsByCategory[targetId] = [];
+  const targetItems = b.subItemsByCategory[targetId];
+  const targetIds = new Set(targetItems.map((i) => i.id));
+
+  for (const [catId, items] of Object.entries({ ...b.subItemsByCategory })) {
+    if (catId === targetId || !Array.isArray(items) || !items.length) continue;
+    const cat = b.categories?.find((c) => c.id === catId);
+    const isSavingsBucket = cat?.name === '저축';
+    if (!isSavingsBucket) continue;
+    for (const item of items) {
+      if (!targetIds.has(item.id)) {
+        targetItems.push(item);
+        targetIds.add(item.id);
+      }
+    }
+    delete b.subItemsByCategory[catId];
+  }
+}
+
 export function monthIndex(year, month) {
   return year * 12 + month;
 }
@@ -89,7 +149,9 @@ export function getSubActualEntry(data, year, month, itemId) {
 
 export function getSubActualAmount(data, year, month, itemId) {
   const entry = getSubActualEntry(data, year, month, itemId);
-  return entry?.amount ?? null;
+  if (entry == null) return null;
+  const amount = readBudgetAmount(entry);
+  return amount > 0 ? amount : null;
 }
 
 let onSavingsSubActualSet = null;
@@ -117,8 +179,8 @@ export function setSubActualAmount(data, year, month, catId, itemId, amount) {
     data.budget.subActuals[key][itemId] = { amount: val, recordedAt: now() };
   }
   syncSubEnvelopeActual(data, year, month, catId);
-  const savingsCat = getSavingsCategory(data);
-  if (onSavingsSubActualSet && savingsCat && catId === savingsCat.id) {
+  const cat = data.budget.categories.find((c) => c.id === catId);
+  if (onSavingsSubActualSet && cat?.name === '저축') {
     onSavingsSubActualSet(data, year, month, itemId, val);
   }
   if (onLoanSubActualSet) {
@@ -137,7 +199,7 @@ export function hasSubActuals(data, year, month, catId) {
   const bucket = data.budget?.subActuals?.[key];
   if (!bucket) return false;
   const ids = new Set(getVisibleSubItems(data, catId).map((i) => i.id));
-  return [...ids].some((id) => (bucket[id]?.amount || 0) > 0);
+  return [...ids].some((id) => readBudgetAmount(bucket[id]) > 0);
 }
 
 export function syncSubEnvelopeActual(data, year, month, catId) {
@@ -272,6 +334,9 @@ export function ensureBudgetStructure(data) {
   if (!b.monthlyPlan) b.monthlyPlan = {};
   if (!b.actuals) b.actuals = {};
   migrateLegacySubItems(data);
+  normalizeBudgetMonthMap(b.subActuals);
+  normalizeBudgetMonthMap(b.actuals);
+  reconcileSavingsSubItemsCategory(data);
   const savingsCat = savingsCategoryRef(data);
   if (savingsCat && !(b.subItemsByCategory[savingsCat.id]?.length)) {
     b.subItemsByCategory[savingsCat.id] = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
@@ -419,7 +484,9 @@ export function getActualEntry(data, year, month, catId) {
 
 export function getActualAmount(data, year, month, catId) {
   const entry = getActualEntry(data, year, month, catId);
-  return entry?.amount ?? null;
+  if (entry == null) return null;
+  const amount = readBudgetAmount(entry);
+  return amount > 0 ? amount : null;
 }
 
 export function setActualAmount(data, year, month, catId, amount, payer) {
@@ -471,12 +538,12 @@ export function deleteSubItem(data, catId, itemId) {
 export function getCategoryPeriodSummary(data, year, month, catId) {
   if (isBeforeBudgetStart(data, year, month)) {
     const entry = getActualEntry(data, year, month, catId);
-    const hasActual = entry != null;
+    const hasActual = entry != null && readBudgetAmount(entry) > 0;
     return {
       monthlyPlanned: 0,
       rolloverIn: 0,
       available: 0,
-      actual: hasActual ? entry.amount : 0,
+      actual: hasActual ? readBudgetAmount(entry) : 0,
       remaining: 0,
       hasActual,
       usedPct: 0,
@@ -490,8 +557,8 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
   const rolloverIn = 0;
   const available = monthlyPlanned;
   const entry = getActualEntry(data, year, month, catId);
-  const hasActual = entry != null;
-  const actual = hasActual ? entry.amount : 0;
+  const hasActual = entry != null && readBudgetAmount(entry) > 0;
+  const actual = hasActual ? readBudgetAmount(entry) : 0;
   const remaining = monthlyPlanned - actual;
   const usedPct = available > 0 ? actual / available : (actual > 0 ? 1.2 : 0);
   const monthDelta = hasActual ? actual - monthlyPlanned : null;
@@ -643,6 +710,9 @@ export function migrateBudgetModel(data) {
   }
 
   migrateLegacySubItems(data);
+  normalizeBudgetMonthMap(b.subActuals);
+  normalizeBudgetMonthMap(b.actuals);
+  reconcileSavingsSubItemsCategory(data);
   const savingsCat = savingsCategoryRef(data);
   if (savingsCat && !(b.subItemsByCategory[savingsCat.id]?.length)) {
     b.subItemsByCategory[savingsCat.id] = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
@@ -654,10 +724,11 @@ export function migrateBudgetModel(data) {
     const miscId = items.find((i) => i.name === '기타')?.id || items[items.length - 1]?.id;
     for (const [key, cats] of Object.entries(b.actuals || {})) {
       const entry = cats[savingsCat.id];
-      if (!entry?.amount) continue;
+      if (!readBudgetAmount(entry)) continue;
       if (b.subActuals[key] && Object.keys(b.subActuals[key]).length) continue;
       if (!b.subActuals[key]) b.subActuals[key] = {};
-      if (miscId) b.subActuals[key][miscId] = { amount: entry.amount, recordedAt: entry.recordedAt || now() };
+      const amt = readBudgetAmount(entry);
+      if (miscId) b.subActuals[key][miscId] = { amount: amt, recordedAt: entry.recordedAt || now() };
     }
     syncSubEnvelopeMonthlyPlan(data, y, curMonth, savingsCat.id);
   }
@@ -666,9 +737,9 @@ export function migrateBudgetModel(data) {
     (yearPlan) => Object.values(yearPlan || {}).some((amt) => Number(amt) > 0),
   );
   const hasActuals = Object.values(b.actuals || {}).some(
-    (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
+    (month) => Object.values(month || {}).some((e) => readBudgetAmount(e) > 0),
   ) || Object.values(b.subActuals || {}).some(
-    (month) => Object.values(month || {}).some((e) => Number(e?.amount) > 0),
+    (month) => Object.values(month || {}).some((e) => readBudgetAmount(e) > 0),
   );
   if (b.setupDone && !hasPositivePlan && !hasActuals) {
     b.setupDone = false;

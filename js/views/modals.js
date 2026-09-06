@@ -6,8 +6,10 @@ import {
   getIncomeCategories, getSavingsEligibleAssets, findSavingsContribution,
   getVisibleSavingsItems, hasSubItems, getVisibleSubItems, SAVINGS_ASSET_TYPES,
   syncAppraisedAssetAmount, getSavingsCategory, getLoanAssets, LOAN_REPAYMENT_METHODS,
+  refreshAutoSnapshots,
 } from '../store.js';
-import { previewLoanSplit, formatLoanSplitSummary } from '../loan-sync.js';
+import { previewLoanSplit, formatLoanSplitSummary, reconcileAllLoanBudgetSync } from '../loan-sync.js';
+import { reconcileAllSavingsBudgetSync } from '../savings-sync.js';
 import {
   getMonthlyPlanAmount, setMonthlyPlanAmount,
   getActualAmount, getActualEntry, setActualAmount, getCategoryPeriodSummary,
@@ -836,6 +838,9 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
   for (const item of items) {
     setSubActualAmount(state.data, year, month, catId, item.id, Number(fd.get(item.id)) || 0);
   }
+  reconcileAllSavingsBudgetSync(state.data);
+  reconcileAllLoanBudgetSync(state.data);
+  refreshAutoSnapshots(state.data);
   persist();
   const after = getCategoryPeriodSummary(state.data, year, month, catId);
   if (isSavings) {

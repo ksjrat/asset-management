@@ -165,16 +165,24 @@ export function syncSavingsCategoryActuals(data, year, month) {
   });
 }
 
+function isSavingsSubItemId(data, itemId) {
+  for (const [catId, items] of Object.entries(data.budget?.subItemsByCategory || {})) {
+    const cat = data.budget.categories?.find((c) => c.id === catId);
+    if (cat?.name !== '저축') continue;
+    if ((items || []).some((i) => i.id === itemId)) return true;
+  }
+  return false;
+}
+
 export function reconcileAllSavingsBudgetSync(data) {
-  const cat = getSavingsCategory(data);
-  if (!cat || !data.budget?.subActuals) return;
+  if (!data.budget?.subActuals) return;
   for (const [key, bucket] of Object.entries(data.budget.subActuals)) {
     const m = key.match(/^(\d{4})-(\d{2})$/);
     if (!m) continue;
     const year = Number(m[1]);
     const month = Number(m[2]);
     for (const itemId of Object.keys(bucket || {})) {
-      if (!getSubItems(data, cat.id).some((i) => i.id === itemId)) continue;
+      if (!isSavingsSubItemId(data, itemId)) continue;
       const amt = getSubActualAmount(data, year, month, itemId) || 0;
       syncSavingsSubActualToAsset(data, year, month, itemId, amt);
     }

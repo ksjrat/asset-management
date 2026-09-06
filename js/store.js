@@ -4,8 +4,8 @@ import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
-  getSubItems,
   getSubSummary,
+  readBudgetAmount,
   setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
   getBudgetStart, isBeforeBudgetStart, getCategoryPeriodSummary,
 } from './budget-engine.js';
@@ -335,33 +335,52 @@ export function getMonthSavingsTotal(data, year, month) {
   ensureBudgetStructure(data);
   const cat = getSavingsCategory(data);
   if (cat) {
-    if (hasSubItems(data, cat.id)) {
-      const { total } = getSubSummary(data, year, month, cat.id);
-      if (total > 0) return total;
-    }
+    let total = 0;
     const s = getCategoryPeriodSummary(data, year, month, cat.id);
-    if (s.hasActual) return Number(s.actual) || 0;
-    const subSum = getSubActualsSum(data, year, month, cat.id);
-    if (subSum > 0) return subSum;
-    const key = ymKey(year, month);
-    const bucket = data.budget?.subActuals?.[key];
-    if (bucket) {
-      const ids = new Set(getSubItems(data, cat.id).map((i) => i.id));
-      let orphanSum = 0;
-      for (const [itemId, entry] of Object.entries(bucket)) {
-        if (ids.has(itemId)) orphanSum += Number(entry?.amount) || 0;
-      }
-      if (orphanSum > 0) return orphanSum;
+    if (s.hasActual) total = Math.max(total, Number(s.actual) || 0);
+    if (hasSubItems(data, cat.id)) {
+      total = Math.max(total, getSubSummary(data, year, month, cat.id).total);
     }
-    return 0;
+    total = Math.max(total, getSubActualsSum(data, year, month, cat.id));
+    total = Math.max(total, sumSavingsSubActualsInBucket(data, year, month, cat.id));
+    total = Math.max(total, sumLegacySavingsLogForMonth(data, year, month));
+    return total;
   }
+  return sumLegacySavingsLogForMonth(data, year, month);
+}
+
+function savingsItemIdsForCategory(data, savingsCatId) {
+  const ids = new Set();
+  for (const [catId, items] of Object.entries(data.budget?.subItemsByCategory || {})) {
+    const c = data.budget.categories?.find((x) => x.id === catId);
+    if (c?.name === '저축' || catId === savingsCatId) {
+      for (const item of items || []) ids.add(item.id);
+    }
+  }
+  return ids;
+}
+
+function sumSavingsSubActualsInBucket(data, year, month, savingsCatId) {
+  const key = ymKey(year, month);
+  const bucket = data.budget?.subActuals?.[key];
+  if (!bucket) return 0;
+  const ids = savingsItemIdsForCategory(data, savingsCatId);
+  let sum = 0;
+  for (const [itemId, entry] of Object.entries(bucket)) {
+    if (ids.has(itemId)) sum += readBudgetAmount(entry);
+  }
+  return sum;
+}
+
+function sumLegacySavingsLogForMonth(data, year, month) {
   let total = 0;
   for (const asset of data.assets?.items || []) {
     for (const entry of asset.savingsLog || []) {
+      if (entry.source === 'budget') continue;
       const d = new Date(entry.date);
-      if (d.getFullYear() === year && d.getMonth() + 1 === month) {
-        total += Number(entry.amount) || 0;
-      }
+      const ey = entry.year ?? d.getFullYear();
+      const em = entry.month ?? (d.getMonth() + 1);
+      if (ey === year && em === month) total += Number(entry.amount) || 0;
     }
   }
   return total;
@@ -784,7 +803,8 @@ export function getCategorySpend(data, year, month) {
   const actuals = data.budget?.actuals?.[key];
   if (actuals && data.budget?.setupDone) {
     for (const [catId, entry] of Object.entries(actuals)) {
-      if (entry?.amount != null) map[catId] = entry.amount;
+      const amt = readBudgetAmount(entry);
+      if (amt > 0) map[catId] = amt;
     }
     if (Object.keys(map).length) return map;
   }
@@ -888,9 +908,9 @@ export function getOwnerMonthlySummary(data, year, month) {
       }
       continue;
     }
-    const entry = getActualEntry(data, year, month, cat.id);
-    const amt = entry?.amount;
+    const amt = getActualAmount(data, year, month, cat.id);
     if (amt == null || amt <= 0) continue;
+    const entry = getActualEntry(data, year, month, cat.id);
     const payer = (cat.name === '기타' && entry.payer) ? entry.payer : (cat.payer || 'joint');
     addExpense(payer, amt);
   }
