@@ -4,6 +4,7 @@ import {
   getSubPayerLabel, hasSubItems,
   getMonthSavingsTotal, getCumulativeSavingsTotal, getCumulativeBudgetSavings,
   getMonthSavedBreakdown, getCumulativeSavedAmount,
+  getMonthBudgetSavings,
 } from '../store.js';
 import {
   getCategoryPeriodSummary,
@@ -60,14 +61,7 @@ export function renderBudget() {
   const start = getBudgetStart(data);
   const beforeStart = isBeforeBudgetStart(data, y, m);
 
-  // 당월 절약액: 실적 입력된 항목만, 저축 카테고리 제외
-  const monthSaved = cats.reduce((sum, c) => {
-    if (c.name === '저축') return sum;
-    const s = getCategoryPeriodSummary(data, y, m, c.id);
-    if (!s.hasActual) return sum;
-    const pureSaving = s.monthlyPlanned - s.actual;
-    return sum + (pureSaving > 0 ? pureSaving : 0);
-  }, 0);
+  const monthSaved = getMonthBudgetSavings(data, y, m);
   const monthSavings = getMonthSavingsTotal(data, y, m);
   const monthSavedBreakdown = getMonthSavedBreakdown(data, y, m);
   const monthPrincipal = monthSavedBreakdown.principal;
@@ -80,7 +74,7 @@ export function renderBudget() {
   const savingsStatsCard = !beforeStart && data.budget?.setupDone ? `
     <section class="section">
       <div class="section-head"><h2>절약 & 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 − 예산 실적</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 + 예산 절약</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
           <span>이번 달 모은 금액</span>

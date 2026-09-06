@@ -110,7 +110,7 @@ export function renderDashboard() {
 
   const heroSub = chartRows.length
     ? `${fmtMonth(sy, sm)} ${saved.total >= 0 ? '+' : ''}${fmtShort(saved.total)} ${momBadge(savedDelta)}`
-    : '저축·주택 원금·투자 수입·예산 실적을 입력하면 집계됩니다';
+    : '저축·주택 원금·투자 수입·예산 절약을 입력하면 집계됩니다';
 
   return `
     ${needsLinkAttention() ? '<button type="button" class="tip-banner" id="btn-link-setup">📱 PC·폰·배우자 연동 마무리 · 연동 도우미</button>' : ''}
@@ -128,7 +128,7 @@ export function renderDashboard() {
 
     <section class="section">
       <div class="section-head"><h2>${fmtMonth(sy, sm)} 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 대출 원금 + 투자 수입 − 예산 실적</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 대출 원금 + 투자 수입 + 예산 절약</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
           <span>저축</span>
@@ -143,8 +143,8 @@ export function renderDashboard() {
           <strong class="${saved.investIncome >= 0 ? 'income' : 'danger'}">${saved.investIncome >= 0 ? '+' : ''}${fmtShort(saved.investIncome)}</strong>
         </div>
         <div class="mini-card">
-          <span>예산 실적</span>
-          <strong class="danger">−${fmtShort(saved.budgetActual)}</strong>
+          <span>예산 절약</span>
+          <strong class="income">+${fmtShort(saved.budgetSaving)}</strong>
         </div>
       </div>
       <div class="mini-card" style="margin-top:10px">

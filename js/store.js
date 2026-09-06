@@ -212,17 +212,33 @@ export function getMonthCashflowSummary(data, year, month) {
   return { income, expense, savings, investPnL };
 }
 
-/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 − 예산 실적 */
+/** 해당 월 예산 절약 (월 예산−실적 양수만, 저축 카테고리 제외) */
+export function getMonthBudgetSavings(data, year, month) {
+  if (!data.budget?.setupDone || isBeforeBudgetStart(data, year, month)) return 0;
+  const cats = getVisibleCategories(data);
+  let total = 0;
+  for (const c of cats) {
+    if (c.name === '저축') continue;
+    const s = getCategoryPeriodSummary(data, year, month, c.id);
+    if (!s.hasActual) continue;
+    const pureSaving = s.monthlyPlanned - s.actual;
+    if (pureSaving > 0) total += pureSaving;
+  }
+  return total;
+}
+
+/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 + 예산 절약 */
 export function getMonthSavedBreakdown(data, year, month) {
   const flow = getMonthCashflowSummary(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
   const investIncome = flow.investPnL;
-  const total = flow.savings + principal + investIncome - flow.expense;
+  const budgetSaving = getMonthBudgetSavings(data, year, month);
+  const total = flow.savings + principal + investIncome + budgetSaving;
   return {
     savings: flow.savings,
     principal,
     investIncome,
-    budgetActual: flow.expense,
+    budgetSaving,
     total,
   };
 }
@@ -233,7 +249,7 @@ export function getMonthSavedAmount(data, year, month) {
 
 function monthHasSavedInputs(data, year, month) {
   const b = getMonthSavedBreakdown(data, year, month);
-  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetActual > 0;
+  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetSaving > 0;
 }
 
 /** 예산 시작월부터 집계 가능한 모든 달 순회 */
@@ -311,28 +327,10 @@ export function getCumulativeSavingsTotal(data) {
 /** 예산 관리 시작 이후 전체 월의 누적 절약액 (월 예산 - 실적, 양수만 합산) */
 export function getCumulativeBudgetSavings(data) {
   if (!data.budget?.setupDone) return 0;
-  const cats = getVisibleCategories(data);
-  const start = getBudgetStart(data);
-  if (!start) return 0;
-  const keys = new Set([
-    ...Object.keys(data.budget.actuals || {}),
-    ...Object.keys(data.budget.subActuals || {}),
-  ]);
   let total = 0;
-  for (const key of keys) {
-    const m2 = key.match(/^(\d{4})-(\d{2})$/);
-    if (!m2) continue;
-    const yr = Number(m2[1]);
-    const mo = Number(m2[2]);
-    if (isBeforeBudgetStart(data, yr, mo)) continue;
-    for (const c of cats) {
-      if (c.name === '저축') continue;
-      const s = getCategoryPeriodSummary(data, yr, mo, c.id);
-      if (!s.hasActual) continue;
-      const pureSaving = s.monthlyPlanned - s.actual;
-      if (pureSaving > 0) total += pureSaving;
-    }
-  }
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    total += getMonthBudgetSavings(data, y, m);
+  });
   return total;
 }
 
