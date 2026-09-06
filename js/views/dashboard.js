@@ -131,7 +131,7 @@ export function renderDashboard() {
 
     <section class="section">
       <div class="section-head"><h2>${fmtMonth(sy, sm)} 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 원금 + 투자 수입 − 예산 초과(저축·원금 제외)</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 원금 + 투자 수입 + 예산 절약(−초과, 저축·원금 제외)</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
           <span>저축</span>
@@ -146,8 +146,8 @@ export function renderDashboard() {
           <strong class="${saved.investIncome >= 0 ? 'income' : 'danger'}">${saved.investIncome >= 0 ? '+' : ''}${fmtShort(saved.investIncome)}</strong>
         </div>
         <div class="mini-card">
-          <span>예산 초과</span>
-          <strong class="danger">−${fmtShort(saved.budgetOverrun)}</strong>
+          <span>예산 절약·초과</span>
+          <strong class="${saved.budgetBalance >= 0 ? 'income' : 'danger'}">${saved.budgetBalance >= 0 ? '+' : ''}${fmtShort(saved.budgetBalance)}</strong>
           <span class="mini-card-sub">저축·주택 원금 제외</span>
         </div>
       </div>

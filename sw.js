@@ -1,4 +1,4 @@
-const CACHE = 'couple-asset-v62';
+const CACHE = 'couple-asset-v63';
 const ASSETS = [
   './',
   './index.html',
