@@ -13,7 +13,11 @@ export function monthIndex(year, month) {
 }
 
 export function getSavingsCategory(data) {
-  return data.budget?.categories?.find((c) => c.name === '저축') || null;
+  ensureBudgetStructure(data);
+  const cats = data.budget?.categories || [];
+  const hidden = new Set(data.settings?.hiddenCategories || []);
+  const visible = cats.filter((c) => !c.hidden && !hidden.has(c.id));
+  return visible.find((c) => c.name === '저축') || cats.find((c) => c.name === '저축') || null;
 }
 
 function subItemsList(data, catId) {

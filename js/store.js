@@ -4,6 +4,8 @@ import {
   ensureBudgetStructure, migrateBudgetModel, getMonthlyPlanAmount, getPeriodTotals,
   getVisibleSavingsItems, getSavingsCategory, getActualAmount, getActualEntry, getSubActualAmount,
   getVisibleSubItems, hasSubItems, DEFAULT_SAVINGS_ITEM_NAMES, getSubActualsSum,
+  getSubItems,
+  getSubSummary,
   setOnSavingsSubActualSet, setOnLoanSubActualSet, syncSubEnvelopeActual,
   getBudgetStart, isBeforeBudgetStart, getCategoryPeriodSummary,
 } from './budget-engine.js';
@@ -247,18 +249,20 @@ export function getMonthLifestyleSpending(data, year, month) {
   return total;
 }
 
-/** 이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 − 생활 지출 (실적 입력된 달만) */
+/** 이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 − 생활 지출 */
 export function getMonthSavedBreakdown(data, year, month) {
-  if (!monthHasUserBudgetActuals(data, year, month) || isBeforeBudgetStart(data, year, month)) {
+  if (isBeforeBudgetStart(data, year, month)) {
     return { savings: 0, principal: 0, investIncome: 0, lifestyleSpending: 0, total: 0 };
   }
-  const flow = getMonthCashflowSummary(data, year, month);
+  const savings = getMonthSavingsTotal(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
-  const investIncome = flow.investPnL;
   const lifestyleSpending = getMonthLifestyleSpending(data, year, month);
-  const total = flow.savings + principal + investIncome - lifestyleSpending;
+  const investIncome = monthHasUserBudgetActuals(data, year, month)
+    ? getInvestmentPnLForMonth(data, year, month).pnl
+    : 0;
+  const total = savings + principal + investIncome - lifestyleSpending;
   return {
-    savings: flow.savings,
+    savings,
     principal,
     investIncome,
     lifestyleSpending,
@@ -271,7 +275,6 @@ export function getMonthSavedAmount(data, year, month) {
 }
 
 function monthHasSavedInputs(data, year, month) {
-  if (!monthHasUserBudgetActuals(data, year, month)) return false;
   const b = getMonthSavedBreakdown(data, year, month);
   return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.lifestyleSpending > 0;
 }
@@ -329,11 +332,28 @@ export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 1
 }
 
 export function getMonthSavingsTotal(data, year, month) {
+  ensureBudgetStructure(data);
   const cat = getSavingsCategory(data);
   if (cat) {
+    if (hasSubItems(data, cat.id)) {
+      const { total } = getSubSummary(data, year, month, cat.id);
+      if (total > 0) return total;
+    }
     const s = getCategoryPeriodSummary(data, year, month, cat.id);
     if (s.hasActual) return Number(s.actual) || 0;
-    return getSubActualsSum(data, year, month, cat.id);
+    const subSum = getSubActualsSum(data, year, month, cat.id);
+    if (subSum > 0) return subSum;
+    const key = ymKey(year, month);
+    const bucket = data.budget?.subActuals?.[key];
+    if (bucket) {
+      const ids = new Set(getSubItems(data, cat.id).map((i) => i.id));
+      let orphanSum = 0;
+      for (const [itemId, entry] of Object.entries(bucket)) {
+        if (ids.has(itemId)) orphanSum += Number(entry?.amount) || 0;
+      }
+      if (orphanSum > 0) return orphanSum;
+    }
+    return 0;
   }
   let total = 0;
   for (const asset of data.assets?.items || []) {
