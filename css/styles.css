@@ -822,6 +822,9 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .spend-delta-change { flex-shrink: 0; font-weight: 700; font-size: 0.82rem; text-align: right; font-variant-numeric: tabular-nums; }
 .spend-delta-change.up { color: var(--danger); }
 .spend-delta-detail { flex-shrink: 0; font-size: 0.72rem; white-space: nowrap; }
+.saved-month-list { margin-top: 12px; }
+.saved-month-list .spend-delta-change { color: var(--primary); font-size: 0.88rem; }
+.saved-month-list .spend-delta-change.up { color: var(--danger); }
 
 .memo-textarea {
   resize: vertical;

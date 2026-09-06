@@ -40,8 +40,17 @@ export function renderDashboard() {
   const prevSaved = getMonthSavedBreakdown(data, prev.year, prev.month);
   const cumSaved = getCumulativeSavedAmount(data);
   const savedDelta = saved.total - prevSaved.total;
-  const chartRows = getMonthlySavedSeries(data, 12);
+  const monthlySaved = getMonthlySavedSeries(data, 999);
+  const chartRows = monthlySaved.slice(-12);
   const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.total }));
+  const monthlySavedList = monthlySaved.length ? `
+      <div class="spend-delta-list saved-month-list">
+        ${[...monthlySaved].reverse().map((r) => `
+          <div class="spend-delta-row">
+            <span class="spend-delta-name">${esc(fmtMonth(r.year, r.month))}</span>
+            <span class="spend-delta-change ${r.total >= 0 ? '' : 'up'}">${r.total >= 0 ? '+' : ''}${fmtMoney(r.total)}</span>
+          </div>`).join('')}
+      </div>` : '';
 
   const ownerChipRow = visibleOwnerFilters.length > 1
     ? `<div class="chip-row">${visibleOwnerFilters.map((o) =>
@@ -160,6 +169,7 @@ export function renderDashboard() {
       <div class="section-head"><h2>월별 모은 금액</h2></div>
       ${chartPts.length ? lineChart(chartPts) : '<p class="muted">입력된 달이 쌓이면 추이가 표시됩니다.</p>'}
       ${chartPts.length ? legend([{ label: '모은 금액', value: saved.total, color: '#1e4d3a' }]) : ''}
+      ${monthlySavedList}
     </section>`;
 }
 
