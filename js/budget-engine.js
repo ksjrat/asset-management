@@ -684,6 +684,26 @@ export function isRecordDue(data, year, month, catId) {
   return !hasRecordedActual(data, year, month, catId);
 }
 
+/** 실적 입력 대기가 있는 가장 이른 달 (없으면 null) */
+export function findEarliestDueBudgetMonth(data, categories) {
+  if (!data.budget?.setupDone || !categories?.length) return null;
+  const start = getBudgetStart(data);
+  if (!start) return null;
+  const now = new Date();
+  const endY = now.getFullYear();
+  const endM = now.getMonth() + 1;
+  let y = start.year;
+  let m = start.month;
+  while (y < endY || (y === endY && m <= endM)) {
+    if (!isBeforeBudgetStart(data, y, m) && categories.some((c) => isRecordDue(data, y, m, c.id))) {
+      return { year: y, month: m };
+    }
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return null;
+}
+
 /** 정산일이 지났고 모든 항목 실적이 입력된 달인지 */
 export function isMonthSettlementComplete(data, year, month, categories) {
   if (!data.budget?.setupDone) return false;

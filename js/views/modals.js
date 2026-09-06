@@ -221,9 +221,8 @@ export async function showSavingsForm(rerender, entryId = null) {
     const y = entry.year ?? new Date(entry.date).getFullYear();
     const m = entry.month ?? new Date(entry.date).getMonth() + 1;
     toast('지출 탭에서 저축 세부 실적을 수정하세요', 'info');
-    const { setTab, setMonth } = await import('../state.js');
-    setMonth(y, m);
-    setTab('expense');
+    const { enterExpenseTab } = await import('../state.js');
+    enterExpenseTab({ year: y, month: m });
     rerender();
     return;
   }

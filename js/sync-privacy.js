@@ -34,6 +34,10 @@ export function stripSensitiveFromPayload(payload) {
   return next;
 }
 
+function recordTime(row) {
+  return new Date(row?.updatedAt || row?.createdAt || row?.at || 0).getTime();
+}
+
 function mergeRecordsById(localArr = [], remoteArr = []) {
   const map = new Map();
   for (const row of localArr) {
@@ -42,6 +46,21 @@ function mergeRecordsById(localArr = [], remoteArr = []) {
   for (const row of remoteArr) {
     if (row?.id) map.set(row.id, row);
   }
+  return [...map.values()];
+}
+
+/** 항목별 updatedAt 기준 병합 — 삭제(deletedAt) 등 최신 상태 우선 */
+function mergeRecordsByUpdatedAt(localArr = [], remoteArr = []) {
+  const map = new Map();
+  function upsert(row) {
+    if (!row?.id) return;
+    const prev = map.get(row.id);
+    if (!prev || recordTime(row) >= recordTime(prev)) {
+      map.set(row.id, row);
+    }
+  }
+  for (const row of localArr) upsert(row);
+  for (const row of remoteArr) upsert(row);
   return [...map.values()];
 }
 
@@ -64,7 +83,7 @@ export function mergePayloadPreservingPrivate(local, remotePayload) {
   merged.transactions = mergeRecordsById(local.transactions, remotePayload.transactions);
   merged.goals = mergeRecordsById(local.goals, remotePayload.goals);
   merged.recurring = mergeRecordsById(local.recurring, remotePayload.recurring);
-  merged.memos = mergeRecordsById(local.memos, remotePayload.memos);
+  merged.memos = mergeRecordsByUpdatedAt(local.memos, remotePayload.memos);
   if (remotePayload.settings || local.settings) {
     merged.settings = {
       ...(local.settings || {}),

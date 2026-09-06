@@ -1,4 +1,4 @@
-import { state, persist, setTab, setMonth } from '../state.js';
+import { state, persist, setTab, setMonth, enterExpenseTab } from '../state.js';
 import {
   computeNetWorth,
   getVisibleHomeOwnerFilters,
@@ -208,8 +208,7 @@ export function bindDashboard() {
     } else toast('입력 대기 항목이 없거나 정산일 이전입니다', 'info');
   });
   document.getElementById('btn-go-expense')?.addEventListener('click', () => {
-    setMonth(sy, sm);
-    setTab('expense');
+    enterExpenseTab();
     rerender();
   });
 }

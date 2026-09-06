@@ -43,7 +43,12 @@ async function showMemoForm(memo, rerender) {
   if (action === 'delete') {
     if (!(await confirmDialog('메모 삭제', '이 메모를 삭제할까요?'))) return;
     ensureMemos(state.data);
-    state.data.memos = state.data.memos.filter((m) => m.id !== memo.id);
+    const now = new Date().toISOString();
+    const target = state.data.memos.find((m) => m.id === memo.id);
+    if (target) {
+      target.deletedAt = now;
+      target.updatedAt = now;
+    }
     persist();
     toast('메모가 삭제되었습니다', 'info');
     rerender();

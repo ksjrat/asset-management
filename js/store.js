@@ -987,9 +987,11 @@ export function ensureMemos(data) {
 
 export function listMemos(data) {
   ensureMemos(data);
-  return [...data.memos].sort(
-    (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)),
-  );
+  return [...data.memos]
+    .filter((m) => !m.deletedAt)
+    .sort(
+      (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)),
+    );
 }
 
 export function recordPolicyConsent(data) {

@@ -1,4 +1,4 @@
-import { state, setTab, shiftMonth, goToToday } from '../state.js';
+import { state, setTab, shiftMonth, goToToday, enterExpenseTab, applyExpenseDueMonthIfNeeded } from '../state.js';
 import { esc } from '../ui.js';
 import { fmtMonth } from '../format.js';
 import { renderAuth, bindAuth, finishOnboarding } from './auth.js';
@@ -74,6 +74,8 @@ export function renderApp() {
     return;
   }
 
+  if (state.tab === 'expense') applyExpenseDueMonthIfNeeded();
+
   const tab = TABS.find((t) => t.id === state.tab);
   const showMonth = MONTH_TABS.has(state.tab);
 
@@ -129,9 +131,10 @@ function bindShell() {
 
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      setTab(btn.dataset.tab);
       state.subView = null;
       state.selectedGoalId = null;
+      if (btn.dataset.tab === 'expense') enterExpenseTab();
+      else setTab(btn.dataset.tab);
       rerender();
     });
   });

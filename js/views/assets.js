@@ -1,4 +1,4 @@
-import { state, persist, setTab, setMonth } from '../state.js';
+import { state, persist, enterExpenseTab } from '../state.js';
 import {
   ASSET_TYPES, OWNERS, getInvestmentPnLForMonth, listSavingsContributions,
   getOwnerDisplayLabel, getEffectiveAssetAmount,
@@ -221,7 +221,7 @@ export function bindAssets() {
   document.getElementById('empty-add-income')?.addEventListener('click', () => showTxForm('income', null, rerender));
 
   document.getElementById('empty-go-expense')?.addEventListener('click', () => {
-    setTab('expense');
+    enterExpenseTab();
     rerender();
   });
 
@@ -254,8 +254,7 @@ export function bindAssets() {
       if (b.dataset.savingsBudget === '1') {
         const y = Number(b.dataset.savingsYear) || state.selectedYear;
         const m = Number(b.dataset.savingsMonth) || state.selectedMonth;
-        setMonth(y, m);
-        setTab('expense');
+        enterExpenseTab({ year: y, month: m });
         rerender().then(() => showSavingsActualForm(y, m, rerender));
         return;
       }
