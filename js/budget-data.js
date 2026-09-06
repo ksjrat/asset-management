@@ -1,3 +1,14 @@
+/** 해당 월에 사용자가 입력한 예산 실적(카테고리·세부)이 있는지 */
+export function monthHasUserBudgetActuals(data, year, month) {
+  if (!data?.budget?.setupDone) return false;
+  const key = `${year}-${String(month).padStart(2, '0')}`;
+  const actualMonth = data.budget.actuals?.[key];
+  if (actualMonth && Object.keys(actualMonth).length > 0) return true;
+  const subMonth = data.budget.subActuals?.[key];
+  if (subMonth && Object.keys(subMonth).length > 0) return true;
+  return false;
+}
+
 /** 예산 실적·세부 실적 개수 (동기화·복구 판단) */
 export function countBudgetActualEntries(data) {
   let n = 0;

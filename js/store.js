@@ -19,10 +19,11 @@ import { LOAN_REPAYMENT_METHODS } from './loan-amort.js';
 import {
   countBudgetActualEntries,
   mergeBudgetMonthMaps,
+  monthHasUserBudgetActuals,
 } from './budget-data.js';
 import { rebuildAutoSnapshots, monthHasBudgetEntry, computeNetWorthAtMonth } from './snapshot-engine.js';
 
-export { monthHasBudgetEntry };
+export { monthHasBudgetEntry, monthHasUserBudgetActuals };
 
 export { LOAN_REPAYMENT_METHODS };
 
@@ -175,7 +176,7 @@ export function getHomeSummaryMonth(data) {
   let y = start.year;
   let m = start.month;
   while (y < endY || (y === endY && m <= endM)) {
-    if (monthHasBudgetEntry(data, y, m)) {
+    if (monthHasUserBudgetActuals(data, y, m)) {
       latest = { year: y, month: m };
     }
     m += 1;
@@ -227,8 +228,11 @@ export function getMonthBudgetSavings(data, year, month) {
   return total;
 }
 
-/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 + 예산 절약 */
+/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 + 예산 절약 (실적 입력된 달만) */
 export function getMonthSavedBreakdown(data, year, month) {
+  if (!monthHasUserBudgetActuals(data, year, month) || isBeforeBudgetStart(data, year, month)) {
+    return { savings: 0, principal: 0, investIncome: 0, budgetSaving: 0, total: 0 };
+  }
   const flow = getMonthCashflowSummary(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
   const investIncome = flow.investPnL;
@@ -248,6 +252,7 @@ export function getMonthSavedAmount(data, year, month) {
 }
 
 function monthHasSavedInputs(data, year, month) {
+  if (!monthHasUserBudgetActuals(data, year, month)) return false;
   const b = getMonthSavedBreakdown(data, year, month);
   return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetSaving > 0;
 }
@@ -351,11 +356,10 @@ export function getEffectiveAssetAmount(item) {
   return Number(item.amount) || 0;
 }
 
-/** 투자·부동산 평가 손익에 쓸 「사용자 평가」인지 (저축 자동·0원 제외) */
+/** 투자·부동산 평가 손익에 쓸 「사용자 평가」인지 (자산 탭에서 직접 기록한 것만) */
 export function isUserAppraisalValuation(v) {
   if (!v || Number(v.amount) <= 0) return false;
-  if (v.source === 'budget-sync') return false;
-  return true;
+  return v.source === 'manual';
 }
 
 /** amount 0인 평가 찌꺼기 제거 (0원 저장 시 −전월잔액 손익 오류 방지) */
