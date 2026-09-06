@@ -1145,6 +1145,12 @@ body.modal-open { overflow: hidden; }
   margin: 0 0 12px;
   line-height: 1.4;
 }
+.auth-form-error { margin-bottom: 4px; }
+.policy-agree--warn {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
 
 .amount-preview {
   color: var(--primary);

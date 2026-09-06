@@ -173,7 +173,12 @@ const LINK_CONNECT_ERRORS = {
 
 /** 온보딩·첫 화면 등에서 받은 코드로 가족에 참여하고(필요 시) 클라우드 연동 */
 export async function connectJoinHousehold({ code, pass }) {
-  await ensureSyncReady();
+  try {
+    await ensureSyncReady();
+  } catch (e) {
+    console.warn('Sync init failed', e);
+    return { ok: false, reason: 'error', message: LINK_CONNECT_ERRORS.error };
+  }
   const syncOn = isSyncEnabled();
   const upper = (code || '').trim().toUpperCase();
   if (upper.length < HOUSEHOLD_CODE_LENGTH) {

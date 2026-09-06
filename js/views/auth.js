@@ -81,10 +81,61 @@ function readWelcomeForm() {
   };
 }
 
+function setWelcomeFormError(message) {
+  const form = document.getElementById('auth-welcome-form');
+  if (!form) return;
+  let el = form.querySelector('.auth-form-error');
+  if (!message) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('p');
+    el.className = 'auth-form-error modal-form-error';
+    el.setAttribute('role', 'alert');
+    form.prepend(el);
+  }
+  el.textContent = message;
+}
+
+function setAuthBusy(busy) {
+  document.querySelectorAll('[data-auth]').forEach((btn) => {
+    btn.disabled = busy;
+    if (busy && btn.dataset.auth === 'link-start') {
+      btn.dataset.authBusyLabel = btn.textContent;
+      btn.textContent = '연동 중…';
+    } else if (!busy && btn.dataset.authBusyLabel) {
+      btn.textContent = btn.dataset.authBusyLabel;
+      delete btn.dataset.authBusyLabel;
+    }
+  });
+}
+
+function proceedFromWelcome(onFinish, renderApp) {
+  leaveStartScreen();
+  state.data.auth.loggedIn = true;
+  persist();
+  if (state.data.auth.onboardingDone) {
+    renderApp();
+  } else {
+    onFinish();
+    persist();
+    renderApp();
+  }
+}
+
+function hasSavedJoinCode() {
+  const code = (state.data.auth.householdId || state.data.auth.inviteCode || '').trim();
+  return code.length >= HOUSEHOLD_CODE_LENGTH;
+}
+
 function requirePolicyAgree() {
   if (state.data.auth.policyAccepted) return true;
-  if (document.getElementById('auth-policy-agree')?.checked) return true;
+  const box = document.getElementById('auth-policy-agree');
+  if (box?.checked) return true;
   toast('개인정보 처리방침에 동의해 주세요', 'info');
+  box?.closest('.policy-agree')?.classList.add('policy-agree--warn');
+  box?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   return false;
 }
 
@@ -112,30 +163,41 @@ export function bindAuth(onFinish, renderApp) {
         if (!requirePolicyAgree()) return;
         const { code, pass } = readWelcomeForm();
         if (!code.trim()) {
+          setWelcomeFormError('가족 코드를 입력해 주세요');
           toast('가족 코드를 입력해 주세요', 'error');
           document.querySelector('#auth-welcome-form [name="code"]')?.focus();
           return;
         }
         if (!pass.trim()) {
+          setWelcomeFormError('가족 암호를 입력해 주세요');
           toast('가족 암호를 입력해 주세요', 'error');
           document.querySelector('#auth-welcome-form [name="pass"]')?.focus();
           return;
         }
-        const result = await connectJoinHousehold({ code, pass });
-        if (!result.ok) {
-          toast(result.message || '연동하지 못했습니다', 'error');
-          return;
-        }
-        leaveStartScreen();
-        state.data.auth.loggedIn = true;
-        persist();
-        toast('연동되었습니다', 'success');
-        if (state.data.auth.onboardingDone) {
-          renderApp();
-        } else {
-          onFinish();
-          persist();
-          renderApp();
+        setWelcomeFormError('');
+        setAuthBusy(true);
+        try {
+          const result = await connectJoinHousehold({ code, pass });
+          if (!result.ok) {
+            setWelcomeFormError(result.message || '연동하지 못했습니다');
+            toast(result.message || '연동하지 못했습니다', 'error');
+            const fatal = result.reason === 'bad-code' || result.reason === 'validation';
+            if (fatal) return;
+            toast('가족 코드는 저장됐어요. 설정 → 연동에서 암호를 다시 맞춰 주세요', 'info');
+          } else {
+            toast('연동되었습니다', 'success');
+          }
+          proceedFromWelcome(onFinish, renderApp);
+        } catch (e) {
+          console.warn('Link start failed', e);
+          setWelcomeFormError('연동 중 문제가 생겼어요. 네트워크를 확인해 주세요.');
+          toast('연동 중 문제가 생겼어요', 'error');
+          if (hasSavedJoinCode()) {
+            toast('가족 코드는 저장됐어요. 일단 앱으로 들어갑니다', 'info');
+            proceedFromWelcome(onFinish, renderApp);
+          }
+        } finally {
+          setAuthBusy(false);
         }
       }
     });
