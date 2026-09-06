@@ -330,7 +330,11 @@ export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 1
 
 export function getMonthSavingsTotal(data, year, month) {
   const cat = getSavingsCategory(data);
-  if (cat) return getSubActualsSum(data, year, month, cat.id);
+  if (cat) {
+    const subSum = getSubActualsSum(data, year, month, cat.id);
+    if (hasSubItems(data, cat.id)) return subSum;
+    return getActualAmount(data, year, month, cat.id) || 0;
+  }
   let total = 0;
   for (const asset of data.assets?.items || []) {
     for (const entry of asset.savingsLog || []) {
@@ -345,19 +349,11 @@ export function getMonthSavingsTotal(data, year, month) {
 
 /** 예산 관리 시작 이후 전체 월의 누적 저축 합계 */
 export function getCumulativeSavingsTotal(data) {
-  const cat = getSavingsCategory(data);
-  if (!cat || !data.budget?.subActuals) return 0;
+  if (!data.budget?.setupDone) return 0;
   let total = 0;
-  for (const [key, bucket] of Object.entries(data.budget.subActuals)) {
-    const m2 = key.match(/^(\d{4})-(\d{2})$/);
-    if (!m2) continue;
-    const yr = Number(m2[1]);
-    const mo = Number(m2[2]);
-    if (isBeforeBudgetStart(data, yr, mo)) continue;
-    for (const entry of Object.values(bucket || {})) {
-      total += Number(entry?.amount) || 0;
-    }
-  }
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    total += getMonthSavingsTotal(data, y, m);
+  });
   return total;
 }
 

@@ -4,6 +4,7 @@ import {
   getSubItems,
   getSubActualAmount,
   getVisibleSubItems,
+  getCategoryPeriodSummary,
 } from './budget-engine.js';
 import { splitLoanPayment, formatLoanSplitSummary } from './loan-amort.js';
 
@@ -153,5 +154,13 @@ export function getMonthHousingPrincipalTotal(data, year, month) {
       if (preview) total += Number(preview.principal) || 0;
     }
   }
-  return total;
+  if (total > 0) return total;
+  const s = getCategoryPeriodSummary(data, year, month, housingCat.id);
+  if (!s.hasActual || s.actual <= 0) return 0;
+  const loanItems = getVisibleSubItems(data, housingCat.id).filter((i) => i.loanId);
+  if (loanItems.length === 1) {
+    const preview = previewLoanSplit(data, loanItems[0].id, year, month, s.actual);
+    if (preview) return Number(preview.principal) || 0;
+  }
+  return 0;
 }
