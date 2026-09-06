@@ -9,7 +9,7 @@ import {
   setHomeOwnerFilter,
   getMonthSavedBreakdown,
   getCumulativeSavedAmount,
-  getMonthlyAssetChangeSeries,
+  getMonthlySavedSeries,
   monthHasUserBudgetActuals,
 } from '../store.js';
 import { fmtMoney, fmtPct, fmtShort, fmtMonth } from '../format.js';
@@ -41,17 +41,17 @@ export function renderDashboard() {
   const prevSaved = getMonthSavedBreakdown(data, prev.year, prev.month);
   const cumSaved = getCumulativeSavedAmount(data);
   const savedDelta = saved.total - prevSaved.total;
-  const assetSeries = getMonthlyAssetChangeSeries(data, ownerFilter, 999);
-  const chartRows = assetSeries.slice(-12);
-  const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.change }));
-  const latestAssetChange = chartRows.length ? chartRows[chartRows.length - 1].change : 0;
-  const monthlyAssetList = assetSeries.length ? `
+  const savedSeries = getMonthlySavedSeries(data, 999);
+  const chartRows = savedSeries.slice(-12);
+  const chartPts = chartRows.map((r) => ({ label: `${r.month}월`, value: r.total }));
+  const latestSaved = chartRows.length ? chartRows[chartRows.length - 1].total : 0;
+  const monthlySavedList = savedSeries.length ? `
       <div class="spend-delta-list saved-month-list">
-        ${[...assetSeries].reverse().map((r) => `
+        ${[...savedSeries].reverse().map((r) => `
           <div class="spend-delta-row">
             <span class="spend-delta-name">${esc(fmtMonth(r.year, r.month))}</span>
-            <span class="spend-delta-detail muted">총자산 ${fmtShort(r.assets)}</span>
-            <span class="spend-delta-change ${r.change >= 0 ? '' : 'up'}">${r.change >= 0 ? '+' : ''}${fmtMoney(r.change)}</span>
+            <span class="spend-delta-detail muted">저축 ${fmtShort(r.savings)} · 원금 ${fmtShort(r.principal)} · 예산 ${r.budgetBalance >= 0 ? '+' : ''}${fmtShort(r.budgetBalance)}</span>
+            <span class="spend-delta-change ${r.total >= 0 ? '' : 'up'}">${r.total >= 0 ? '+' : ''}${fmtMoney(r.total)}</span>
           </div>`).join('')}
       </div>` : '';
 
@@ -164,11 +164,11 @@ export function renderDashboard() {
     ${ownerChipRow}
 
     <section class="section">
-      <div class="section-head"><h2>월별 총자산 변화</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">전월 대비 총자산 증감 · 저축·대출 원금·평가 반영</p>
+      <div class="section-head"><h2>월별 모은 금액</h2></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 원금 + 투자 수입 + 예산 절약(−초과)</p>
       ${chartPts.length ? lineChart(chartPts) : '<p class="muted">예산 관리를 시작하면 추이가 표시됩니다.</p>'}
-      ${chartPts.length ? legend([{ label: '총자산 변화', value: latestAssetChange, color: '#1e4d3a' }]) : ''}
-      ${monthlyAssetList}
+      ${chartPts.length ? legend([{ label: '월 모은 금액', value: latestSaved, color: '#1e4d3a' }]) : ''}
+      ${monthlySavedList}
     </section>`;
 }
 
