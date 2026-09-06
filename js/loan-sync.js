@@ -2,14 +2,51 @@ import { ymKey } from './format.js';
 import {
   findSubItemCategoryId,
   getSubItems,
-  getSubActualAmount,
-  getVisibleSubItems,
+  getSubActualEntry,
+  readBudgetAmount,
   getCategoryPeriodSummary,
 } from './budget-engine.js';
 import { splitLoanPayment, formatLoanSplitSummary } from './loan-amort.js';
 
 export function budgetLoanLogId(itemId, year, month) {
   return `budget-loan-${itemId}-${ymKey(year, month)}`;
+}
+
+function getSubActualPayment(data, year, month, itemId) {
+  return readBudgetAmount(getSubActualEntry(data, year, month, itemId));
+}
+
+function housingCategory(data) {
+  return data.budget?.categories?.find((c) => c.name === '주거') || null;
+}
+
+function isHousingSubItem(data, itemId) {
+  const catId = findSubItemCategoryId(data, itemId);
+  if (!catId) return false;
+  const cat = data.budget?.categories?.find((c) => c.id === catId);
+  return cat?.name === '주거';
+}
+
+function collectHousingLoanItems(data) {
+  const itemById = new Map();
+  const housingCat = housingCategory(data);
+  if (housingCat) {
+    for (const item of getSubItems(data, housingCat.id)) {
+      if (item.loanId) itemById.set(item.id, item);
+    }
+  }
+  return { housingCat, itemById };
+}
+
+function loanItemPrincipalForMonth(data, year, month, item, loan) {
+  const payment = getSubActualPayment(data, year, month, item.id);
+  if (payment > 0) {
+    const preview = previewLoanSplit(data, item.id, year, month, payment);
+    if (preview) return Number(preview.principal) || 0;
+  }
+  const logEntry = findBudgetLoanLogEntry(loan, item.id, year, month);
+  if (logEntry) return Number(logEntry.principal) || 0;
+  return 0;
 }
 
 function findSubItem(data, itemId) {
@@ -118,7 +155,7 @@ export function reconcileAllLoanBudgetSync(data) {
     const month = Number(m[2]);
     for (const itemId of Object.keys(bucket || {})) {
       if (!findSubItem(data, itemId)?.item?.loanId) continue;
-      const amt = getSubActualAmount(data, year, month, itemId) || 0;
+      const amt = getSubActualPayment(data, year, month, itemId);
       syncLoanSubActualToAsset(data, year, month, itemId, amt);
     }
   }
@@ -136,35 +173,32 @@ export { formatLoanSplitSummary };
 
 /** 주거(주택) 대출 세부 실적의 당월 원금 상환 합계 */
 export function getMonthHousingPrincipalTotal(data, year, month) {
-  const housingCat = data.budget?.categories?.find((c) => c.name === '주거');
-  if (!housingCat) return 0;
+  const { housingCat, itemById } = collectHousingLoanItems(data);
+  const key = ymKey(year, month);
+  const bucket = data.budget?.subActuals?.[key];
+  if (bucket) {
+    for (const itemId of Object.keys(bucket)) {
+      if (!isHousingSubItem(data, itemId)) continue;
+      const found = findSubItem(data, itemId);
+      if (found?.item?.loanId) itemById.set(found.item.id, found.item);
+    }
+  }
+
   let total = 0;
-  for (const item of getVisibleSubItems(data, housingCat.id)) {
-    if (!item.loanId) continue;
+  for (const item of itemById.values()) {
     const loan = data.assets?.items?.find((x) => x.id === item.loanId && x.type === 'loan');
     if (!loan) continue;
     ensureLoanFields(loan);
-    const entry = findBudgetLoanLogEntry(loan, item.id, year, month);
-    if (entry) {
-      total += Number(entry.principal) || 0;
-      continue;
-    }
-    const payment = getSubActualAmount(data, year, month, item.id) || 0;
-    if (payment > 0) {
-      const preview = previewLoanSplit(data, item.id, year, month, payment);
-      if (preview) total += Number(preview.principal) || 0;
-    }
+    total += loanItemPrincipalForMonth(data, year, month, item, loan);
   }
-  if (total > 0) return total;
+  if (total > 0 || !housingCat) return total;
+
   const s = getCategoryPeriodSummary(data, year, month, housingCat.id);
   if (!s.hasActual || s.actual <= 0) return 0;
-  const loanItems = getVisibleSubItems(data, housingCat.id).filter((i) => i.loanId);
-  for (const item of loanItems) {
-    const payment = getSubActualAmount(data, year, month, item.id) || 0;
-    if (payment <= 0 && loanItems.length === 1) {
-      const preview = previewLoanSplit(data, item.id, year, month, s.actual);
-      if (preview) return Number(preview.principal) || 0;
-    }
+  const loanItems = [...itemById.values()];
+  if (loanItems.length === 1 && getSubActualPayment(data, year, month, loanItems[0].id) <= 0) {
+    const preview = previewLoanSplit(data, loanItems[0].id, year, month, s.actual);
+    if (preview) return Number(preview.principal) || 0;
   }
   return 0;
 }
