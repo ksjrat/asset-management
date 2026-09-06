@@ -164,11 +164,11 @@ export function renderDashboard() {
     ${ownerChipRow}
 
     <section class="section">
-      <div class="section-head"><h2>월별 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">저축 + 주택 원금 + 투자 수입 + 예산 절약(−초과)</p>
+      <div class="section-head"><h2>월별 총자산 변화</h2></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">전월 대비 총자산 증감 · 저축·대출 원금·평가 반영</p>
       ${chartPts.length ? lineChart(chartPts) : '<p class="muted">예산 관리를 시작하면 추이가 표시됩니다.</p>'}
-      ${chartPts.length ? legend([{ label: '월 모은 금액', value: latestSaved, color: '#1e4d3a' }]) : ''}
-      ${monthlySavedList}
+      ${chartPts.length ? legend([{ label: '총자산 변화', value: latestAssetChange, color: '#1e4d3a' }]) : ''}
+      ${monthlyAssetList}
     </section>`;
 }
 
