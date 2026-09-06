@@ -881,7 +881,8 @@ table.data tr.total td { font-weight: 700; background: #eef5f1; }
 .budget-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
 .budget-warn { font-size: 0.75rem; color: var(--danger); margin-top: 4px; }
 
-.chart-svg { width: 100%; height: auto; display: block; margin: 8px 0; }
+.chart-svg { width: 100%; height: auto; display: block; margin: 8px 0; max-height: 220px; }
+.chart-svg--axis { font-family: system-ui, -apple-system, sans-serif; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
 .legend-item { display: flex; align-items: center; gap: 4px; }
 .legend-dot { width: 8px; height: 8px; border-radius: 50%; }

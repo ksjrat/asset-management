@@ -1,33 +1,114 @@
 import { fmtShort } from './format.js';
 
-export function lineChart(points, { width = 320, height = 140, color = '#1e4d3a' } = {}) {
+const AXIS = {
+  left: 52,
+  right: 12,
+  top: 14,
+  bottom: 32,
+};
+
+function computeYDomain(vals) {
+  let min = Math.min(...vals);
+  let max = Math.max(...vals);
+  if (min === max) {
+    if (min === 0) return { min: -500000, max: 500000 };
+    if (min > 0) return { min: 0, max: min * 1.2 || 1 };
+    return { min: min * 1.2, max: 0 };
+  }
+  if (min > 0) min = 0;
+  if (max < 0) max = 0;
+  const pad = (max - min) * 0.08 || 1;
+  return { min: min - pad, max: max + pad };
+}
+
+function yTicks(min, max, count = 4) {
+  const ticks = [];
+  for (let i = 0; i <= count; i++) {
+    ticks.push(min + ((max - min) * i) / count);
+  }
+  return ticks;
+}
+
+function plotY(value, min, max, plotTop, plotHeight) {
+  return plotTop + plotHeight - ((value - min) / (max - min || 1)) * plotHeight;
+}
+
+function plotX(index, count, plotLeft, plotWidth) {
+  if (count <= 1) return plotLeft + plotWidth / 2;
+  return plotLeft + (index / (count - 1)) * plotWidth;
+}
+
+export function lineChart(points, { width = 340, height = 200, color = '#1e4d3a' } = {}) {
   if (!points.length) {
     return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" aria-hidden="true">
-      <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="#6b7a72" font-size="12">데이터 없음</text>
+      <text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#6b7a72" font-size="12">데이터 없음</text>
     </svg>`;
   }
+
   const vals = points.map((p) => p.value);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const pad = 12;
-  const range = max - min || 1;
+  const { min, max } = computeYDomain(vals);
+  const plotLeft = AXIS.left;
+  const plotTop = AXIS.top;
+  const plotWidth = width - AXIS.left - AXIS.right;
+  const plotHeight = height - AXIS.top - AXIS.bottom;
+  const plotBottom = plotTop + plotHeight;
+
+  const ticks = yTicks(min, max);
+  const gridLines = ticks.map((t) => {
+    const y = plotY(t, min, max, plotTop, plotHeight);
+    return `<line x1="${plotLeft}" y1="${y.toFixed(1)}" x2="${width - AXIS.right}" y2="${y.toFixed(1)}"
+      stroke="#dde5e0" stroke-width="1"/>`;
+  }).join('');
+
+  const yLabels = ticks.map((t) => {
+    const y = plotY(t, min, max, plotTop, plotHeight);
+    return `<text x="${plotLeft - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end"
+      font-size="9" fill="#6b7a72">${fmtShort(t)}</text>`;
+  }).join('');
+
+  const zeroLine = min < 0 && max > 0
+    ? `<line x1="${plotLeft}" y1="${plotY(0, min, max, plotTop, plotHeight).toFixed(1)}"
+        x2="${width - AXIS.right}" y2="${plotY(0, min, max, plotTop, plotHeight).toFixed(1)}"
+        stroke="#9aab9f" stroke-width="1" stroke-dasharray="4 3"/>`
+    : '';
+
   const coords = points.map((p, i) => {
-    const x = pad + (i / Math.max(points.length - 1, 1)) * (width - pad * 2);
-    const y = height - pad - ((p.value - min) / range) * (height - pad * 2);
+    const x = plotX(i, points.length, plotLeft, plotWidth);
+    const y = plotY(p.value, min, max, plotTop, plotHeight);
     return { x, y, ...p };
   });
+
   const path = coords.map((c, i) => `${i ? 'L' : 'M'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
-  const area = `${path} L${coords[coords.length-1].x},${height-pad} L${coords[0].x},${height-pad} Z`;
+  const area = `${path} L${coords[coords.length - 1].x.toFixed(1)},${plotBottom} L${coords[0].x.toFixed(1)},${plotBottom} Z`;
+
+  const xStep = points.length > 8 ? 2 : 1;
+  const xLabels = coords.map((c, i) => {
+    if (i % xStep !== 0 && i !== points.length - 1) return '';
+    return `<text x="${c.x.toFixed(1)}" y="${height - 8}" text-anchor="middle"
+      font-size="9" fill="#6b7a72">${c.label}</text>`;
+  }).join('');
+
   const dots = coords.map((c) =>
-    `<circle cx="${c.x}" cy="${c.y}" r="4" fill="${color}" data-label="${c.label}"/>`
+    `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5"/>`,
   ).join('');
-  return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="추이 그래프">
+
+  const axes = `
+    <line x1="${plotLeft}" y1="${plotTop}" x2="${plotLeft}" y2="${plotBottom}" stroke="#b8c4bc" stroke-width="1"/>
+    <line x1="${plotLeft}" y1="${plotBottom}" x2="${width - AXIS.right}" y2="${plotBottom}" stroke="#b8c4bc" stroke-width="1"/>
+  `;
+
+  return `<svg class="chart-svg chart-svg--axis" viewBox="0 0 ${width} ${height}" role="img" aria-label="추이 그래프">
     <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.2"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
     </linearGradient></defs>
+    ${gridLines}
+    ${zeroLine}
+    ${axes}
+    ${yLabels}
+    ${xLabels}
     <path d="${area}" fill="url(#chartGrad)"/>
-    <path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}
   </svg>`;
 }
