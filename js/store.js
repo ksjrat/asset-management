@@ -331,9 +331,9 @@ export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 1
 export function getMonthSavingsTotal(data, year, month) {
   const cat = getSavingsCategory(data);
   if (cat) {
-    const subSum = getSubActualsSum(data, year, month, cat.id);
-    if (hasSubItems(data, cat.id)) return subSum;
-    return getActualAmount(data, year, month, cat.id) || 0;
+    const s = getCategoryPeriodSummary(data, year, month, cat.id);
+    if (s.hasActual) return Number(s.actual) || 0;
+    return getSubActualsSum(data, year, month, cat.id);
   }
   let total = 0;
   for (const asset of data.assets?.items || []) {

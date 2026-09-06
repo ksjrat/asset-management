@@ -38,7 +38,7 @@ function prevSyncedPrincipal(loan, itemId, year, month) {
 
 export function previewLoanSplit(data, itemId, year, month, payment) {
   const loan = getLoanForSubItem(data, itemId);
-  if (!loan || !loan.annualRate) return null;
+  if (!loan || loan.annualRate == null || Number.isNaN(Number(loan.annualRate))) return null;
   const prevPrincipal = prevSyncedPrincipal(loan, itemId, year, month);
   const balanceBefore = (loan.amount || 0) + prevPrincipal;
   const split = splitLoanPayment(balanceBefore, payment, loan);
@@ -143,6 +143,7 @@ export function getMonthHousingPrincipalTotal(data, year, month) {
     if (!item.loanId) continue;
     const loan = data.assets?.items?.find((x) => x.id === item.loanId && x.type === 'loan');
     if (!loan) continue;
+    ensureLoanFields(loan);
     const entry = findBudgetLoanLogEntry(loan, item.id, year, month);
     if (entry) {
       total += Number(entry.principal) || 0;
@@ -158,9 +159,12 @@ export function getMonthHousingPrincipalTotal(data, year, month) {
   const s = getCategoryPeriodSummary(data, year, month, housingCat.id);
   if (!s.hasActual || s.actual <= 0) return 0;
   const loanItems = getVisibleSubItems(data, housingCat.id).filter((i) => i.loanId);
-  if (loanItems.length === 1) {
-    const preview = previewLoanSplit(data, loanItems[0].id, year, month, s.actual);
-    if (preview) return Number(preview.principal) || 0;
+  for (const item of loanItems) {
+    const payment = getSubActualAmount(data, year, month, item.id) || 0;
+    if (payment <= 0 && loanItems.length === 1) {
+      const preview = previewLoanSplit(data, item.id, year, month, s.actual);
+      if (preview) return Number(preview.principal) || 0;
+    }
   }
   return 0;
 }
