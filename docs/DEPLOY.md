@@ -74,9 +74,19 @@ Private GitHub 저장소도 연동 가능합니다.
 
 ## 로컬에서만 테스트
 
-| 용도 | 실행 파일 |
-|------|-----------|
-| PC만 | `start-server.bat` → http://localhost:8080 |
-| 같은 Wi‑Fi 폰 | `start-server-mobile.bat` → 표시된 IP:8080 |
+| 용도 | 실행 파일 | 접속 |
+|------|-----------|------|
+| PC만 | `start-server.bat` | http://localhost:8080 |
+| 같은 Wi‑Fi 폰·태블릿 | `start-server-mobile.bat` | 창에 표시된 `http://192.168.x.x:8080` |
 
-로컬 서버는 **PC가 켜져 있을 때만** 동작합니다.
+로컬 서버는 **PC가 켜져 있고 배치 파일이 실행 중일 때만** 동작합니다.
+
+### 같은 Wi‑Fi에서 휴대폰 접속 (요약)
+
+1. PC·휴대폰 **같은 Wi‑Fi** (휴대폰 데이터만 켜면 안 됨)
+2. `start-server-mobile.bat` 실행 → **사설 IP**(`192.168.` 등) 확인
+3. 휴대폰 브라우저에서 `http://<IP>:8080` 입력
+4. Windows 방화벽에서 **Python 개인 네트워크 허용** (최초 1회)
+5. 기기별 데이터는 자동 공유되지 않음 → Firebase 연동은 [SYNC.md](./SYNC.md)
+
+자세한 설명·문제 해결: [README.md](../README.md) «같은 Wi‑Fi에서 휴대폰으로 쓰기»
