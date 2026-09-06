@@ -306,16 +306,37 @@ export function eachBudgetMonthUpToNow(data, fn) {
   }
 }
 
-/** 관리 시작 이래 누적 모은 금액 */
-export function getCumulativeSavedAmount(data) {
+function monthHasContributionInputs(data, year, month) {
+  const b = getMonthSavedBreakdown(data, year, month);
+  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0;
+}
+
+/** 이번 달 저축·주택 원금·투자 수입 합 (예산 절약·초과 제외) */
+export function getMonthContributionsAmount(data, year, month) {
+  const b = getMonthSavedBreakdown(data, year, month);
+  return b.savings + b.principal + b.investIncome;
+}
+
+/** 관리 시작 이래 저축·주택 원금·투자 수입 누적 */
+export function getCumulativeContributionsAmount(data) {
   if (!data.budget?.setupDone) return 0;
   let total = 0;
   eachBudgetMonthUpToNow(data, (y, m) => {
-    if (monthHasSavedInputs(data, y, m)) {
-      total += getMonthSavedAmount(data, y, m);
+    if (monthHasContributionInputs(data, y, m)) {
+      total += getMonthContributionsAmount(data, y, m);
     }
   });
   return total;
+}
+
+/** 관리 시작 이래 모은 금액 (저축·원금·투자 + 예산 절약·초과) */
+export function getCumulativeGrandTotal(data) {
+  return getCumulativeContributionsAmount(data) + getCumulativeBudgetSavings(data);
+}
+
+/** @deprecated getCumulativeGrandTotal */
+export function getCumulativeSavedAmount(data) {
+  return getCumulativeGrandTotal(data);
 }
 
 /** 월별 모은 금액 추이 (차트용) */

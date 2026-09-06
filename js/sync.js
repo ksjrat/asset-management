@@ -48,6 +48,7 @@ export function extractSyncPayload(data) {
     budget: data.budget,
     transactions: data.transactions,
     recurring: data.recurring,
+    memos: data.memos,
     guideChecks: data.guideChecks,
     settings: {
       snapshotDay: data.settings?.snapshotDay,

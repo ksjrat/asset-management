@@ -2,8 +2,8 @@ import { state } from '../state.js';
 import {
   getVisibleCategories, getOwnerDisplayLabel, getOwnerMonthlySummary,
   getSubPayerLabel, hasSubItems,
-  getMonthSavingsTotal, getCumulativeSavingsTotal, getCumulativeBudgetSavings,
-  getMonthSavedBreakdown, getCumulativeSavedAmount,
+  getMonthSavingsTotal, getCumulativeBudgetSavings,
+  getMonthSavedBreakdown, getCumulativeContributionsAmount, getCumulativeGrandTotal,
 } from '../store.js';
 import {
   getCategoryPeriodSummary,
@@ -66,20 +66,15 @@ export function renderBudget() {
   const monthInvest = monthSavedBreakdown.investIncome;
   const monthBudgetBal = monthSavedBreakdown.budgetBalance;
   const monthAccumulated = monthSavedBreakdown.total;
-  const cumSaved = getCumulativeBudgetSavings(data);
-  const cumSavings = getCumulativeSavingsTotal(data);
-  const cumAccumulated = getCumulativeSavedAmount(data);
+  const cumBudgetBal = getCumulativeBudgetSavings(data);
+  const cumContributions = getCumulativeContributionsAmount(data);
+  const grandTotal = getCumulativeGrandTotal(data);
 
   const savingsStatsCard = !beforeStart && data.budget?.setupDone ? `
     <section class="section">
       <div class="section-head"><h2>절약 & 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 + 예산 절약(−초과, 저축·원금 제외)</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 + 예산 절약(−초과)</p>
       <div class="summary-row summary-row--quad">
-        <div class="mini-card">
-          <span>이번 달 모은 금액</span>
-          <strong class="${monthAccumulated >= 0 ? 'income' : 'danger'}">${monthAccumulated >= 0 ? '+' : ''}${fmtShort(monthAccumulated)}</strong>
-          <span class="mini-card-sub">${fmtMoney(monthAccumulated)}</span>
-        </div>
         <div class="mini-card">
           <span>이번 달 저축</span>
           <strong class="income">${fmtShort(monthSavings)}</strong>
@@ -91,31 +86,36 @@ export function renderBudget() {
           <span class="mini-card-sub">주거 대출 원금 상환</span>
         </div>
         <div class="mini-card">
+          <span>이번 달 투자 수입</span>
+          <strong class="${monthInvest >= 0 ? 'income' : 'danger'}">${monthInvest >= 0 ? '+' : ''}${fmtShort(monthInvest)}</strong>
+          <span class="mini-card-sub">자산 탭 평가 손익</span>
+        </div>
+        <div class="mini-card">
           <span>이번 달 예산 절약·초과</span>
           <strong class="${monthBudgetBal >= 0 ? 'income' : 'danger'}">${monthBudgetBal >= 0 ? '+' : ''}${fmtShort(monthBudgetBal)}</strong>
-          <span class="mini-card-sub">저축·주택 원금 제외 · 아낀 만큼 +, 초과만 −</span>
+          <span class="mini-card-sub">저축·주택 원금 제외</span>
         </div>
       </div>
       <div class="summary-row summary-row--quad" style="margin-top:10px">
         <div class="mini-card">
-          <span>이번 달 투자 수입</span>
-          <strong class="${monthInvest >= 0 ? 'income' : 'danger'}">${monthInvest >= 0 ? '+' : ''}${fmtShort(monthInvest)}</strong>
-          <span class="mini-card-sub">자산 탭에서 직접 기록한 평가 손익</span>
+          <span>이번 달 모은 금액</span>
+          <strong class="${monthAccumulated >= 0 ? 'income' : 'danger'}">${monthAccumulated >= 0 ? '+' : ''}${fmtShort(monthAccumulated)}</strong>
+          <span class="mini-card-sub">${fmtMoney(monthAccumulated)}</span>
         </div>
         <div class="mini-card">
           <span>누적 모은 금액</span>
-          <strong class="${cumAccumulated >= 0 ? 'income' : 'danger'}">${fmtShort(cumAccumulated)}</strong>
-          <span class="mini-card-sub">관리 시작 이래</span>
+          <strong class="${cumContributions >= 0 ? 'income' : 'danger'}">${cumContributions >= 0 ? '+' : ''}${fmtShort(cumContributions)}</strong>
+          <span class="mini-card-sub">저축·주택 원금·투자 수입 합계</span>
         </div>
         <div class="mini-card">
           <span>누적 절약</span>
-          <strong class="${cumSaved >= 0 ? 'income' : 'danger'}">${cumSaved >= 0 ? '+' : ''}${fmtShort(cumSaved)}</strong>
-          <span class="mini-card-sub">예산 절약·초과 순합 (저축·원금 제외)</span>
+          <strong class="${cumBudgetBal >= 0 ? 'income' : 'danger'}">${cumBudgetBal >= 0 ? '+' : ''}${fmtShort(cumBudgetBal)}</strong>
+          <span class="mini-card-sub">예산 절약(+)·초과(−) 순합</span>
         </div>
         <div class="mini-card">
-          <span>누적 저축</span>
-          <strong class="income">${fmtShort(cumSavings)}</strong>
-          <span class="mini-card-sub">저축 세부 실적 합계</span>
+          <span>최종 합계</span>
+          <strong class="${grandTotal >= 0 ? 'income' : 'danger'}">${grandTotal >= 0 ? '+' : ''}${fmtShort(grandTotal)}</strong>
+          <span class="mini-card-sub">누적 모은 금액 + 누적 절약</span>
         </div>
       </div>
     </section>` : '';

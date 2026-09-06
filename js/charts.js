@@ -7,24 +7,53 @@ const AXIS = {
   bottom: 32,
 };
 
-function computeYDomain(vals) {
-  let min = Math.min(...vals);
-  let max = Math.max(...vals);
-  if (min === max) {
-    if (min === 0) return { min: -500000, max: 500000 };
-    if (min > 0) return { min: 0, max: min * 1.2 || 1 };
-    return { min: min * 1.2, max: 0 };
-  }
-  if (min > 0) min = 0;
-  if (max < 0) max = 0;
-  const pad = (max - min) * 0.08 || 1;
-  return { min: min - pad, max: max + pad };
+/** Y축 눈금 간격 (1·2·5×10^n) */
+function niceStep(span, tickCount = 4) {
+  const rough = span / tickCount;
+  if (rough <= 0 || !Number.isFinite(rough)) return 1;
+  const exp = Math.floor(Math.log10(rough));
+  const base = Math.pow(10, exp);
+  const frac = rough / base;
+  if (frac <= 1) return base;
+  if (frac <= 2) return 2 * base;
+  if (frac <= 5) return 5 * base;
+  return 10 * base;
 }
 
-function yTicks(min, max, count = 4) {
+function computeYDomain(vals) {
+  const dataMin = Math.min(...vals);
+  const dataMax = Math.max(...vals);
+
+  if (dataMin === dataMax) {
+    const margin = Math.max(Math.abs(dataMin) * 0.06, 10000);
+    const step = niceStep(margin * 2);
+    const min = Math.floor((dataMin - margin) / step) * step;
+    const max = Math.ceil((dataMax + margin) / step) * step;
+    return { min, max, step };
+  }
+
+  const span = dataMax - dataMin;
+  const pad = Math.max(span * 0.12, Math.abs(dataMax) * 0.002, 10000);
+  let min = dataMin - pad;
+  let max = dataMax + pad;
+
+  // 부호가 섞인 경우(증감 그래프)만 0 포함
+  if (dataMin < 0 && dataMax > 0) {
+    min = Math.min(min, -pad);
+    max = Math.max(max, pad);
+  }
+
+  const step = niceStep(max - min);
+  min = Math.floor(min / step) * step;
+  max = Math.ceil(max / step) * step;
+  return { min, max, step };
+}
+
+function yTicks(min, max, step) {
   const ticks = [];
-  for (let i = 0; i <= count; i++) {
-    ticks.push(min + ((max - min) * i) / count);
+  for (let t = min; t <= max + step * 0.001; t += step) {
+    ticks.push(t);
+    if (ticks.length > 8) break;
   }
   return ticks;
 }
@@ -46,14 +75,14 @@ export function lineChart(points, { width = 340, height = 200, color = '#1e4d3a'
   }
 
   const vals = points.map((p) => p.value);
-  const { min, max } = computeYDomain(vals);
+  const { min, max, step } = computeYDomain(vals);
   const plotLeft = AXIS.left;
   const plotTop = AXIS.top;
   const plotWidth = width - AXIS.left - AXIS.right;
   const plotHeight = height - AXIS.top - AXIS.bottom;
   const plotBottom = plotTop + plotHeight;
 
-  const ticks = yTicks(min, max);
+  const ticks = yTicks(min, max, step);
   const gridLines = ticks.map((t) => {
     const y = plotY(t, min, max, plotTop, plotHeight);
     return `<line x1="${plotLeft}" y1="${y.toFixed(1)}" x2="${width - AXIS.right}" y2="${y.toFixed(1)}"
