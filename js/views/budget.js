@@ -80,7 +80,7 @@ export function renderBudget() {
   const savingsStatsCard = !beforeStart && data.budget?.setupDone ? `
     <section class="section">
       <div class="section-head"><h2>절약 & 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 수입 + 저축 + 주택 원금 + 투자 수입 − 예산 실적</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 − 예산 실적</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
           <span>이번 달 모은 금액</span>

@@ -212,14 +212,13 @@ export function getMonthCashflowSummary(data, year, month) {
   return { income, expense, savings, investPnL };
 }
 
-/** 이번 달 모은 금액 = 수입 + 저축 + 주택 대출 원금 + 투자 수입 − 예산 실적 */
+/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 − 예산 실적 */
 export function getMonthSavedBreakdown(data, year, month) {
   const flow = getMonthCashflowSummary(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
   const investIncome = flow.investPnL;
-  const total = flow.income + flow.savings + principal + investIncome - flow.expense;
+  const total = flow.savings + principal + investIncome - flow.expense;
   return {
-    income: flow.income,
     savings: flow.savings,
     principal,
     investIncome,
@@ -234,7 +233,7 @@ export function getMonthSavedAmount(data, year, month) {
 
 function monthHasSavedInputs(data, year, month) {
   const b = getMonthSavedBreakdown(data, year, month);
-  return b.income > 0 || b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetActual > 0;
+  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetActual > 0;
 }
 
 /** 예산 시작월부터 집계 가능한 모든 달 순회 */
