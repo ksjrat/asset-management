@@ -329,7 +329,17 @@ export function getMonthlySavedSeries(data, limit = 12) {
   return rows.slice(-limit);
 }
 
-/** 월별 총자산 변화 (전월 대비, 차트용) */
+/** 월별 총자산 (말잔, 차트용) */
+export function getMonthlyAssetSeries(data, ownerFilter = 'all', limit = 12) {
+  const nwAt = (y, m) => computeNetWorthAtMonth(data, y, m, (d) => computeNetWorth(d, ownerFilter));
+  const rows = [];
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    rows.push({ year: y, month: m, assets: nwAt(y, m).assets });
+  });
+  return rows.slice(-limit);
+}
+
+/** 월별 총자산 변화 (전월 대비) */
 export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 12) {
   const nwAt = (y, m) => computeNetWorthAtMonth(data, y, m, (d) => computeNetWorth(d, ownerFilter));
   const rows = [];
