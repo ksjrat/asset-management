@@ -54,7 +54,7 @@ export function renderDashboard() {
           if (r.monthSaved) {
             deltaParts.push(`당월 ${r.monthSaved >= 0 ? '+' : ''}${fmtShort(r.monthSaved)}`);
           }
-          if (savingsRate != null) deltaParts.push(`수익 대비 ${fmtPct(savingsRate)}`);
+          if (savingsRate != null) deltaParts.push(`저축 비율 ${fmtPct(savingsRate)}`);
           const deltaHint = deltaParts.join(' · ') || '입력 없음';
           return `
           <div class="spend-delta-row">
