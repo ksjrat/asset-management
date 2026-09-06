@@ -233,6 +233,7 @@ export async function pullFromCloud(data) {
     return { ...merged, status: 'ok' };
   } catch (e) {
     console.warn('Pull failed', e);
+    if (e?.name === 'OperationError') return pullResult(data, 'bad-pass');
     return pullResult(data, 'error');
   }
 }

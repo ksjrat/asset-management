@@ -190,11 +190,23 @@ export function bindAuth(onFinish, renderApp) {
           proceedFromWelcome(onFinish, renderApp);
         } catch (e) {
           console.warn('Link start failed', e);
-          setWelcomeFormError('연동 중 문제가 생겼어요. 네트워크를 확인해 주세요.');
-          toast('연동 중 문제가 생겼어요', 'error');
+          const insecure = typeof crypto !== 'undefined' && !crypto.subtle && location.protocol === 'http:';
+          const msg = insecure
+            ? '이 주소(http)에서는 클라우드 연동이 안 됩니다. https://ksjrat.github.io/asset-management/ 로 접속해 주세요.'
+            : '연동 중 문제가 생겼어요. 네트워크를 확인해 주세요.';
+          setWelcomeFormError(msg);
+          toast(insecure ? 'HTTPS 주소로 접속해 주세요' : '연동 중 문제가 생겼어요', 'error');
           if (hasSavedJoinCode()) {
             toast('가족 코드는 저장됐어요. 일단 앱으로 들어갑니다', 'info');
-            proceedFromWelcome(onFinish, renderApp);
+            try {
+              proceedFromWelcome(onFinish, renderApp);
+            } catch (e2) {
+              console.warn('Proceed after link failed', e2);
+              leaveStartScreen();
+              state.data.auth.loggedIn = true;
+              if (!state.data.auth.onboardingDone) onFinish();
+              renderApp();
+            }
           }
         } finally {
           setAuthBusy(false);

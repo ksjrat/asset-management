@@ -95,7 +95,7 @@ export function needsLinkAttention() {
 }
 
 export function dismissLinkAttention() {
-  localStorage.setItem(DISMISS_KEY, '1');
+  try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* 사파리 비공개 등 */ }
 }
 
 function checklistHtml() {
