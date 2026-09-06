@@ -1,5 +1,6 @@
 import { state, persist } from './state.js';
-import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries, ensureAppSettings, setHomeOwnerFilter } from './store.js';
+import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries, ensureAppSettings, setHomeOwnerFilter, refreshAutoSnapshots } from './store.js';
+import { finalizeBudgetAfterSync } from './budget-data.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload,
@@ -60,10 +61,13 @@ async function applyPullResult(result, { silent = false } = {}) {
   }
 
   const changed = dataFootprint(data) !== dataFootprint(before)
-    || JSON.stringify(data.transactions) !== JSON.stringify(before.transactions);
+    || JSON.stringify(data.transactions) !== JSON.stringify(before.transactions)
+    || JSON.stringify(data.budget?.subActuals) !== JSON.stringify(before.budget?.subActuals);
 
   state.data = data;
   ensureAppSettings(state.data);
+  finalizeBudgetAfterSync(state.data);
+  refreshAutoSnapshots(state.data);
   state.ownerFilter = setHomeOwnerFilter(state.data, state.ownerFilter);
   state.data._syncMeta = {
     ...(state.data._syncMeta || {}),

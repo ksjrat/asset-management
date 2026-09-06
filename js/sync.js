@@ -1,5 +1,6 @@
 import { DATA_VERSION, dataFootprint, hasUserFinancialData, countBudgetActualEntries } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
+import { finalizeBudgetAfterSync } from './budget-data.js';
 import {
   encryptPayload, decryptPayload, hasCloudPassphraseSession, setCloudPassphraseSession,
   getCloudPassphraseSession,
@@ -104,6 +105,7 @@ export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
 
   const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
+  finalizeBudgetAfterSync(merged);
   if (hasUserFinancialData(local) && dataFootprint(merged) < dataFootprint(local)) {
     return { data: local, rejectedEmptyRemote: true };
   }
@@ -154,6 +156,7 @@ async function unpackCloudDoc(snapData, householdId) {
 }
 
 async function packCloudDoc(data, householdId) {
+  finalizeBudgetAfterSync(data);
   const payload = extractSyncPayload(data);
   const pass = getCloudPassphraseSession();
   if (!pass) return null;

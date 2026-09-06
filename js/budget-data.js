@@ -1,4 +1,9 @@
-import { readBudgetAmount } from './budget-engine.js';
+import { ymKey } from './format.js';
+import {
+  readBudgetAmount, ensureBudgetStructure, migrateBudgetModel,
+} from './budget-engine.js';
+import { reconcileAllSavingsBudgetSync } from './savings-sync.js';
+import { reconcileAllLoanBudgetSync, ensureLoanFields } from './loan-sync.js';
 
 /** 해당 월에 사용자가 입력한 예산 실적(카테고리·세부)이 있는지 */
 export function monthHasUserBudgetActuals(data, year, month) {
@@ -28,23 +33,48 @@ export function countBudgetActualEntries(data) {
 }
 
 function entryTime(entry) {
+  if (entry == null) return 0;
+  if (typeof entry === 'number') return 0;
   return new Date(entry?.recordedAt || 0).getTime();
+}
+
+function pickNewerBudgetEntry(a, b) {
+  const amtA = readBudgetAmount(a);
+  const amtB = readBudgetAmount(b);
+  if (amtA <= 0 && amtB > 0) return b;
+  if (amtB <= 0 && amtA > 0) return a;
+  return entryTime(b) >= entryTime(a) ? b : a;
+}
+
+/** 2025-8 → 2025-08 등 월 키 통일 (병합·동기화용, 원본 변경 없음) */
+function flattenBudgetMonthMap(map = {}) {
+  const out = {};
+  for (const [key, bucket] of Object.entries(map || {})) {
+    const m = String(key).match(/^(\d{4})-(\d{1,2})$/);
+    if (!m || !bucket || typeof bucket !== 'object') continue;
+    const nKey = ymKey(Number(m[1]), Number(m[2]));
+    if (!out[nKey]) out[nKey] = {};
+    for (const [id, entry] of Object.entries(bucket)) {
+      if (readBudgetAmount(entry) <= 0) continue;
+      const prev = out[nKey][id];
+      out[nKey][id] = prev ? pickNewerBudgetEntry(prev, entry) : entry;
+    }
+  }
+  return out;
 }
 
 /** 월별 실적 맵 병합 — 항목 단위로 더 최근 기록 우선, 없으면 합집합 */
 export function mergeBudgetMonthMaps(local = {}, remote = {}) {
-  const out = { ...local };
-  for (const [ym, remoteMonth] of Object.entries(remote || {})) {
+  const normLocal = flattenBudgetMonthMap(local);
+  const normRemote = flattenBudgetMonthMap(remote);
+  const out = { ...normLocal };
+  for (const [ym, remoteMonth] of Object.entries(normRemote)) {
     if (!remoteMonth || typeof remoteMonth !== 'object') continue;
     const merged = { ...(out[ym] || {}) };
     for (const [id, entry] of Object.entries(remoteMonth)) {
-      if (!entry || readBudgetAmount(entry) <= 0) continue;
+      if (readBudgetAmount(entry) <= 0) continue;
       const localEntry = merged[id];
-      if (!localEntry) {
-        merged[id] = entry;
-        continue;
-      }
-      merged[id] = entryTime(entry) >= entryTime(localEntry) ? entry : localEntry;
+      merged[id] = localEntry ? pickNewerBudgetEntry(localEntry, entry) : entry;
     }
     if (Object.keys(merged).length) out[ym] = merged;
     else delete out[ym];
@@ -74,7 +104,12 @@ function mergeSubItemsByCategory(local = {}, remote = {}) {
     const byId = new Map(localItems.map((i) => [i.id, i]));
     for (const item of remoteItems) {
       if (!item?.id) continue;
-      if (!byId.has(item.id)) localItems.push(item);
+      if (byId.has(item.id)) {
+        Object.assign(byId.get(item.id), item);
+      } else {
+        localItems.push(item);
+        byId.set(item.id, item);
+      }
     }
     out[catId] = localItems;
   }
@@ -107,5 +142,18 @@ export function mergeBudgetObjects(localBudget, remoteBudget) {
     merged.categories = mergeCategories(localBudget.categories || [], remoteBudget.categories || []);
   }
   merged.setupDone = !!(localBudget.setupDone || remoteBudget.setupDone);
+  delete merged.savingsActuals;
+  delete merged.savingsItems;
+  delete merged.savingsMonthlyPlan;
   return merged;
+}
+
+/** 클라우드 pull/push 직후 — 실적 키 정규화·구형 필드 마이그레이션·자산 연동 */
+export function finalizeBudgetAfterSync(data) {
+  if (!data?.budget) return;
+  ensureBudgetStructure(data);
+  migrateBudgetModel(data);
+  for (const item of data.assets?.items || []) ensureLoanFields(item);
+  reconcileAllSavingsBudgetSync(data);
+  reconcileAllLoanBudgetSync(data);
 }
