@@ -12,12 +12,16 @@ export function monthIndex(year, month) {
   return year * 12 + month;
 }
 
-export function getSavingsCategory(data) {
-  ensureBudgetStructure(data);
+function savingsCategoryRef(data) {
   const cats = data.budget?.categories || [];
   const hidden = new Set(data.settings?.hiddenCategories || []);
   const visible = cats.filter((c) => !c.hidden && !hidden.has(c.id));
   return visible.find((c) => c.name === '저축') || cats.find((c) => c.name === '저축') || null;
+}
+
+export function getSavingsCategory(data) {
+  ensureBudgetStructure(data);
+  return savingsCategoryRef(data);
 }
 
 function subItemsList(data, catId) {
@@ -239,7 +243,7 @@ function migrateLegacySubItems(data) {
   if (!b.subMonthlyPlan) b.subMonthlyPlan = {};
   if (!b.subActuals) b.subActuals = {};
 
-  const savingsCat = getSavingsCategory(data);
+  const savingsCat = savingsCategoryRef(data);
   if (b.savingsItems?.length && savingsCat && !b.subItemsByCategory[savingsCat.id]?.length) {
     b.subItemsByCategory[savingsCat.id] = b.savingsItems;
   }
@@ -268,7 +272,7 @@ export function ensureBudgetStructure(data) {
   if (!b.monthlyPlan) b.monthlyPlan = {};
   if (!b.actuals) b.actuals = {};
   migrateLegacySubItems(data);
-  const savingsCat = getSavingsCategory(data);
+  const savingsCat = savingsCategoryRef(data);
   if (savingsCat && !(b.subItemsByCategory[savingsCat.id]?.length)) {
     b.subItemsByCategory[savingsCat.id] = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
       id: `sav-${i}`, name, hidden: false, payer: 'joint',
@@ -639,7 +643,7 @@ export function migrateBudgetModel(data) {
   }
 
   migrateLegacySubItems(data);
-  const savingsCat = getSavingsCategory(data);
+  const savingsCat = savingsCategoryRef(data);
   if (savingsCat && !(b.subItemsByCategory[savingsCat.id]?.length)) {
     b.subItemsByCategory[savingsCat.id] = DEFAULT_SAVINGS_ITEM_NAMES.map((name, i) => ({
       id: `sav-${i}`, name, hidden: false, payer: 'joint',
