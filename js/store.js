@@ -213,13 +213,13 @@ export function getMonthCashflowSummary(data, year, month) {
   return { income, expense, savings, investPnL };
 }
 
-/** 해당 월 예산 절약 (월 예산−실적 양수만, 저축 카테고리 제외) */
+/** 해당 월 예산 절약 (월 예산−실적 양수만, 저축·주거 제외) */
 export function getMonthBudgetSavings(data, year, month) {
   if (!data.budget?.setupDone || isBeforeBudgetStart(data, year, month)) return 0;
   const cats = getVisibleCategories(data);
   let total = 0;
   for (const c of cats) {
-    if (c.name === '저축') continue;
+    if (c.name === '저축' || c.name === '주거') continue;
     const s = getCategoryPeriodSummary(data, year, month, c.id);
     if (!s.hasActual) continue;
     const pureSaving = s.monthlyPlanned - s.actual;
@@ -228,21 +228,40 @@ export function getMonthBudgetSavings(data, year, month) {
   return total;
 }
 
-/** 이번 달 모은 금액 = 저축 + 주택 대출 원금 + 투자 수입 + 예산 절약 (실적 입력된 달만) */
+/** 생활 지출 (저축 카테고리·주택 대출 원금 제외) */
+export function getMonthLifestyleSpending(data, year, month) {
+  if (!data.budget?.setupDone || isBeforeBudgetStart(data, year, month)) return 0;
+  const cats = getVisibleCategories(data);
+  const principal = getMonthHousingPrincipalTotal(data, year, month);
+  let total = 0;
+  for (const c of cats) {
+    if (c.name === '저축') continue;
+    const s = getCategoryPeriodSummary(data, year, month, c.id);
+    if (!s.hasActual) continue;
+    if (c.name === '주거') {
+      total += Math.max(0, s.actual - principal);
+    } else {
+      total += s.actual;
+    }
+  }
+  return total;
+}
+
+/** 이번 달 모은 금액 = 저축 + 주택 원금 + 투자 수입 − 생활 지출 (실적 입력된 달만) */
 export function getMonthSavedBreakdown(data, year, month) {
   if (!monthHasUserBudgetActuals(data, year, month) || isBeforeBudgetStart(data, year, month)) {
-    return { savings: 0, principal: 0, investIncome: 0, budgetSaving: 0, total: 0 };
+    return { savings: 0, principal: 0, investIncome: 0, lifestyleSpending: 0, total: 0 };
   }
   const flow = getMonthCashflowSummary(data, year, month);
   const principal = getMonthHousingPrincipalTotal(data, year, month);
   const investIncome = flow.investPnL;
-  const budgetSaving = getMonthBudgetSavings(data, year, month);
-  const total = flow.savings + principal + investIncome + budgetSaving;
+  const lifestyleSpending = getMonthLifestyleSpending(data, year, month);
+  const total = flow.savings + principal + investIncome - lifestyleSpending;
   return {
     savings: flow.savings,
     principal,
     investIncome,
-    budgetSaving,
+    lifestyleSpending,
     total,
   };
 }
@@ -254,7 +273,7 @@ export function getMonthSavedAmount(data, year, month) {
 function monthHasSavedInputs(data, year, month) {
   if (!monthHasUserBudgetActuals(data, year, month)) return false;
   const b = getMonthSavedBreakdown(data, year, month);
-  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.budgetSaving > 0;
+  return b.savings > 0 || b.principal > 0 || b.investIncome !== 0 || b.lifestyleSpending > 0;
 }
 
 /** 예산 시작월부터 집계 가능한 모든 달 순회 */
@@ -292,6 +311,19 @@ export function getMonthlySavedSeries(data, limit = 12) {
     if (monthHasSavedInputs(data, y, m)) {
       rows.push({ year: y, month: m, ...getMonthSavedBreakdown(data, y, m) });
     }
+  });
+  return rows.slice(-limit);
+}
+
+/** 월별 총자산 변화 (전월 대비, 차트용) */
+export function getMonthlyAssetChangeSeries(data, ownerFilter = 'all', limit = 12) {
+  const nwAt = (y, m) => computeNetWorthAtMonth(data, y, m, (d) => computeNetWorth(d, ownerFilter));
+  const rows = [];
+  eachBudgetMonthUpToNow(data, (y, m) => {
+    const { assets } = nwAt(y, m);
+    const prev = prevYm(y, m);
+    const prevAssets = nwAt(prev.year, prev.month).assets;
+    rows.push({ year: y, month: m, assets, change: assets - prevAssets });
   });
   return rows.slice(-limit);
 }

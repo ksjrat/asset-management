@@ -4,7 +4,6 @@ import {
   getSubPayerLabel, hasSubItems,
   getMonthSavingsTotal, getCumulativeSavingsTotal, getCumulativeBudgetSavings,
   getMonthSavedBreakdown, getCumulativeSavedAmount,
-  getMonthBudgetSavings,
 } from '../store.js';
 import {
   getCategoryPeriodSummary,
@@ -61,11 +60,11 @@ export function renderBudget() {
   const start = getBudgetStart(data);
   const beforeStart = isBeforeBudgetStart(data, y, m);
 
-  const monthSaved = getMonthBudgetSavings(data, y, m);
   const monthSavings = getMonthSavingsTotal(data, y, m);
   const monthSavedBreakdown = getMonthSavedBreakdown(data, y, m);
   const monthPrincipal = monthSavedBreakdown.principal;
   const monthInvest = monthSavedBreakdown.investIncome;
+  const monthSpending = monthSavedBreakdown.lifestyleSpending;
   const monthAccumulated = monthSavedBreakdown.total;
   const cumSaved = getCumulativeBudgetSavings(data);
   const cumSavings = getCumulativeSavingsTotal(data);
@@ -74,17 +73,12 @@ export function renderBudget() {
   const savingsStatsCard = !beforeStart && data.budget?.setupDone ? `
     <section class="section">
       <div class="section-head"><h2>절약 & 모은 금액</h2></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 + 예산 절약</p>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">이번 달 = 저축 + 주택 원금 + 투자 수입 − 지출(저축·원금 제외)</p>
       <div class="summary-row summary-row--quad">
         <div class="mini-card">
           <span>이번 달 모은 금액</span>
           <strong class="${monthAccumulated >= 0 ? 'income' : 'danger'}">${monthAccumulated >= 0 ? '+' : ''}${fmtShort(monthAccumulated)}</strong>
           <span class="mini-card-sub">${fmtMoney(monthAccumulated)}</span>
-        </div>
-        <div class="mini-card">
-          <span>이번 달 절약</span>
-          <strong class="${monthSaved >= 0 ? 'income' : 'danger'}">${fmtShort(monthSaved)}</strong>
-          <span class="mini-card-sub">월 예산 − 실적 (저축·주거 원금 제외)</span>
         </div>
         <div class="mini-card">
           <span>이번 달 저축</span>
@@ -95,6 +89,11 @@ export function renderBudget() {
           <span>이번 달 주택 원금</span>
           <strong class="income">${fmtShort(monthPrincipal)}</strong>
           <span class="mini-card-sub">주거 대출 원금 상환</span>
+        </div>
+        <div class="mini-card">
+          <span>이번 달 지출</span>
+          <strong class="danger">−${fmtShort(monthSpending)}</strong>
+          <span class="mini-card-sub">실적 합계 (저축·주택 원금 제외)</span>
         </div>
       </div>
       <div class="summary-row summary-row--quad" style="margin-top:10px">
