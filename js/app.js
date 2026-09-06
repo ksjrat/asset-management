@@ -1,14 +1,21 @@
 import { initUI } from './ui.js';
 import { renderApp } from './views/index.js';
-import { state } from './state.js';
-import { load } from './store.js';
+import { state, leaveStartScreen, persist, persistAuthFlags } from './state.js';
+import { load, hasUserFinancialData } from './store.js';
 import { isAppPinConfigured } from './app-lock.js';
 import { setupCloudSync } from './sync-service.js';
 import { initPwaInstall } from './pwa-install.js';
 
 async function bootstrap() {
   state.data = load();
-  if (state.data.auth.atStartScreen) {
+  if (state.data.auth.atStartScreen && hasUserFinancialData(state.data)) {
+    // 연동 실패 후 시작 화면 플래그만 남은 경우 — 데이터는 있으니 앱으로 복구
+    leaveStartScreen();
+    state.data.auth.onboardingDone = true;
+    state.data.auth.loggedIn = true;
+    persistAuthFlags();
+    persist();
+  } else if (state.data.auth.atStartScreen) {
     state.showWelcome = true;
     state.authScreen = 'welcome';
     state.locked = false;

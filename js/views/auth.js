@@ -1,4 +1,4 @@
-import { state, persist, leaveStartScreen } from '../state.js';
+import { state, persist, persistAuthFlags, leaveStartScreen } from '../state.js';
 import { recordPolicyConsent, HOUSEHOLD_CODE_LENGTH } from '../store.js';
 import { connectJoinHousehold } from '../link-wizard.js';
 import { esc, formField, toast } from '../ui.js';
@@ -28,11 +28,12 @@ function welcomeLinkFieldsHtml() {
     </form>`;
 }
 
-function welcomeActionsHtml({ fromSettings }) {
-  if (fromSettings) {
+function welcomeActionsHtml({ fromSettings, hasCode }) {
+  if (fromSettings || hasCode) {
+    const linkLabel = fromSettings ? '연동하기' : '연동하고 시작';
     return `
         <div class="auth-actions">
-          <button type="button" class="btn btn-primary btn-block" data-auth="link-start">연동하기</button>
+          <button type="button" class="btn btn-primary btn-block" data-auth="link-start">${linkLabel}</button>
           <button type="button" class="btn btn-ghost btn-block" data-auth="resume">앱으로 들어가기</button>
         </div>`;
   }
@@ -58,6 +59,7 @@ export function renderAuth() {
   if (state.authScreen !== 'welcome') return '';
   const fromSettings = state.showWelcome && state.data.auth.onboardingDone;
   const firstTime = !state.data.auth.onboardingDone;
+  const hasCode = hasSavedJoinCode();
   return `
       <div class="auth-screen">
         <div class="auth-hero auth-hero--compact">
@@ -66,7 +68,7 @@ export function renderAuth() {
           <p class="muted">${fromSettings ? '가족 코드·암호로 연동할 수 있어요' : firstTime ? '순자산·예산·목표를 함께 관리해요' : '다시 오신 것을 환영해요'}</p>
         </div>
         ${welcomeLinkFieldsHtml()}
-        ${welcomeActionsHtml({ fromSettings })}
+        ${welcomeActionsHtml({ fromSettings, hasCode })}
         ${welcomePolicyHtml({ fromSettings })}
       </div>`;
 }
@@ -114,12 +116,14 @@ function setAuthBusy(busy) {
 function proceedFromWelcome(onFinish, renderApp) {
   leaveStartScreen();
   state.data.auth.loggedIn = true;
-  persist();
+  persistAuthFlags();
   if (state.data.auth.onboardingDone) {
+    if (!persist()) persistAuthFlags();
     renderApp();
   } else {
     onFinish();
-    persist();
+    persistAuthFlags();
+    if (!persist()) persistAuthFlags();
     renderApp();
   }
 }
@@ -205,6 +209,8 @@ export function bindAuth(onFinish, renderApp) {
               leaveStartScreen();
               state.data.auth.loggedIn = true;
               if (!state.data.auth.onboardingDone) onFinish();
+              persistAuthFlags();
+              persist();
               renderApp();
             }
           }

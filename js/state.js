@@ -1,4 +1,4 @@
-import { load, save } from './store.js';
+import { load, save, KEY } from './store.js';
 import { syncAfterPersist } from './sync-service.js';
 
 const initialData = load();
@@ -35,8 +35,28 @@ export const state = {
 };
 
 export function persist() {
-  save(state.data);
-  syncAfterPersist();
+  try {
+    save(state.data);
+    syncAfterPersist();
+    return true;
+  } catch (e) {
+    console.warn('Persist failed', e);
+    return false;
+  }
+}
+
+/** 전체 저장 실패 시에도 시작 화면·로그인 상태만이라도 남김 */
+export function persistAuthFlags() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    const data = raw ? JSON.parse(raw) : structuredClone(state.data);
+    data.auth = { ...data.auth, ...state.data.auth };
+    localStorage.setItem(KEY, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn('Auth flags persist failed', e);
+    return false;
+  }
 }
 
 /** 설정 등에서 「시작 화면」(가족 코드·암호 입력)으로 이동 */
