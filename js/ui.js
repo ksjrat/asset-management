@@ -219,12 +219,28 @@ export function openModal({ title, body, actions = [], onOpen, beforeFinish }) {
 
 function closeModal(overlay) {
   overlay.classList.remove('open');
-  document.body.classList.remove('modal-open');
   if (activeOverlay === overlay) {
     activeOverlay = null;
     activeFinish = null;
   }
   setTimeout(() => overlay.remove(), 220);
+  if (!modalEl?.querySelector('.modal-overlay:not([data-closing])')) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
+/** 열려 있는 모달을 모두 닫음 (중복 스택 방지) */
+export function closeAllModals() {
+  const root = modalEl || document.getElementById('modal-root');
+  if (!root) return;
+  for (const overlay of root.querySelectorAll('.modal-overlay')) {
+    overlay.dataset.closing = '1';
+    overlay.classList.remove('open');
+    overlay.remove();
+  }
+  activeOverlay = null;
+  activeFinish = null;
+  document.body.classList.remove('modal-open');
 }
 
 export function closeActiveModal() {

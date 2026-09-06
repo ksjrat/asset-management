@@ -4,6 +4,27 @@ export const DEFAULT_SAVINGS_ITEM_NAMES = [
   '비상금', '여행', '주택', '자동차', '결혼', '육아', '노후', '투자', '목표적금', '기타',
 ];
 
+function isExplicitZeroEntry(entry) {
+  return entry != null && typeof entry === 'object' && entry.recordedAt != null && readBudgetAmount(entry) === 0;
+}
+
+export function hasRecordedActual(data, year, month, catId) {
+  ensureBudgetStructure(data);
+  if (hasSubItems(data, catId)) {
+    const key = ymKey(year, month);
+    const bucket = data.budget?.subActuals?.[key];
+    const items = getVisibleSubItems(data, catId);
+    if (items.length && bucket && items.every((i) => bucket[i.id] != null)) return true;
+    if (bucket && items.some((i) => readBudgetAmount(bucket[i.id]) > 0)) return true;
+    const entry = getActualEntry(data, year, month, catId);
+    return entry != null && readBudgetAmount(entry) > 0;
+  }
+  const entry = getActualEntry(data, year, month, catId);
+  if (entry == null) return false;
+  if (readBudgetAmount(entry) > 0) return true;
+  return isExplicitZeroEntry(entry);
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -18,7 +39,12 @@ export function readBudgetAmount(entry) {
 
 function normalizeBudgetEntry(entry) {
   const amount = readBudgetAmount(entry);
-  if (amount <= 0) return null;
+  if (amount <= 0) {
+    if (typeof entry === 'object' && entry?.recordedAt) {
+      return { ...entry, amount: 0 };
+    }
+    return null;
+  }
   if (typeof entry === 'object' && entry?.amount != null) {
     return { ...entry, amount };
   }
@@ -151,7 +177,9 @@ export function getSubActualAmount(data, year, month, itemId) {
   const entry = getSubActualEntry(data, year, month, itemId);
   if (entry == null) return null;
   const amount = readBudgetAmount(entry);
-  return amount > 0 ? amount : null;
+  if (amount > 0) return amount;
+  if (isExplicitZeroEntry(entry)) return 0;
+  return null;
 }
 
 let onSavingsSubActualSet = null;
@@ -172,12 +200,7 @@ export function setSubActualAmount(data, year, month, catId, itemId, amount) {
   const key = ymKey(year, month);
   if (!data.budget.subActuals[key]) data.budget.subActuals[key] = {};
   const val = Math.max(0, Number(amount) || 0);
-  if (val === 0) {
-    delete data.budget.subActuals[key][itemId];
-    if (!Object.keys(data.budget.subActuals[key]).length) delete data.budget.subActuals[key];
-  } else {
-    data.budget.subActuals[key][itemId] = { amount: val, recordedAt: now() };
-  }
+  data.budget.subActuals[key][itemId] = { amount: val, recordedAt: now() };
   syncSubEnvelopeActual(data, year, month, catId);
   const cat = data.budget.categories.find((c) => c.id === catId);
   if (onSavingsSubActualSet && cat?.name === '저축') {
@@ -202,9 +225,17 @@ export function hasSubActuals(data, year, month, catId) {
   return [...ids].some((id) => readBudgetAmount(bucket[id]) > 0);
 }
 
+function hasSubActualRecords(data, year, month, catId) {
+  const key = ymKey(year, month);
+  const bucket = data.budget?.subActuals?.[key];
+  if (!bucket) return false;
+  const ids = new Set(getVisibleSubItems(data, catId).map((i) => i.id));
+  return [...ids].some((id) => bucket[id] != null);
+}
+
 export function syncSubEnvelopeActual(data, year, month, catId) {
   const sum = getSubActualsSum(data, year, month, catId);
-  if (sum > 0 || hasSubActuals(data, year, month, catId)) {
+  if (sum > 0 || hasSubActualRecords(data, year, month, catId)) {
     setActualAmount(data, year, month, catId, sum);
   } else {
     const key = ymKey(year, month);
@@ -486,16 +517,19 @@ export function getActualAmount(data, year, month, catId) {
   const entry = getActualEntry(data, year, month, catId);
   if (entry == null) return null;
   const amount = readBudgetAmount(entry);
-  return amount > 0 ? amount : null;
+  if (amount > 0) return amount;
+  if (isExplicitZeroEntry(entry)) return 0;
+  return null;
 }
 
 export function setActualAmount(data, year, month, catId, amount, payer) {
   ensureBudgetStructure(data);
   const key = ymKey(year, month);
+  const val = Math.max(0, Number(amount) || 0);
   if (!data.budget.actuals[key]) data.budget.actuals[key] = {};
   const prev = getActualEntry(data, year, month, catId);
   const entry = {
-    amount: Math.max(0, Number(amount) || 0),
+    amount: val,
     recordedAt: now(),
   };
   const resolvedPayer = payer ?? prev?.payer;
@@ -566,12 +600,15 @@ export function deleteCategory(data, catId) {
 export function getCategoryPeriodSummary(data, year, month, catId) {
   if (isBeforeBudgetStart(data, year, month)) {
     const entry = getActualEntry(data, year, month, catId);
-    const hasActual = entry != null && readBudgetAmount(entry) > 0;
+    const hasActual = hasRecordedActual(data, year, month, catId);
+    const actualVal = hasActual
+      ? (hasSubItems(data, catId) ? getSubActualsSum(data, year, month, catId) : readBudgetAmount(entry))
+      : 0;
     return {
       monthlyPlanned: 0,
       rolloverIn: 0,
       available: 0,
-      actual: hasActual ? readBudgetAmount(entry) : 0,
+      actual: actualVal,
       remaining: 0,
       hasActual,
       usedPct: 0,
@@ -585,8 +622,10 @@ export function getCategoryPeriodSummary(data, year, month, catId) {
   const rolloverIn = 0;
   const available = monthlyPlanned;
   const entry = getActualEntry(data, year, month, catId);
-  const hasActual = entry != null && readBudgetAmount(entry) > 0;
-  const actual = hasActual ? readBudgetAmount(entry) : 0;
+  const hasActual = hasRecordedActual(data, year, month, catId);
+  const actual = hasActual
+    ? (hasSubItems(data, catId) ? getSubActualsSum(data, year, month, catId) : readBudgetAmount(entry))
+    : 0;
   const remaining = monthlyPlanned - actual;
   const usedPct = available > 0 ? actual / available : (actual > 0 ? 1.2 : 0);
   const monthDelta = hasActual ? actual - monthlyPlanned : null;
@@ -642,7 +681,7 @@ export function canRecordActual(data, year, month, catId) {
 /** 아직 실적 미입력 + 입력 가능 */
 export function isRecordDue(data, year, month, catId) {
   if (!canRecordActual(data, year, month, catId)) return false;
-  return getActualEntry(data, year, month, catId) == null;
+  return !hasRecordedActual(data, year, month, catId);
 }
 
 /** 정산일이 지났고 모든 항목 실적이 입력된 달인지 */

@@ -21,15 +21,21 @@ export function countBudgetActualEntries(data) {
   let n = 0;
   for (const month of Object.values(data?.budget?.actuals || {})) {
     for (const e of Object.values(month || {})) {
-      if (readBudgetAmount(e) > 0) n += 1;
+      if (readBudgetAmount(e) > 0 || isRecordedBudgetEntry(e)) n += 1;
     }
   }
   for (const month of Object.values(data?.budget?.subActuals || {})) {
     for (const e of Object.values(month || {})) {
-      if (readBudgetAmount(e) > 0) n += 1;
+      if (readBudgetAmount(e) > 0 || isRecordedBudgetEntry(e)) n += 1;
     }
   }
   return n;
+}
+
+function isRecordedBudgetEntry(entry) {
+  if (entry == null) return false;
+  if (readBudgetAmount(entry) > 0) return true;
+  return typeof entry === 'object' && entry.recordedAt != null;
 }
 
 function entryTime(entry) {
@@ -39,10 +45,10 @@ function entryTime(entry) {
 }
 
 function pickNewerBudgetEntry(a, b) {
-  const amtA = readBudgetAmount(a);
-  const amtB = readBudgetAmount(b);
-  if (amtA <= 0 && amtB > 0) return b;
-  if (amtB <= 0 && amtA > 0) return a;
+  const recA = isRecordedBudgetEntry(a);
+  const recB = isRecordedBudgetEntry(b);
+  if (!recA && recB) return b;
+  if (recA && !recB) return a;
   return entryTime(b) >= entryTime(a) ? b : a;
 }
 
@@ -55,7 +61,7 @@ function flattenBudgetMonthMap(map = {}) {
     const nKey = ymKey(Number(m[1]), Number(m[2]));
     if (!out[nKey]) out[nKey] = {};
     for (const [id, entry] of Object.entries(bucket)) {
-      if (readBudgetAmount(entry) <= 0) continue;
+      if (!isRecordedBudgetEntry(entry)) continue;
       const prev = out[nKey][id];
       out[nKey][id] = prev ? pickNewerBudgetEntry(prev, entry) : entry;
     }
@@ -72,7 +78,7 @@ export function mergeBudgetMonthMaps(local = {}, remote = {}) {
     if (!remoteMonth || typeof remoteMonth !== 'object') continue;
     const merged = { ...(out[ym] || {}) };
     for (const [id, entry] of Object.entries(remoteMonth)) {
-      if (readBudgetAmount(entry) <= 0) continue;
+      if (!isRecordedBudgetEntry(entry)) continue;
       const localEntry = merged[id];
       merged[id] = localEntry ? pickNewerBudgetEntry(localEntry, entry) : entry;
     }

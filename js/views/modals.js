@@ -18,9 +18,10 @@ import {
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
   getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue, deleteSubItem, deleteCategory,
+  hasRecordedActual, readBudgetAmount,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid, ymKey } from '../format.js';
-import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal, confirmDialog } from '../ui.js';
+import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal, closeAllModals, confirmDialog } from '../ui.js';
 import { validateGoalInput, projectGoalImpact } from '../validators.js';
 
 function bindGoalImpactPreview(form, current = 0) {
@@ -751,6 +752,7 @@ export async function showSubActualForm(catId, year, month, rerender, options = 
     body: `<form id="sub-actual-form" class="form-stack">
       <p class="field-hint">월 예산 ${fmtMoney(s.monthlyPlanned)}</p>
       <p class="field-hint">세부 항목별 금액을 입력하세요. 합계가 실적으로 반영됩니다.</p>
+      <p class="field-hint">사용이 없는 항목은 <strong>0</strong>을 입력하면 입력 완료로 처리됩니다.</p>
       ${savingsHint}
       ${loanHint}
       ${prevFillBtn}
@@ -894,7 +896,8 @@ export async function showActualForm(catId, year, month, rerender, options = {})
   if (!cat) return false;
   const s = getCategoryPeriodSummary(state.data, year, month, catId);
   const entry = getActualEntry(state.data, year, month, catId);
-  const current = entry?.amount ?? null;
+  const recorded = hasRecordedActual(state.data, year, month, catId);
+  const current = recorded ? String(readBudgetAmount(entry)) : '';
   const isMisc = cat.name === '기타';
   const payerDefault = entry?.payer || cat.payer || 'joint';
   const payerField = isMisc
@@ -916,8 +919,9 @@ export async function showActualForm(catId, year, month, rerender, options = {})
     title: `${fmtMonth(year, month)} · ${cat.name} 실적`,
     body: `<form id="actual-form" class="form-stack">
       <p class="field-hint">월 예산 ${fmtMoney(s.monthlyPlanned)}</p>
+      <p class="field-hint">이번 달 사용이 없으면 <strong>0</strong>을 입력하면 입력 완료로 처리됩니다.</p>
       ${prevHint}
-      ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" step="1" required value="${current ?? ''}" />`)}
+      ${formField('실제 사용 금액', `<input class="input" name="amount" type="number" min="0" step="1" required value="${current}" />`)}
       ${payerField}
       ${formField('메모', '<input class="input" name="memo" />')}
     </form>`,
@@ -1012,7 +1016,6 @@ async function confirmDeleteCategory(cat, rerender) {
   deleteCategory(state.data, cat.id);
   persist();
   toast('삭제되었습니다', 'success');
-  closeActiveModal();
   rerender();
   showCategoryManage(rerender);
 }
@@ -1239,6 +1242,7 @@ function bindSubItemEditInSheet(sheet, catId, item, ctx) {
 }
 
 export async function showSubItemsManage(catId, rerender) {
+  closeAllModals();
   const cat = state.data.budget.categories.find((c) => c.id === catId);
   if (!cat) return;
   const isSavings = cat.name === '저축';
@@ -1343,6 +1347,7 @@ export async function showSavingsItemsManage(rerender) {
 }
 
 export async function showCategoryManage(rerender) {
+  closeAllModals();
   const allCats = state.data.budget.categories;
   const visibleCats = getVisibleCategories(state.data);
   const hiddenCats = getHiddenCategories(state.data);
