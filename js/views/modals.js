@@ -17,7 +17,7 @@ import {
   RECORD_SCHEDULES,
   getBudgetStart, setBudgetStart,
   getSubMonthlyPlanAmount, setSubMonthlyPlanAmount, syncSubEnvelopeMonthlyPlan,
-  getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue, deleteSubItem,
+  getSubActualAmount, setSubActualAmount, getSubItems, isRecordDue, deleteSubItem, deleteCategory,
 } from '../budget-engine.js';
 import { fmtMonth, fmtMoney, todayISO, uid, ymKey } from '../format.js';
 import { openModal, toast, formField, esc, modalValue, modalForm, setModalContent, setModalActions, closeActiveModal, confirmDialog } from '../ui.js';
@@ -993,9 +993,28 @@ function categoryManageRows(cats, data) {
       <span class="cat-manage-actions">
         <button type="button" class="text-btn" data-sub-manage="${c.id}">${subManageButtonLabel(data, c.id)}</button>
         <button type="button" class="text-btn" data-cat-edit="${c.id}">편집</button>
+        <button type="button" class="text-btn text-btn--danger" data-cat-delete="${c.id}">삭제</button>
       </span>
     </div>`;
   }).join('');
+}
+
+async function confirmDeleteCategory(cat, rerender) {
+  const subCount = getSubItems(state.data, cat.id).length;
+  const detail = subCount
+    ? `세부 항목 ${subCount}개와 `
+    : '';
+  const ok = await confirmDialog(
+    '카테고리 삭제',
+    `「${cat.name}」 카테고리를 삭제합니다. ${detail}관련 예산·실적 기록도 함께 지워지며 복구할 수 없습니다.`,
+  );
+  if (modalValue(ok) !== true) return;
+  deleteCategory(state.data, cat.id);
+  persist();
+  toast('삭제되었습니다', 'success');
+  closeActiveModal();
+  rerender();
+  showCategoryManage(rerender);
 }
 
 function setCategoryHidden(data, cat, hidden) {
@@ -1020,13 +1039,15 @@ async function openCategoryEdit(cat, rerender) {
       ${subdivided
     ? '<p class="field-hint">세부 항목이 있어 부담자는 세부 항목에서 지정합니다.</p>'
     : formField('부담자', payerSelect('payer', cat.payer || 'joint', state.data))}
-      <label class="toggle-row"><span>숨김</span>
+      <p class="field-hint muted">목록에서 「삭제」로 카테고리를 완전히 제거할 수 있습니다. 숨김은 잠시 안 보이게만 합니다.</p>
+      <label class="toggle-row"><span>숨김 (지출 탭·예산에서 제외)</span>
         <input type="checkbox" name="hidden" ${cat.hidden ? 'checked' : ''} /></label>
       ${recordDayField}
     </form>`,
     actions: [
       { label: '세부 항목', value: 'sub' },
-      { label: '숨기기', value: 'delete', danger: true },
+      { label: '숨기기', value: 'hide' },
+      { label: '삭제', value: 'delete', danger: true },
       { label: '저장', value: 'save', primary: true },
     ],
   });
@@ -1035,12 +1056,16 @@ async function openCategoryEdit(cat, rerender) {
     showSubItemsManage(cat.id, rerender);
     return;
   }
-  if (ea === 'delete') {
+  if (ea === 'hide') {
     setCategoryHidden(state.data, cat, true);
     persist();
     toast('숨김 처리');
     rerender();
     showCategoryManage(rerender);
+    return;
+  }
+  if (ea === 'delete') {
+    await confirmDeleteCategory(cat, rerender);
     return;
   }
   if (ea !== 'save') return;
@@ -1069,6 +1094,12 @@ function bindCategoryManageSheet(sheet, allCats, hiddenCount, rerender) {
       }
     });
   });
+  sheet.querySelectorAll('[data-cat-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const cat = allCats.find((c) => c.id === btn.dataset.catDelete);
+      if (cat) await confirmDeleteCategory(cat, rerender);
+    });
+  });
   sheet.querySelectorAll('[data-sub-manage]').forEach((btn) => {
     btn.addEventListener('click', () => {
       closeActiveModal();
@@ -1094,9 +1125,24 @@ function subItemManageRows(items, data) {
     const link = loan ? ` · ${esc(loan.name)}` : (linked ? ` · ${esc(linked.name)}` : '');
     return `<div class="cat-manage-row">
       <span>${esc(item.name)} <span class="muted">· ${esc(payer)}${link}</span></span>
-      <button type="button" class="text-btn" data-sub-edit="${item.id}">편집</button>
+      <span class="cat-manage-row-actions">
+        <button type="button" class="text-btn" data-sub-edit="${item.id}">편집</button>
+        <button type="button" class="text-btn text-btn--danger" data-sub-delete="${item.id}">삭제</button>
+      </span>
     </div>`;
   }).join('');
+}
+
+async function confirmDeleteSubItem(catId, item, onDone) {
+  const ok = await confirmDialog(
+    '세부 항목 삭제',
+    `「${item.name}」 항목과 관련 실적·예산 기록을 삭제합니다. 복구할 수 없습니다.`,
+  );
+  if (modalValue(ok) !== true) return;
+  deleteSubItem(state.data, catId, item.id);
+  persist();
+  toast('삭제되었습니다', 'success');
+  onDone?.();
 }
 
 function buildSubItemEditForm(catId, item) {
@@ -1126,7 +1172,8 @@ function buildSubItemEditForm(catId, item) {
       ${formField('부담자', payerSelect('payer', item.payer || 'joint', state.data))}
       ${loanField}
       ${assetField}
-      <label class="toggle-row"><span>숨김</span>
+      <p class="field-hint muted">목록에서 「삭제」로 항목을 완전히 제거할 수 있습니다. 숨김은 잠시 안 보이게만 합니다.</p>
+      <label class="toggle-row"><span>숨김 (목록·실적 입력에서 제외)</span>
         <input type="checkbox" name="hidden" ${item.hidden ? 'checked' : ''} /></label>
     </form>`;
 }
@@ -1173,12 +1220,7 @@ function bindSubItemEditInSheet(sheet, catId, item, ctx) {
       return;
     }
     if (action === 'delete') {
-      const ok = await confirmDialog('세부 항목 삭제', '실적·예산 기록도 함께 삭제됩니다. 계속할까요?');
-      if (modalValue(ok) !== true) return;
-      deleteSubItem(state.data, catId, item.id);
-      persist();
-      toast('삭제되었습니다', 'success');
-      ctx.showList();
+      await confirmDeleteSubItem(catId, item, () => ctx.showList());
       return;
     }
     if (action !== 'save' || !formData) return;
@@ -1228,6 +1270,13 @@ export async function showSubItemsManage(catId, rerender) {
               const itemsNow = getSubItems(state.data, catId);
               const target = itemsNow.find((i) => i.id === btn.dataset.subEdit);
               if (target) bindSubItemEditInSheet(sheet, catId, target, ctx);
+            });
+          });
+          sheet.querySelectorAll('[data-sub-delete]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const itemsNow = getSubItems(state.data, catId);
+              const target = itemsNow.find((i) => i.id === btn.dataset.subDelete);
+              if (target) await confirmDeleteSubItem(catId, target, () => ctx.showList());
             });
           });
         },
@@ -1308,7 +1357,7 @@ export async function showCategoryManage(rerender) {
   const res = await openModal({
     title: '카테고리 관리',
     body: `<div class="cat-manage-panel">
-      <p class="field-hint">각 항목의 「세부 나누기」로 원하는 카테고리에 세부 내역을 추가할 수 있습니다.</p>
+      <p class="field-hint">각 항목의 「세부 나누기」로 세부 내역을 추가할 수 있습니다. 「삭제」로 카테고리를 완전히 제거할 수 있습니다.</p>
       <div class="list-group">${visibleRows || '<p class="muted cat-manage-empty">사용 중인 카테고리가 없습니다.</p>'}</div>
       ${hiddenBlock}
     </div>`,

@@ -535,6 +535,34 @@ export function deleteSubItem(data, catId, itemId) {
   return true;
 }
 
+export function deleteCategory(data, catId) {
+  ensureBudgetStructure(data);
+  const idx = data.budget.categories.findIndex((c) => c.id === catId);
+  if (idx < 0) return false;
+
+  for (const item of [...getSubItems(data, catId)]) {
+    deleteSubItem(data, catId, item.id);
+  }
+  delete data.budget.subItemsByCategory[catId];
+
+  for (const bucket of Object.values(data.budget.actuals || {})) {
+    delete bucket[catId];
+  }
+  for (const bucket of Object.values(data.budget.monthlyPlan || {})) {
+    delete bucket[catId];
+  }
+
+  data.budget.categories.splice(idx, 1);
+
+  const hidden = data.settings?.hiddenCategories;
+  if (Array.isArray(hidden)) {
+    const hi = hidden.indexOf(catId);
+    if (hi >= 0) hidden.splice(hi, 1);
+  }
+
+  return true;
+}
+
 export function getCategoryPeriodSummary(data, year, month, catId) {
   if (isBeforeBudgetStart(data, year, month)) {
     const entry = getActualEntry(data, year, month, catId);

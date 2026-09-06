@@ -1164,6 +1164,8 @@ body.modal-open { overflow: hidden; }
 .goal-impact.warn { color: var(--danger); }
 .timeline-item { font-size: 0.85rem; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .cat-manage-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cat-manage-row-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.text-btn--danger { color: var(--danger, #c0392b); }
 .cat-manage-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: nowrap; }
 .cat-manage-actions .text-btn { white-space: nowrap; }
 .cat-manage-panel .list-group:last-child .cat-manage-row:last-child { border-bottom: none; }

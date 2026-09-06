@@ -105,7 +105,10 @@ function mergeSubItemsByCategory(local = {}, remote = {}) {
     for (const item of remoteItems) {
       if (!item?.id) continue;
       if (byId.has(item.id)) {
-        Object.assign(byId.get(item.id), item);
+        const existing = byId.get(item.id);
+        const hidden = !!(existing.hidden || item.hidden);
+        Object.assign(existing, item);
+        existing.hidden = hidden;
       } else {
         localItems.push(item);
         byId.set(item.id, item);
