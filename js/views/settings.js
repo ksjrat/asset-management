@@ -4,6 +4,7 @@ import {
   countBudgetActualEntries,
   HOME_OWNER_FILTERS, ensureAppSettings, computeGoalProgress, setHomeOwnerFilter,
 } from '../store.js';
+import { markRestored } from '../change-tracker.js';
 import { showGoalForm } from './modals.js';
 import { fmtMoney } from '../format.js';
 import { getBudgetStart, getRecordScheduleLabel } from '../budget-engine.js';
@@ -419,7 +420,9 @@ export function bindSettings() {
     backup.auth.userName = state.data.auth.userName || backup.auth.userName;
     backup.auth.userEmail = state.data.auth.userEmail || backup.auth.userEmail;
     backup.auth.onboardingDone = true;
+    const prev = state.data;
     state.data = backup;
+    markRestored(state.data, prev);
     persist();
     toast('백업에서 복구했습니다', 'success');
     rerender();

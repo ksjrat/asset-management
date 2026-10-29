@@ -1,8 +1,10 @@
 import { load, save, KEY, getVisibleCategories } from './store.js';
 import { findEarliestDueBudgetMonth } from './budget-engine.js';
 import { syncAfterPersist } from './sync-service.js';
+import { stampLocalChanges, resetChangeBaseline } from './change-tracker.js';
 
 const initialData = load();
+resetChangeBaseline(initialData);
 
 const savedTab = (() => {
   try { return localStorage.getItem('couple-asset-tab'); } catch { return null; }
@@ -39,6 +41,7 @@ export const state = {
 
 export function persist() {
   try {
+    stampLocalChanges(state.data);
     save(state.data);
     syncAfterPersist();
     return true;

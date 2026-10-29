@@ -44,6 +44,7 @@ const ASSETS = [
   './js/link-wizard.js',
   './js/sync-privacy.js',
   './js/sync-crypto.js',
+  './js/change-tracker.js',
 ];
 
 self.addEventListener('install', (e) => {

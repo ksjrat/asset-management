@@ -1,4 +1,4 @@
-import { DATA_VERSION, dataFootprint, hasUserFinancialData, countBudgetActualEntries } from './store.js';
+import { DATA_VERSION, hasUserFinancialData, countBudgetActualEntries } from './store.js';
 import { stripSensitiveFromPayload, mergePayloadPreservingPrivate } from './sync-privacy.js';
 import { finalizeBudgetAfterSync } from './budget-data.js';
 import {
@@ -50,6 +50,7 @@ export function extractSyncPayload(data) {
     recurring: data.recurring,
     memos: data.memos,
     guideChecks: data.guideChecks,
+    tombstones: data.tombstones || { assets: {}, transactions: {}, goals: {}, recurring: {} },
     settings: {
       snapshotDay: data.settings?.snapshotDay,
       hiddenCategories: data.settings?.hiddenCategories || [],
@@ -98,28 +99,27 @@ function remotePayloadHasUserData(payload) {
 }
 
 export function applyRemotePayload(local, remotePayload, remoteUpdatedAt) {
-  if (!remotePayload) return { data: local, rejectedEmptyRemote: false };
+  if (!remotePayload) return { data: local, rejectedEmptyRemote: false, needsPush: false };
 
   if (hasUserFinancialData(local) && !remotePayloadHasUserData(remotePayload)) {
-    return { data: local, rejectedEmptyRemote: true };
+    return { data: local, rejectedEmptyRemote: true, needsPush: false };
   }
 
   const merged = mergePayloadPreservingPrivate(structuredClone(local), remotePayload);
   preserveLocalAuth(local, merged);
   finalizeBudgetAfterSync(merged);
-  if (hasUserFinancialData(local) && dataFootprint(merged) < dataFootprint(local)) {
-    return { data: local, rejectedEmptyRemote: true };
-  }
   if (countBudgetActualEntries(merged) < countBudgetActualEntries(local)) {
-    return { data: local, rejectedEmptyRemote: true };
+    return { data: local, rejectedEmptyRemote: true, needsPush: false };
   }
+  const needsPush = !!merged._needsPush;
+  delete merged._needsPush;
   const prevMerged = local._syncMeta?.lastMergedAt || 0;
   merged._syncMeta = {
     ...(local._syncMeta || {}),
     lastMergedAt: Math.max(prevMerged, remoteUpdatedAt || 0),
     lastRemoteAt: remoteUpdatedAt || Date.now(),
   };
-  return { data: merged, rejectedEmptyRemote: false };
+  return { data: merged, rejectedEmptyRemote: false, needsPush };
 }
 
 export function ensureHouseholdId(data) {

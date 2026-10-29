@@ -1,6 +1,7 @@
 import { state, persist } from './state.js';
 import { save, saveSafetyBackup, hasUserFinancialData, dataFootprint, countBudgetActualEntries, ensureAppSettings, setHomeOwnerFilter, refreshAutoSnapshots } from './store.js';
 import { finalizeBudgetAfterSync } from './budget-data.js';
+import { resetChangeBaseline } from './change-tracker.js';
 import {
   initSync, bindHouseholdSync, pullFromCloud, pushToCloud, scheduleSyncPush,
   ensureHouseholdId, isSyncEnabled, applyRemotePayload,
@@ -32,7 +33,7 @@ async function applyPullResult(result, { silent = false } = {}) {
   if (!result || typeof result !== 'object' || !('data' in result)) {
     return { status: 'error' };
   }
-  const { data, rejectedEmptyRemote, status } = result;
+  const { data, rejectedEmptyRemote, status, needsPush } = result;
   if (!data || typeof data !== 'object' || !data.auth) {
     console.warn('Sync: invalid pull result, keeping local data');
     return { status: 'error' };
@@ -42,8 +43,7 @@ async function applyPullResult(result, { silent = false } = {}) {
   saveSafetyBackup(before);
 
   const wouldShrink = hasUserFinancialData(before)
-    && (dataFootprint(data) < dataFootprint(before)
-      || countBudgetActualEntries(data) < countBudgetActualEntries(before));
+    && countBudgetActualEntries(data) < countBudgetActualEntries(before);
 
   if (rejectedEmptyRemote || wouldShrink) {
     if (hasCloudPassphraseSession() && hasUserFinancialData(before)) {
@@ -75,6 +75,11 @@ async function applyPullResult(result, { silent = false } = {}) {
     lastMergedAt: data._syncMeta?.lastMergedAt || Date.now(),
   };
   save(state.data);
+  resetChangeBaseline(state.data);
+
+  if (needsPush) {
+    scheduleSyncPush(state.data);
+  }
 
   if (!silent && changed) {
     toast('다른 기기와 데이터가 맞춰졌습니다', 'success');

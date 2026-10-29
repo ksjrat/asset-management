@@ -5,9 +5,11 @@ import { load, hasUserFinancialData, getNetWorthDiagnosis } from './store.js';
 import { isAppPinConfigured } from './app-lock.js';
 import { setupCloudSync } from './sync-service.js';
 import { initPwaInstall } from './pwa-install.js';
+import { resetChangeBaseline } from './change-tracker.js';
 
 async function bootstrap() {
   state.data = load();
+  resetChangeBaseline(state.data);
   if (state.data.auth.atStartScreen && hasUserFinancialData(state.data)) {
     // 연동 실패 후 시작 화면 플래그만 남은 경우 — 데이터는 있으니 앱으로 복구
     leaveStartScreen();
